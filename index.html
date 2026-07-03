@@ -16,6 +16,8 @@
     --accent-soft:#e4f1ef;
     --amber:#b5760a;
     --amber-soft:#fbf1de;
+    --danger:#b02a1f;
+    --danger-soft:#fbe6e4;
     --radius:8px;
     font-size:15px;
   }
@@ -48,11 +50,35 @@
     font-size:.82rem;
     color:#cfe6e3;
   }
+
+  /* ---- top-level mode nav + data source bar ---- */
+  .mode-nav{
+    background:var(--accent);
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    padding:0 20px; color:#fff;
+  }
+  .mode-btn{
+    appearance:none; border:none; background:transparent; color:#dcefed;
+    padding:12px 16px; font-size:.9rem; font-weight:600; cursor:pointer; font-family:inherit;
+    border-bottom:3px solid transparent;
+  }
+  .mode-btn:hover{ color:#fff; }
+  .mode-btn.active{ color:#fff; border-bottom-color:#fff; }
+  .mode-nav .source-chip{
+    margin-left:auto; font-size:.74rem; color:#e6f4f2; opacity:.95;
+    display:flex; align-items:center; gap:6px; padding:4px 0;
+  }
+  .source-chip .dot{ width:8px; height:8px; border-radius:50%; background:#cfe6e3; }
+  .source-chip .dot.local{ background:var(--amber); }
+  .source-chip .dot.none{ background:var(--danger); }
+
   .wrap{
     max-width:1080px;
     margin:0 auto;
     padding:20px 20px 140px;
   }
+  .wrap.manage{ padding-bottom:40px; }
+
   .meta-card{
     background:var(--card);
     border:1px solid var(--line);
@@ -68,7 +94,7 @@
   .meta-card input[type=text]{
     border:1px solid var(--line); border-radius:6px; padding:8px 10px; font-size:.92rem; font-family:inherit;
   }
-  .meta-card .toggles{grid-column:1 / -1; display:flex; gap:18px; font-size:.82rem; color:var(--ink-soft); align-items:center;}
+  .meta-card .toggles{grid-column:1 / -1; display:flex; gap:18px; font-size:.82rem; color:var(--ink-soft); align-items:center; flex-wrap:wrap;}
   .meta-card .toggles label{display:flex; align-items:center; gap:6px; text-transform:none; font-weight:500; color:var(--ink);}
 
   .tabs{
@@ -76,6 +102,7 @@
     gap:6px;
     margin-bottom:16px;
     border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
   }
   .tab-btn{
     appearance:none; border:1px solid transparent; background:transparent;
@@ -167,12 +194,118 @@
   .btn-primary:hover{ background:var(--accent-dark); }
   .btn-secondary{ background:transparent; color:var(--ink-soft); border-color:var(--line); }
   .btn-secondary:hover{ color:var(--ink); border-color:var(--ink-soft); }
+  .btn-danger{ background:var(--danger-soft); color:var(--danger); border-color:#e9c4c0; }
+  .btn-danger:hover{ background:#f6d6d3; }
   .status-msg{ font-size:.85rem; color:var(--accent-dark); font-weight:600; min-width:140px; }
 
+  /* ===================== ADMIN / CRUD ===================== */
+  .admin-actions{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:12px 14px; margin-bottom:14px;
+  }
+  .admin-actions .grow{ flex:1; }
+  .admin-note{
+    font-size:.78rem; color:var(--ink-soft); background:var(--amber-soft);
+    border:1px solid #efdcb3; border-radius:6px; padding:8px 11px; margin-bottom:16px;
+    line-height:1.4;
+  }
+  .admin-note b{ color:var(--amber); }
+  .warn-banner{
+    font-size:.8rem; color:var(--danger); background:var(--danger-soft);
+    border:1px solid #e9c4c0; border-radius:6px; padding:8px 11px; margin-bottom:14px;
+  }
+  .warn-banner ul{ margin:6px 0 0; padding-left:18px; }
+
+  .admin-cols{ display:grid; grid-template-columns:260px 1fr; gap:16px; align-items:start; }
+
+  .panel{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); }
+  .panel-head{
+    padding:11px 14px; border-bottom:1px solid var(--line);
+    font-size:.74rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); font-weight:700;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  .panel-body{ padding:12px 14px; }
+
+  .tbl-list{ display:flex; flex-direction:column; gap:6px; }
+  .tbl-card{
+    display:flex; align-items:center; gap:6px; padding:8px 10px;
+    border:1px solid var(--line); border-radius:7px; cursor:pointer; background:#fbfdfc;
+  }
+  .tbl-card:hover{ border-color:var(--accent); }
+  .tbl-card.active{ border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 1px var(--accent) inset; }
+  .tbl-card .tbl-name{ flex:1; font-weight:600; font-size:.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tbl-card .tbl-count{ font-size:.72rem; color:var(--ink-soft); }
+
+  .mini-btn{
+    appearance:none; border:1px solid var(--line); background:#fff; color:var(--ink-soft);
+    border-radius:5px; padding:3px 7px; font-size:.74rem; cursor:pointer; font-family:inherit; line-height:1.2;
+  }
+  .mini-btn:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .mini-btn.danger:hover{ border-color:var(--danger); color:var(--danger); }
+  .icon-btn{
+    appearance:none; border:none; background:transparent; cursor:pointer; color:var(--ink-soft);
+    font-size:.9rem; padding:2px 5px; border-radius:4px; line-height:1;
+  }
+  .icon-btn:hover{ background:var(--accent-soft); color:var(--accent-dark); }
+  .icon-btn.danger:hover{ background:var(--danger-soft); color:var(--danger); }
+
+  .ed-section{ margin-bottom:18px; }
+  .ed-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .ed-field{ display:flex; flex-direction:column; gap:4px; }
+  .ed-field.full{ grid-column:1 / -1; }
+  .ed-field label{ font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); font-weight:600; }
+  .ed-field input[type=text], .ed-field select, .ed-field textarea{
+    width:100%; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:.87rem; font-family:inherit; resize:vertical;
+  }
+  .ed-field .hint{ font-size:.72rem; color:var(--ink-soft); font-style:italic; }
+
+  .ed-row{
+    border:1px solid var(--line); border-radius:8px; margin-bottom:12px; overflow:hidden; background:#fff;
+  }
+  .ed-row-head{
+    display:flex; align-items:center; gap:8px; padding:9px 12px; background:#eef4f3; border-bottom:1px solid var(--line);
+    cursor:pointer;
+  }
+  .ed-row-head .er-title{ flex:1; font-weight:700; font-size:.88rem; }
+  .ed-row-head .er-type{ font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--accent-dark); background:var(--accent-soft); padding:2px 7px; border-radius:10px; }
+  .ed-row-head .caret{ color:var(--ink-soft); font-size:.8rem; }
+  .ed-row-body{ padding:12px; display:none; }
+  .ed-row.open .ed-row-body{ display:block; }
+  .ed-row.open .caret{ transform:rotate(90deg); }
+
+  .opt-source{ display:flex; gap:16px; font-size:.82rem; margin:2px 0 8px; }
+  .opt-source label{ display:flex; align-items:center; gap:5px; cursor:pointer; text-transform:none; letter-spacing:0; font-weight:500; color:var(--ink); }
+
+  .field-editor{ display:flex; flex-direction:column; gap:7px; }
+  .field-editor .fe-row{ display:grid; grid-template-columns:1fr 1.4fr 110px 28px; gap:7px; align-items:center; }
+  .field-editor .fe-row input, .field-editor .fe-row select{
+    border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:.82rem; font-family:inherit;
+  }
+
+  .oset{ border:1px solid var(--line); border-radius:7px; padding:10px 12px; margin-bottom:10px; }
+  .oset-head{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .oset-head input{ flex:1; border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:.84rem; font-weight:600; font-family:inherit; }
+  .oset textarea{ width:100%; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:.82rem; font-family:inherit; min-height:70px; resize:vertical; }
+  .oset .used-in{ font-size:.72rem; color:var(--ink-soft); margin-top:4px; }
+
+  .empty-state{
+    text-align:center; color:var(--ink-soft); padding:40px 20px; background:var(--card);
+    border:1px dashed var(--line); border-radius:var(--radius);
+  }
+  .empty-state p{ margin:6px 0 16px; }
+
+  .hidden{ display:none !important; }
+
+  @media (max-width: 860px){
+    .admin-cols{ grid-template-columns:1fr; }
+  }
   @media (max-width: 720px){
     .row{ grid-template-columns:1fr; }
     .row-item{ border-right:none; border-bottom:1px solid var(--line); }
     .meta-card{ grid-template-columns:1fr; }
+    .ed-grid{ grid-template-columns:1fr; }
+    .field-editor .fe-row{ grid-template-columns:1fr 1fr; }
   }
 </style>
 </head>
@@ -183,35 +316,47 @@
   <div class="sub">Click through a table, then copy the finished result straight into your report</div>
 </header>
 
-<div class="wrap">
+<nav class="mode-nav">
+  <button class="mode-btn active" data-mode="builder">Scope Builder</button>
+  <button class="mode-btn" data-mode="manage">Manage Tables</button>
+  <span class="source-chip" id="sourceChip"><span class="dot"></span><span id="sourceLabel">Loading…</span></span>
+</nav>
 
-  <div class="meta-card">
-    <div class="field">
-      <label for="forumDate">SORT Forum Date</label>
-      <input type="text" id="forumDate" placeholder="dd/mm/yyyy">
+<div class="wrap" id="wrap">
+
+  <!-- ===================== BUILDER VIEW ===================== -->
+  <div id="builderView">
+    <div class="meta-card">
+      <div class="field">
+        <label for="forumDate">SORT Forum Date</label>
+        <input type="text" id="forumDate" placeholder="dd/mm/yyyy">
+      </div>
+      <div class="field">
+        <label for="forumAttendees">SORT Forum Attendees</label>
+        <input type="text" id="forumAttendees" placeholder="Names">
+      </div>
+      <div class="toggles">
+        <label><input type="checkbox" id="includeHeader" checked> Include title/date/attendees when copying</label>
+        <label><input type="checkbox" id="includeEmpty"> Include rows with nothing filled in</label>
+      </div>
     </div>
-    <div class="field">
-      <label for="forumAttendees">SORT Forum Attendees</label>
-      <input type="text" id="forumAttendees" placeholder="Names">
+
+    <div class="tabs" id="tabs"></div>
+
+    <div class="progress">
+      <span id="progressText">0 of 0 rows filled</span>
+      <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
     </div>
-    <div class="toggles">
-      <label><input type="checkbox" id="includeHeader" checked> Include title/date/attendees when copying</label>
-      <label><input type="checkbox" id="includeEmpty"> Include rows with nothing filled in</label>
-    </div>
+
+    <div id="rowsContainer"></div>
   </div>
 
-  <div class="tabs" id="tabs"></div>
-
-  <div class="progress">
-    <span id="progressText">0 of 0 rows filled</span>
-    <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
-  </div>
-
-  <div id="rowsContainer"></div>
+  <!-- ===================== MANAGE VIEW ===================== -->
+  <div id="manageView" class="hidden"></div>
 
 </div>
 
-<div class="toolbar">
+<div class="toolbar" id="builderToolbar">
   <div class="toolbar-inner">
     <button class="btn btn-primary" id="copyBtn">Copy table for Word</button>
     <button class="btn btn-secondary" id="resetBtn">Reset this table</button>
@@ -219,234 +364,170 @@
   </div>
 </div>
 
+<input type="file" id="importFile" accept="application/json,.json" class="hidden">
+
 <script>
-/* ===================== DATA MODEL ===================== */
-// type: 'single' -> radio buttons, 'multi' -> checkboxes, null -> no option list (fields/text only)
-// options: array of strings. An option starting with "### " is rendered as a non-selectable divider.
-// fields: extra small inputs rendered below the options, always available.
-// note: helper text shown under the item label (e.g. approval requirements).
+/* =========================================================================
+   SORT Forum Scope Builder
+   -------------------------------------------------------------------------
+   Table + row definitions live in an external file (definitions.json) so
+   they can evolve without editing this page and can be hosted on SharePoint
+   or an on-prem file share. This file provides:
+     • the end-user "Scope Builder" (unchanged behaviour), and
+     • a "Manage Tables" CRUD editor for the definitions.
+   Edits are kept in the browser (localStorage). Use Export to download the
+   JSON and re-publish it to the shared location for the whole team.
 
-const ACCESSIBILITY_OPTIONS = [
-  "All weather access","Dry weather access only","Concrete truck","Flatbed truck","4WD with tandem trailer","4WD only"
-];
+   Definition shape:
+   {
+     version, meta:{...},
+     optionSets: { <name>: [ "opt", "### Divider", ... ] },
+     tables: [ { id, label, title, rows:[ ROW ] } ]
+   }
+   ROW = {
+     id, item, instruction, type:"single"|"multi"|"none",
+     note?, optionSet? (name) OR options?[] , fields?:[{key,label,type,placeholder?}]
+   }
+   type: single -> radio, multi -> checkbox, none -> fields/text only.
+   An option string beginning with "### " renders as a non-selectable divider.
+   ========================================================================= */
 
-const DEMOLITION_OPTIONS = [
-  "Standard: Complete demolition and disposal",
-  "Complex: Parts to be returned to the Hub/Council",
-  "Complex: Drop-off contact/address required for Gas Cylinders"
-];
+const LS_DEFS = "sort.definitions.v1";   // saved (edited) definitions
+const LS_URL  = "sort.definitionsUrl";   // remembered "load from URL" source
+const DEFINITIONS_FILE = "definitions.json";
 
-const COMMS_OPTIONS = [
-  "IP Logger - Cellular Communications",
-  "IP Logger - Satellite Communications",
-  "IP Logger - Campbell Scientific - ERRTS VHF Communications",
-  "Local Processing Unit - Elpro ERRTS VHF Communications",
-  "AL200X Campbell Scientific - ERRTS VHF Communications"
-];
+let defs = null;          // active definitions used by the builder + editor
+let defsOrigin = "none";  // "file" | "url" | "local" | "imported" | "none"
+let mode = "builder";     // "builder" | "manage"
 
-function remediationOptions(cabinetWording){
-  return [
-    "Vendor/Contractor site visit required prior to complex installation",
-    "Vegetation management",
-    cabinetWording,
-    "Data access to be provided to Council via satellite modem",
-    "Track / stairs required to access orifice / gauge boards"
-  ];
+/* ===================== DEFINITION HELPERS ===================== */
+function clone(x){ return JSON.parse(JSON.stringify(x)); }
+
+function normalizeDefinitions(raw){
+  const d = (raw && typeof raw === "object") ? raw : {};
+  const out = {
+    version: d.version || 1,
+    meta: (d.meta && typeof d.meta === "object") ? d.meta : {},
+    optionSets: (d.optionSets && typeof d.optionSets === "object") ? d.optionSets : {},
+    tables: Array.isArray(d.tables) ? d.tables : []
+  };
+  // Coerce every set to an array of strings.
+  Object.keys(out.optionSets).forEach(k=>{
+    if(!Array.isArray(out.optionSets[k])) out.optionSets[k] = [];
+    out.optionSets[k] = out.optionSets[k].map(String);
+  });
+  out.tables = out.tables.map((t,ti)=>({
+    id: t.id || ("table" + (ti+1)),
+    label: t.label || t.title || ("Table " + (ti+1)),
+    title: t.title || t.label || ("Table " + (ti+1)),
+    rows: Array.isArray(t.rows) ? t.rows.map((r,ri)=>normalizeRow(r,ri)) : []
+  }));
+  return out;
+}
+function normalizeRow(r, ri){
+  const type = (r.type === "single" || r.type === "multi") ? r.type
+             : (r.type === "none" || r.type == null) ? "none" : "single";
+  const row = {
+    id: r.id || ("row" + (ri+1)),
+    item: r.item || "",
+    instruction: r.instruction || "",
+    type
+  };
+  if(r.note) row.note = r.note;
+  if(type !== "none"){
+    if(r.optionSet) row.optionSet = r.optionSet;
+    else row.options = Array.isArray(r.options) ? r.options.map(String) : [];
+  }
+  if(Array.isArray(r.fields) && r.fields.length){
+    row.fields = r.fields.map(f=>{
+      const field = { key: f.key || "", label: f.label || "", type: (f.type === "textarea" ? "textarea" : "text") };
+      if(f.placeholder) field.placeholder = f.placeholder;
+      return field;
+    });
+  }
+  return row;
 }
 
-const TABLES = [
-  {
-    id: "rainfall",
-    label: "Rainfall Table",
-    title: "Rainfall Table",
-    rows: [
-      { id:"stationType", item:"Station Type", instruction:"(Choose relevant option)", type:"single",
-        options:["Rain Gauge"] },
-      { id:"complexity", item:"Complexity, Scope & Type", instruction:"(Choose 1 option)", type:"single",
-        options:[
-          "### High Complexity",
-          "High Complexity Total Rebuild – Type 1","High Complexity Total Rebuild – Type 2","High Complexity Total Rebuild – Type 3","High Complexity Bespoke Rebuild",
-          "### Moderate Complexity",
-          "Moderate Complexity Total Rebuild – Type 1","Moderate Complexity Total Rebuild – Type 2","Moderate Complexity Total Rebuild – Type 3",
-          "Moderate Complexity Bespoke Upgrade","Moderate Complexity – Cabinet & Equipment Replacement","Moderate Complexity Platform Replacement",
-          "### Low Complexity",
-          "Low Complexity Remediation – Instrumentation Only","Low Complexity Remediation – Raintree Retrofit",
-          "Low Complexity Remediation – Raintree Retrofit – Vegetation Management",
-          "Low Complexity Remediation - Co-Located Equipment Upgrade",
-          "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
-          "### Other",
-          "Vegetation Management","Acquire & Decommission","Acquire & Relocate","Acquired – No Remediation Required","Do Not Acquire"
-        ]},
-      { id:"comms", item:"Comms Option", instruction:"(Choose 1 option)", type:"single", options: COMMS_OPTIONS },
-      { id:"fadeMargin", item:"Fade Margin >20db", instruction:"(If station is ERRTS)", type:"single", options:["Yes","No"] },
-      { id:"reasonComms", item:"Reason for Changing Comms Type", instruction:"", type:"single", options:["Yes","NA"],
-        note:"Changing comms type requires GM Approval — ERRTS to SAT",
-        fields:[{key:"reasonDetail", label:"Reason (if Yes)", type:"text"}] },
-      { id:"stockFence", item:"Stock Fence", instruction:"(Yes/No, details)", type:"single", options:["Yes","No"],
-        fields:[{key:"size", label:"Size (eg. 3x3)", type:"text"},{key:"gate", label:"Gate", type:"text"}] },
-      { id:"demolition", item:"Demolition / Disposal", instruction:"(Yes/No, details)", type:"multi", options: DEMOLITION_OPTIONS },
-      { id:"relocation", item:"Relocation", instruction:"(Yes/No, </>25m)", type:"single", options:["Yes","No"],
-        note:"WL Relocation requires EPS & GM Approval",
-        fields:[{key:"distance", label:"Distance (>25m or <25m)", type:"text"}] },
-      { id:"coords", item:"Instrumentation Coordinates", instruction:"(Existing or, Proposed)", type:null,
-        fields:[{key:"existing", label:"Existing", type:"text"},{key:"proposed", label:"Proposed", type:"text"}] },
-      { id:"accessibility", item:"Accessibility", instruction:"(Delete irrelevant options)", type:"multi", options: ACCESSIBILITY_OPTIONS },
-      { id:"nonStandard", item:"Non-Standard options", instruction:"(Please avoid if possible)", type:"single", options:["Yes","NA"],
-        fields:[{key:"detail", label:"If chosen: drawings, part numbers, exact locations etc. (must be provided)", type:"textarea"}] },
-      { id:"remediation", item:"Remediation / Additional Works", instruction:"(Delete irrelevant options)", type:"multi",
-        options: remediationOptions("Bollards for site protection"),
-        fields:[{key:"other", label:"Other", type:"text"}] },
-      { id:"photos", item:"Site Assessment Photos", instruction:"", type:null,
-        fields:[{key:"link", label:"Insert link & confirm access", type:"text"}] },
-      { id:"installNotes", item:"Installation Notes", instruction:"(Freeform section)", type:null,
-        fields:[{key:"notes", label:"Notes", type:"textarea"}] }
-    ]
-  },
-  {
-    id: "waterlevel",
-    label: "Water Level Table",
-    title: "Water Level (+/- Rainfall) Table",
-    rows: [
-      { id:"stationType", item:"Station Type", instruction:"(Choose relevant option)", type:"single",
-        options:["Rain Gauge / Water Level","Rain Gauge / Water Level / Repeater","Rain Gauge / Water Level / Reservoir",
-          "Rain Gauge / Water Level / Tide","Water Level","Water Level / Reservoir","Water Level / Tide Gauge","Base Station"] },
-      { id:"complexity", item:"Complexity, Scope & Type", instruction:"(Choose 1 option)", type:"single",
-        options:[
-          "### High Complexity",
-          "High Complexity Total Rebuild – Type 1","High Complexity Total Rebuild – Type 2","High Complexity Total Rebuild – Type 3",
-          "High Complexity Total Rebuild – Type 4","High Complexity Total Rebuild – Type 5A (Integrated)","High Complexity Total Rebuild – Type 5B (Remote)",
-          "High Complexity Bespoke Rebuild",
-          "### Moderate Complexity",
-          "Moderate Complexity Total Rebuild – Type 1","Moderate Complexity Total Rebuild – Type 2","Moderate Complexity Total Rebuild – Type 3",
-          "Moderate Complexity Bespoke Upgrade","Moderate Complexity – Cabinet & Equipment Replacement","Moderate Complexity Platform Replacement",
-          "### Low Complexity",
-          "Low Complexity Remediation – Instrumentation Only",
-          "Low Complexity Remediation - Co-Located Equipment Upgrade",
-          "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
-          "Low Complexity – Type 4",
-          "### Other",
-          "Vegetation Management","Acquire & Decommission","Acquire & Relocate","Acquired – No Remediation Required","Do Not Acquire"
-        ]},
-      { id:"comms", item:"Comms Option", instruction:"(Choose 1 option)", type:"single", options: COMMS_OPTIONS },
-      { id:"reasonComms", item:"Reason for Changing Comms Type", instruction:"", type:"single", options:["Yes","NA"],
-        note:"Changing comms type requires GM Approval — ERRTS to SAT",
-        fields:[{key:"reasonDetail", label:"Reason (if Yes)", type:"text"}] },
-      { id:"sensorOption", item:"Sensor Option with River Line Termination", instruction:"(Choose 1 option, details)", type:"single",
-        options:["HS40 with GCO (define range)","Amazon Bubbler with BU07 (define psi pressure)","Vega C23"],
-        fields:[{key:"detail", label:"Range / pressure detail", type:"text"}] },
-      { id:"rainfallLocation", item:"Rainfall Mounted Location", instruction:"(Details / NA)", type:null,
-        fields:[{key:"detail", label:"Details", type:"text"}] },
-      { id:"stockFence", item:"Stock Fence", instruction:"(Yes/No, details)", type:"single", options:["Yes","No"],
-        fields:[{key:"size", label:"Size (eg. 3x3)", type:"text"},{key:"gate", label:"Gate", type:"text"}] },
-      { id:"demolition", item:"Demolition / Disposal", instruction:"(Yes/No, details)", type:"multi", options: DEMOLITION_OPTIONS },
-      { id:"relocation", item:"Relocation", instruction:"(Yes/No, </>25m)", type:"single", options:["Yes","No"],
-        note:"WL Relocation requires EPS & GM Approval",
-        fields:[{key:"distance", label:"Distance (>25m or <25m)", type:"text"}] },
-      { id:"coords", item:"Instrumentation Coordinates", instruction:"(Existing or, Proposed)", type:null,
-        fields:[{key:"existing", label:"Existing", type:"text"},{key:"proposed", label:"Proposed", type:"text"}] },
-      { id:"riverCoords", item:"River Line Termination Coordinates", instruction:"", type:null,
-        fields:[{key:"detail", label:"Coordinates", type:"text"}] },
-      { id:"gaugeBoards", item:"1m Gauge Boards", instruction:"(Yes/No, add details)", type:"single", options:["Yes","No","TBA"],
-        fields:[{key:"quantity", label:"Quantity", type:"text"},{key:"distance", label:"Distance", type:"text"}] },
-      { id:"accessibility", item:"Accessibility", instruction:"(Delete irrelevant options)", type:"multi", options: ACCESSIBILITY_OPTIONS },
-      { id:"nonStandard", item:"Non-Standard options", instruction:"(Please avoid if possible)", type:"single", options:["Yes","NA"],
-        fields:[{key:"detail", label:"If chosen: drawings, part numbers, exact locations etc. (must be provided)", type:"textarea"}] },
-      { id:"remediation", item:"Remediation / Additional Works", instruction:"(Delete irrelevant options)", type:"multi",
-        options: remediationOptions("Bollards for cabinet protection").concat(["Plinth under cabinet"]),
-        fields:[{key:"other", label:"Other", type:"text"}] },
-      { id:"photos", item:"Site Assessment Photos", instruction:"", type:null,
-        fields:[{key:"link", label:"Insert link & confirm access", type:"text"}] },
-      { id:"installNotes", item:"Installation Notes", instruction:"(Freeform section)", type:null,
-        fields:[{key:"notes", label:"Notes", type:"textarea"}] }
-    ]
-  },
-  {
-    id: "repeater",
-    label: "Repeater / Gateway Table",
-    title: "Repeater / Gateway Table",
-    rows: [
-      { id:"stationType", item:"Station Type", instruction:"(Delete irrelevant options)", type:"single",
-        options:["Rain Gauge / Repeater","Rain Gauge / Water Level / Repeater","Rain Gauge / Water Level / Reservoir",
-          "Rain Gauge / Water Level / Tide","Water Level / Reservoir","Water Level / Tide Gauge","Repeater","Gateway","Base Station"] },
-      { id:"complexity", item:"Complexity & Scope", instruction:"(Choose 1 option)", type:"single",
-        options:[
-          "### High Complexity",
-          "High Complexity Total Rebuild – Type 5A","High Complexity Total Rebuild – Type 5B","High Complexity Bespoke Rebuild",
-          "High Complexity Total Rebuild – Repeater",
-          "### Moderate Complexity",
-          "Moderate Complexity Bespoke Upgrade","Moderate Complexity – Cabinet & Equipment Replacement","Moderate Complexity Platform Replacement",
-          "### Low Complexity",
-          "Low Complexity Remediation – Instrumentation Only",
-          "Low Complexity Remediation - Co-Located Equipment Upgrade",
-          "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
-          "### Other",
-          "Vegetation Management","Acquire & Decommission","Acquire & Relocate","Acquired – No Remediation Required","Do Not Acquire"
-        ]},
-      { id:"infraType", item:"Infra Type", instruction:"(Choose 1 option)", type:"single", options:["Rack Mount","Outdoor Cabinet"] },
-      { id:"mast", item:"Mast", instruction:"(Choose relevant option)", type:"single", options:["8m","4m","Cabinet mount"] },
-      { id:"errts", item:"ERRTS / Frequencies", instruction:"(Choose option, add detail)", type:"single",
-        options:["ERRTS (ELPRO)","ERRTS (Campbell Scientific)","Satellite","Cellular"],
-        fields:[{key:"frequency", label:"Frequency details", type:"text"},{key:"power", label:"Transmitter power", type:"text"}] },
-      { id:"backhaul", item:"Backhaul Options", instruction:"(Choose 1 option)", type:"single", options:["Bureau WAN","Cellular Modem"] },
-      { id:"bgan", item:"Optional BGAN Backup", instruction:"(Yes / No)", type:"single", options:["Yes","No"] },
-      { id:"reasonComms", item:"Reason for Changing Comms Type", instruction:"", type:"single", options:["Yes","NA"],
-        note:"Changing comms type requires GM Approval",
-        fields:[{key:"reasonDetail", label:"Reason (if Yes)", type:"text"}] },
-      { id:"rainfallLocation", item:"Rainfall Mounted Location", instruction:"(Details / NA)", type:null,
-        fields:[{key:"detail", label:"Details", type:"text"}] },
-      { id:"cavityFilters", item:"Cavity Filters", instruction:"(Add relevant detail)", type:null,
-        fields:[{key:"bandpass", label:"Bandpass", type:"text"},{key:"frequency", label:"Frequency", type:"text"}] },
-      { id:"stockFence", item:"Stock / Security Fence", instruction:"(Yes/No, details)", type:"single", options:["Yes","No"],
-        fields:[{key:"size", label:"Size (eg. 3x3)", type:"text"},{key:"gate", label:"Gate", type:"text"}] },
-      { id:"demolition", item:"Demolition / Disposal", instruction:"(Yes/No, details)", type:"multi", options: DEMOLITION_OPTIONS },
-      { id:"relocation", item:"Relocation", instruction:"(Yes/No, </>25m)", type:"single", options:["Yes","No"],
-        note:"Relocations require GM Approval",
-        fields:[{key:"distance", label:"Distance (>25m or <25m)", type:"text"}] },
-      { id:"coords", item:"Instrumentation Coordinates", instruction:"(Existing or, Proposed)", type:null,
-        fields:[{key:"existing", label:"Existing", type:"text"},{key:"proposed", label:"Proposed", type:"text"}] },
-      { id:"accessibility", item:"Accessibility", instruction:"(Delete irrelevant options)", type:"multi", options: ACCESSIBILITY_OPTIONS },
-      { id:"nonStandard", item:"Non-Standard options", instruction:"(Please avoid if possible)", type:"single", options:["Yes","NA"],
-        fields:[{key:"detail", label:"If chosen: drawings, part numbers, exact locations etc. (must be provided)", type:"textarea"}] },
-      { id:"remediation", item:"Remediation / Additional Works", instruction:"(Tick if required)", type:"multi",
-        options: remediationOptions("Bollards for cabinet protection").concat(["Plinth under cabinet"]),
-        fields:[{key:"other", label:"Other", type:"text"}] },
-      { id:"photos", item:"Site Assessment Photos", instruction:"", type:null,
-        fields:[{key:"link", label:"Insert link & confirm access", type:"text"}] },
-      { id:"installNotes", item:"Installation Notes", instruction:"(Freeform section)", type:null,
-        fields:[{key:"notes", label:"Notes", type:"textarea"}] }
-    ]
-  }
-];
+// Resolve the option strings for a row (shared set or inline), filtering blanks.
+function rowOptions(row){
+  if(!rowHasOptions(row)) return [];
+  let list = row.optionSet ? (defs.optionSets[row.optionSet] || []) : (row.options || []);
+  return list.filter(o => String(o).trim() !== "");
+}
+function rowHasOptions(row){ return row.type === "single" || row.type === "multi"; }
 
-/* ===================== STATE ===================== */
-// state[tableId][rowId] = { selected: string|string[]|null, fields: {key:value}, note: string }
-const state = {};
-TABLES.forEach(t=>{
-  state[t.id] = {};
-  t.rows.forEach(r=>{
-    state[t.id][r.id] = {
-      selected: r.type === "multi" ? [] : null,
-      fields: {},
-      note: ""
-    };
+/* Produce a clean copy for export (drops empty option lines, unused keys). */
+function exportableDefinitions(){
+  const d = clone(defs);
+  Object.keys(d.optionSets).forEach(k=>{
+    d.optionSets[k] = d.optionSets[k].filter(o => String(o).trim() !== "");
   });
-});
+  d.tables.forEach(t=>t.rows.forEach(r=>{
+    if(rowHasOptions(r) && Array.isArray(r.options)){
+      r.options = r.options.filter(o => String(o).trim() !== "");
+    }
+  }));
+  if(!d.meta) d.meta = {};
+  d.meta.updated = new Date().toISOString().slice(0,10);
+  return d;
+}
 
-let activeTableId = TABLES[0].id;
+/* ===================== BUILDER STATE ===================== */
+// state[tableId][rowId] = { selected: string|string[]|null, fields:{key:value}, note:string }
+let state = {};
+let activeTableId = null;
 
-/* ===================== RENDER ===================== */
+function emptyRowState(row){
+  return { selected: row.type === "multi" ? [] : null, fields:{}, note:"" };
+}
+// Rebuild builder state to match the current definitions, preserving any
+// in-progress answers whose table/row still exist and whose type is compatible.
+function reconcileState(){
+  const next = {};
+  (defs ? defs.tables : []).forEach(t=>{
+    next[t.id] = {};
+    t.rows.forEach(r=>{
+      const prev = state[t.id] && state[t.id][r.id];
+      if(prev){
+        const wantsArray = r.type === "multi";
+        const hadArray = Array.isArray(prev.selected);
+        next[t.id][r.id] = {
+          selected: wantsArray ? (hadArray ? prev.selected : []) : (hadArray ? null : prev.selected),
+          fields: prev.fields || {},
+          note: prev.note || ""
+        };
+      } else {
+        next[t.id][r.id] = emptyRowState(r);
+      }
+    });
+  });
+  state = next;
+  const ids = defs ? defs.tables.map(t=>t.id) : [];
+  if(!ids.includes(activeTableId)) activeTableId = ids[0] || null;
+}
+
+function activeTable(){ return defs ? defs.tables.find(t=>t.id === activeTableId) : null; }
+
+/* ===================== DOM REFS ===================== */
+const wrapEl = document.getElementById("wrap");
+const builderView = document.getElementById("builderView");
+const manageView = document.getElementById("manageView");
 const tabsEl = document.getElementById("tabs");
 const rowsContainerEl = document.getElementById("rowsContainer");
 const progressTextEl = document.getElementById("progressText");
 const progressFillEl = document.getElementById("progressFill");
+const builderToolbar = document.getElementById("builderToolbar");
+const sourceLabelEl = document.getElementById("sourceLabel");
+const sourceChipEl = document.getElementById("sourceChip");
 
+/* ===================== BUILDER RENDER ===================== */
 function renderTabs(){
   tabsEl.innerHTML = "";
-  TABLES.forEach(t=>{
+  defs.tables.forEach(t=>{
     const btn = document.createElement("button");
     btn.className = "tab-btn" + (t.id === activeTableId ? " active" : "");
     btn.textContent = t.label;
-    btn.addEventListener("click", ()=>{ activeTableId = t.id; renderAll(); });
+    btn.addEventListener("click", ()=>{ activeTableId = t.id; renderBuilder(); });
     tabsEl.appendChild(btn);
   });
 }
@@ -478,8 +559,9 @@ function rowOutputLines(table, row){
 }
 
 function renderRows(){
-  const table = TABLES.find(t=>t.id === activeTableId);
+  const table = activeTable();
   rowsContainerEl.innerHTML = "";
+  if(!table) return;
 
   let filledCount = 0;
 
@@ -509,15 +591,15 @@ function renderRows(){
     clearBtn.className = "row-clear";
     clearBtn.textContent = "Clear";
     clearBtn.addEventListener("click", ()=>{
-      state[table.id][row.id] = { selected: row.type === "multi" ? [] : null, fields:{}, note:"" };
+      state[table.id][row.id] = emptyRowState(row);
       renderRows();
     });
     controlsEl.appendChild(clearBtn);
 
-    if(row.type){
+    if(rowHasOptions(row)){
       const optsWrap = document.createElement("div");
       optsWrap.className = "options-list";
-      row.options.forEach((opt, idx)=>{
+      rowOptions(row).forEach((opt)=>{
         if(opt.startsWith("###")){
           const div = document.createElement("div");
           div.className = "option-divider";
@@ -606,9 +688,10 @@ function renderRows(){
 }
 
 function updatePreviews(){
-  const table = TABLES.find(t=>t.id === activeTableId);
+  const table = activeTable();
+  if(!table) return;
   table.rows.forEach(row=>{
-    const el = rowsContainerEl.querySelector(`[data-preview-for="${row.id}"]`);
+    const el = rowsContainerEl.querySelector(`[data-preview-for="${cssEscape(row.id)}"]`);
     if(!el) return;
     const lines = rowOutputLines(table, row);
     if(lines.length){
@@ -623,11 +706,12 @@ function updatePreviews(){
 
 function renderPreviewAndProgress(){
   updatePreviews();
-  const table = TABLES.find(t=>t.id === activeTableId);
+  const table = activeTable();
+  if(!table) return;
   let filledCount = 0;
-  table.rows.forEach(row=>{
+  table.rows.forEach((row, idx)=>{
     if(rowHasContent(table, row)) filledCount++;
-    const rowEl = rowsContainerEl.children[table.rows.indexOf(row)];
+    const rowEl = rowsContainerEl.children[idx];
     if(rowEl){
       rowEl.classList.toggle("has-content", rowHasContent(table, row));
     }
@@ -640,7 +724,16 @@ function updateProgress(filled, total){
   progressFillEl.style.width = total ? `${(filled/total)*100}%` : "0%";
 }
 
-function renderAll(){
+function renderBuilder(){
+  if(!defs || !defs.tables.length){
+    tabsEl.innerHTML = "";
+    rowsContainerEl.innerHTML = `<div class="empty-state">
+        <h3>No tables defined yet</h3>
+        <p>Load or import a definitions file, or add a table from <b>Manage Tables</b>.</p>
+      </div>`;
+    updateProgress(0,0);
+    return;
+  }
   renderTabs();
   renderRows();
 }
@@ -649,6 +742,11 @@ function escapeHtml(str){
   return String(str)
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
     .replace(/"/g,"&quot;");
+}
+// Escape a value for use inside a CSS attribute selector.
+function cssEscape(str){
+  if(window.CSS && CSS.escape) return CSS.escape(str);
+  return String(str).replace(/["\\\]]/g, "\\$&");
 }
 
 /* ===================== COPY TO CLIPBOARD ===================== */
@@ -661,7 +759,7 @@ const forumDateEl = document.getElementById("forumDate");
 const forumAttendeesEl = document.getElementById("forumAttendees");
 
 function buildHtmlTable(){
-  const table = TABLES.find(t=>t.id === activeTableId);
+  const table = activeTable();
   const includeHeader = includeHeaderEl.checked;
   const includeEmpty = includeEmptyEl.checked;
 
@@ -689,7 +787,7 @@ function buildHtmlTable(){
 }
 
 function buildPlainText(){
-  const table = TABLES.find(t=>t.id === activeTableId);
+  const table = activeTable();
   const includeHeader = includeHeaderEl.checked;
   const includeEmpty = includeEmptyEl.checked;
   let out = "";
@@ -709,10 +807,10 @@ function buildPlainText(){
 }
 
 async function copyTable(){
+  if(!activeTable()){ showStatus("No table to copy"); return; }
   const html = buildHtmlTable();
   const text = buildPlainText();
 
-  // Preferred: modern async clipboard with real HTML mime type (best fidelity into Word)
   try{
     if(navigator.clipboard && window.ClipboardItem){
       const item = new ClipboardItem({
@@ -725,7 +823,6 @@ async function copyTable(){
     }
   }catch(e){ /* fall through to legacy method */ }
 
-  // Fallback: build a hidden real table, select it, and use execCommand('copy')
   try{
     const container = document.createElement("div");
     container.style.position = "fixed";
@@ -744,13 +841,9 @@ async function copyTable(){
     sel.removeAllRanges();
     document.body.removeChild(container);
 
-    if(ok){
-      showStatus("Copied — paste into Word");
-    } else {
-      throw new Error("execCommand failed");
-    }
+    if(ok){ showStatus("Copied — paste into Word"); }
+    else { throw new Error("execCommand failed"); }
   }catch(e){
-    // Last resort: plain text only
     try{
       await navigator.clipboard.writeText(text);
       showStatus("Copied as plain text only");
@@ -768,14 +861,714 @@ function showStatus(msg){
 
 copyBtn.addEventListener("click", copyTable);
 resetBtn.addEventListener("click", ()=>{
-  const table = TABLES.find(t=>t.id === activeTableId);
-  table.rows.forEach(r=>{
-    state[table.id][r.id] = { selected: r.type === "multi" ? [] : null, fields:{}, note:"" };
-  });
+  const table = activeTable();
+  if(!table) return;
+  table.rows.forEach(r=>{ state[table.id][r.id] = emptyRowState(r); });
   renderRows();
 });
 
-renderAll();
+/* =========================================================================
+   MANAGE / CRUD EDITOR
+   ========================================================================= */
+let selectedTableIndex = 0;
+
+function slugify(str){
+  return String(str).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"") || "item";
+}
+function uniqueId(base, taken){
+  let id = base, n = 2;
+  while(taken.includes(id)){ id = base + n; n++; }
+  return id;
+}
+
+// Write the current definitions to the browser store (no origin change).
+function writeLocal(){
+  try{ localStorage.setItem(LS_DEFS, JSON.stringify(defs)); }
+  catch(e){ console.warn("Could not save to localStorage", e); }
+}
+// An *edit* happened: persist (debounced) and mark the copy as locally edited.
+let persistTimer = null;
+function persistLocal(){
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(()=>{
+    writeLocal();
+    if(defsOrigin !== "local"){ defsOrigin = "local"; renderSourceChip(); }
+  }, 300);
+}
+// A structural change: persist, refresh dependent builder state, re-render editor.
+function afterStructuralChange(){
+  reconcileState();
+  persistLocal();
+  renderManage();
+}
+// A text-only change: persist quietly, keep focus (no re-render).
+function afterTextChange(){ persistLocal(); }
+
+function collectIssues(){
+  const issues = [];
+  const tIds = defs.tables.map(t=>t.id);
+  tIds.forEach((id,i)=>{
+    if(!id.trim()) issues.push("A table has a blank ID.");
+    else if(tIds.indexOf(id) !== i) issues.push(`Duplicate table ID "${id}".`);
+  });
+  defs.tables.forEach(t=>{
+    const rIds = t.rows.map(r=>r.id);
+    rIds.forEach((id,i)=>{
+      if(!id.trim()) issues.push(`Table "${t.label}" has a row with a blank ID.`);
+      else if(rIds.indexOf(id) !== i) issues.push(`Table "${t.label}" has duplicate row ID "${id}".`);
+    });
+    t.rows.forEach(r=>{
+      if(r.optionSet && !defs.optionSets[r.optionSet]){
+        issues.push(`Row "${r.item}" references missing option set "${r.optionSet}".`);
+      }
+    });
+  });
+  const sNames = Object.keys(defs.optionSets);
+  // (object keys are inherently unique; nothing to check for duplicates)
+  return [...new Set(issues)];
+}
+
+function renderManage(){
+  if(!defs){
+    manageView.innerHTML = renderNoDefsHtml();
+    wireNoDefs();
+    return;
+  }
+  if(selectedTableIndex >= defs.tables.length) selectedTableIndex = Math.max(0, defs.tables.length-1);
+
+  const issues = collectIssues();
+  manageView.innerHTML = `
+    <div class="admin-actions">
+      <button class="btn btn-secondary" id="btnImport">Import JSON…</button>
+      <button class="btn btn-secondary" id="btnUrl">Load from URL…</button>
+      <button class="btn btn-primary" id="btnExport">Export JSON</button>
+      <button class="btn btn-secondary" id="btnReset">Reset to published file</button>
+      <span class="grow"></span>
+      <span class="status-msg" id="mStatus"></span>
+    </div>
+    <div class="admin-note">
+      <b>Heads up:</b> changes here are saved in <b>this browser only</b>. When you are happy,
+      click <b>Export JSON</b> and upload the file to your shared location (SharePoint / on-prem)
+      as <code>${escapeHtml(DEFINITIONS_FILE)}</code> so the whole team gets the update.
+    </div>
+    ${issues.length ? `<div class="warn-banner"><b>Please fix before publishing:</b><ul>${issues.map(i=>`<li>${escapeHtml(i)}</li>`).join("")}</ul></div>` : ""}
+    <div class="admin-cols">
+      <div>
+        <div class="panel" style="margin-bottom:14px;">
+          <div class="panel-head">Tables <button class="mini-btn" id="btnAddTable">+ Add table</button></div>
+          <div class="panel-body"><div class="tbl-list" id="tblList"></div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">Shared option sets <button class="mini-btn" id="btnAddSet">+ Add set</button></div>
+          <div class="panel-body" id="setList"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head" id="editorHead">Table editor</div>
+        <div class="panel-body" id="tableEditor"></div>
+      </div>
+    </div>
+  `;
+
+  // top actions
+  document.getElementById("btnImport").addEventListener("click", ()=>importFileEl.click());
+  document.getElementById("btnUrl").addEventListener("click", promptLoadUrl);
+  document.getElementById("btnExport").addEventListener("click", exportDefinitions);
+  document.getElementById("btnReset").addEventListener("click", resetToPublished);
+  document.getElementById("btnAddTable").addEventListener("click", addTable);
+  document.getElementById("btnAddSet").addEventListener("click", addOptionSet);
+
+  renderTableList();
+  renderOptionSets();
+  renderTableEditor();
+}
+
+function renderTableList(){
+  const listEl = document.getElementById("tblList");
+  listEl.innerHTML = "";
+  if(!defs.tables.length){
+    listEl.innerHTML = `<div class="hint" style="font-size:.82rem;color:var(--ink-soft);">No tables yet — click “+ Add table”.</div>`;
+    return;
+  }
+  defs.tables.forEach((t, i)=>{
+    const card = document.createElement("div");
+    card.className = "tbl-card" + (i === selectedTableIndex ? " active" : "");
+    card.innerHTML = `
+      <span class="tbl-name">${escapeHtml(t.label || "(untitled)")}</span>
+      <span class="tbl-count">${t.rows.length}</span>`;
+    card.addEventListener("click", (e)=>{
+      if(e.target.closest(".icon-btn")) return;
+      selectedTableIndex = i; renderManage();
+    });
+
+    const up = iconBtn("↑","Move up", ()=>{ if(i>0){ swap(defs.tables,i,i-1); selectedTableIndex=i-1; afterStructuralChange(); }});
+    const down = iconBtn("↓","Move down", ()=>{ if(i<defs.tables.length-1){ swap(defs.tables,i,i+1); selectedTableIndex=i+1; afterStructuralChange(); }});
+    const dup = iconBtn("⧉","Duplicate", ()=>duplicateTable(i));
+    const del = iconBtn("🗑","Delete table", ()=>deleteTable(i), true);
+    [up,down,dup,del].forEach(b=>card.appendChild(b));
+    listEl.appendChild(card);
+  });
+}
+
+function renderOptionSets(){
+  const wrap = document.getElementById("setList");
+  wrap.innerHTML = "";
+  const names = Object.keys(defs.optionSets);
+  if(!names.length){
+    wrap.innerHTML = `<div class="hint" style="font-size:.82rem;color:var(--ink-soft);">No shared sets. Rows can still use their own custom lists.</div>`;
+    return;
+  }
+  names.forEach(name=>{
+    const usedIn = defs.tables
+      .filter(t=>t.rows.some(r=>r.optionSet === name))
+      .map(t=>t.label);
+    const box = document.createElement("div");
+    box.className = "oset";
+    const head = document.createElement("div");
+    head.className = "oset-head";
+    const nameInput = document.createElement("input");
+    nameInput.value = name;
+    nameInput.title = "Set name (used by rows)";
+    nameInput.addEventListener("change", ()=>renameOptionSet(name, nameInput.value.trim()));
+    const del = iconBtn("🗑","Delete set", ()=>deleteOptionSet(name), true);
+    head.appendChild(nameInput);
+    head.appendChild(del);
+
+    const ta = document.createElement("textarea");
+    ta.value = defs.optionSets[name].join("\n");
+    ta.placeholder = "One option per line. A line starting with '### ' is a heading.";
+    ta.addEventListener("input", ()=>{
+      defs.optionSets[name] = ta.value.split("\n");
+      afterTextChange();
+    });
+
+    box.appendChild(head);
+    box.appendChild(ta);
+    if(usedIn.length){
+      const u = document.createElement("div");
+      u.className = "used-in";
+      u.textContent = "Used in: " + usedIn.join(", ");
+      box.appendChild(u);
+    }
+    wrap.appendChild(box);
+  });
+}
+
+function renderTableEditor(){
+  const head = document.getElementById("editorHead");
+  const host = document.getElementById("tableEditor");
+  const table = defs.tables[selectedTableIndex];
+  if(!table){
+    head.textContent = "Table editor";
+    host.innerHTML = `<div class="hint" style="color:var(--ink-soft);">Select or add a table to edit.</div>`;
+    return;
+  }
+  head.textContent = "Editing: " + (table.label || "(untitled)");
+  host.innerHTML = `
+    <div class="ed-section ed-grid">
+      <div class="ed-field">
+        <label>Tab label</label>
+        <input type="text" id="tLabel" value="${escapeHtml(table.label)}">
+      </div>
+      <div class="ed-field">
+        <label>Table ID</label>
+        <input type="text" id="tId" value="${escapeHtml(table.id)}">
+        <span class="hint">Internal key — keep it short & unique.</span>
+      </div>
+      <div class="ed-field full">
+        <label>Printed title (top of the copied table)</label>
+        <input type="text" id="tTitle" value="${escapeHtml(table.title)}">
+      </div>
+    </div>
+    <div class="ed-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <strong style="font-size:.9rem;">Rows (${table.rows.length})</strong>
+        <button class="mini-btn" id="btnAddRow">+ Add row</button>
+      </div>
+      <div id="rowEditors"></div>
+    </div>
+  `;
+
+  const lbl = document.getElementById("tLabel");
+  lbl.addEventListener("input", ()=>{
+    table.label = lbl.value;
+    const nameSpan = document.querySelector(`#tblList .tbl-card:nth-child(${selectedTableIndex+1}) .tbl-name`);
+    if(nameSpan) nameSpan.textContent = table.label || "(untitled)";
+    head.textContent = "Editing: " + (table.label || "(untitled)");
+    afterTextChange();
+  });
+  const idInput = document.getElementById("tId");
+  idInput.addEventListener("change", ()=>{ table.id = idInput.value.trim(); afterStructuralChange(); });
+  const ttl = document.getElementById("tTitle");
+  ttl.addEventListener("input", ()=>{ table.title = ttl.value; afterTextChange(); });
+  document.getElementById("btnAddRow").addEventListener("click", ()=>addRow(table));
+
+  renderRowEditors(table);
+}
+
+function renderRowEditors(table){
+  const host = document.getElementById("rowEditors");
+  host.innerHTML = "";
+  if(!table.rows.length){
+    host.innerHTML = `<div class="hint" style="color:var(--ink-soft);">No rows yet — click “+ Add row”.</div>`;
+    return;
+  }
+  table.rows.forEach((row, i)=>{
+    host.appendChild(buildRowEditor(table, row, i));
+  });
+}
+
+function buildRowEditor(table, row, i){
+  const box = document.createElement("div");
+  box.className = "ed-row" + (row._open ? " open" : "");
+
+  const head = document.createElement("div");
+  head.className = "ed-row-head";
+  head.innerHTML = `
+    <span class="caret">▶</span>
+    <span class="er-title">${escapeHtml(row.item || "(untitled row)")}</span>
+    <span class="er-type">${row.type}</span>`;
+  head.addEventListener("click", (e)=>{
+    if(e.target.closest(".icon-btn")) return;
+    row._open = !box.classList.contains("open");
+    box.classList.toggle("open");
+  });
+  const up = iconBtn("↑","Move up", ()=>{ if(i>0){ swap(table.rows,i,i-1); afterStructuralChange(); }});
+  const down = iconBtn("↓","Move down", ()=>{ if(i<table.rows.length-1){ swap(table.rows,i,i+1); afterStructuralChange(); }});
+  const dup = iconBtn("⧉","Duplicate row", ()=>duplicateRow(table,i));
+  const del = iconBtn("🗑","Delete row", ()=>deleteRow(table,i), true);
+  [up,down,dup,del].forEach(b=>head.appendChild(b));
+  box.appendChild(head);
+
+  const body = document.createElement("div");
+  body.className = "ed-row-body";
+  body.innerHTML = `
+    <div class="ed-grid">
+      <div class="ed-field">
+        <label>Item name</label>
+        <input type="text" class="f-item" value="${escapeHtml(row.item)}">
+      </div>
+      <div class="ed-field">
+        <label>Row ID</label>
+        <input type="text" class="f-id" value="${escapeHtml(row.id)}">
+      </div>
+      <div class="ed-field">
+        <label>Instruction (grey helper)</label>
+        <input type="text" class="f-instruction" value="${escapeHtml(row.instruction)}">
+      </div>
+      <div class="ed-field">
+        <label>Selection type</label>
+        <select class="f-type">
+          <option value="single"${row.type==="single"?" selected":""}>Single choice (radio)</option>
+          <option value="multi"${row.type==="multi"?" selected":""}>Multiple choice (checkbox)</option>
+          <option value="none"${row.type==="none"?" selected":""}>No options (fields / text only)</option>
+        </select>
+      </div>
+      <div class="ed-field full">
+        <label>Approval note (amber box, optional)</label>
+        <input type="text" class="f-note" value="${escapeHtml(row.note || "")}">
+      </div>
+    </div>
+    <div class="ed-section optionsBlock"></div>
+    <div class="ed-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <label style="font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:600;">Fields (free-text inputs)</label>
+        <button class="mini-btn btnAddField">+ Add field</button>
+      </div>
+      <div class="field-editor fieldEditor"></div>
+    </div>
+  `;
+  box.appendChild(body);
+
+  // text inputs (no re-render)
+  const itemInput = body.querySelector(".f-item");
+  itemInput.addEventListener("input", ()=>{
+    row.item = itemInput.value;
+    head.querySelector(".er-title").textContent = row.item || "(untitled row)";
+    afterTextChange();
+  });
+  body.querySelector(".f-id").addEventListener("change", (e)=>{ row.id = e.target.value.trim(); afterStructuralChange(); });
+  body.querySelector(".f-instruction").addEventListener("input", (e)=>{ row.instruction = e.target.value; afterTextChange(); });
+  body.querySelector(".f-note").addEventListener("input", (e)=>{ row.note = e.target.value; afterTextChange(); });
+  body.querySelector(".f-type").addEventListener("change", (e)=>{
+    const newType = e.target.value;
+    row.type = newType;
+    if(newType === "none"){
+      // options no longer relevant; keep nothing stray
+    } else if(!row.optionSet && !Array.isArray(row.options)){
+      row.options = [];
+    }
+    row._open = true;
+    afterStructuralChange();
+  });
+  body.querySelector(".btnAddField").addEventListener("click", ()=>{
+    if(!row.fields) row.fields = [];
+    const taken = row.fields.map(f=>f.key);
+    row.fields.push({ key: uniqueId("field", taken), label:"New field", type:"text" });
+    row._open = true;
+    afterStructuralChange();
+  });
+
+  renderOptionsBlock(body.querySelector(".optionsBlock"), row);
+  renderFieldEditor(body.querySelector(".fieldEditor"), row);
+  return box;
+}
+
+function renderOptionsBlock(host, row){
+  host.innerHTML = "";
+  if(!rowHasOptions(row)){
+    host.innerHTML = `<div class="hint" style="color:var(--ink-soft);font-size:.78rem;">This row shows no option list.</div>`;
+    return;
+  }
+  const usingSet = !!row.optionSet;
+  const setNames = Object.keys(defs.optionSets);
+
+  const source = document.createElement("div");
+  source.className = "opt-source";
+  source.innerHTML = `
+    <label><input type="radio" name="src_${cssEscape(row.id)}_${Math.random().toString(36).slice(2,6)}" class="srcCustom" ${usingSet?"":"checked"}> Custom list</label>
+    <label><input type="radio" class="srcShared" ${usingSet?"checked":""} ${setNames.length?"":"disabled"}> Shared set</label>
+  `;
+  host.appendChild(source);
+
+  if(usingSet){
+    const sel = document.createElement("select");
+    sel.className = "f-set";
+    setNames.forEach(n=>{
+      const o = document.createElement("option");
+      o.value = n; o.textContent = n; o.selected = n === row.optionSet;
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", ()=>{ row.optionSet = sel.value; afterTextChange(); });
+    const field = document.createElement("div");
+    field.className = "ed-field";
+    field.innerHTML = `<label>Which shared set</label>`;
+    field.appendChild(sel);
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = `${rowOptions(row).length} option(s). Edit the list under “Shared option sets”.`;
+    field.appendChild(hint);
+    host.appendChild(field);
+  } else {
+    const field = document.createElement("div");
+    field.className = "ed-field full";
+    field.innerHTML = `<label>Options — one per line ('### Heading' for a divider)</label>`;
+    const ta = document.createElement("textarea");
+    ta.style.minHeight = "90px";
+    ta.value = (row.options || []).join("\n");
+    ta.addEventListener("input", ()=>{ row.options = ta.value.split("\n"); afterTextChange(); });
+    field.appendChild(ta);
+    host.appendChild(field);
+  }
+
+  source.querySelector(".srcCustom").addEventListener("change", (e)=>{
+    if(!e.target.checked) return;
+    row.options = rowOptions(row).slice();   // seed from whatever was resolving
+    delete row.optionSet;
+    afterStructuralChange();
+  });
+  const sharedRadio = source.querySelector(".srcShared");
+  sharedRadio.addEventListener("change", (e)=>{
+    if(!e.target.checked) return;
+    row.optionSet = setNames[0];
+    delete row.options;
+    afterStructuralChange();
+  });
+}
+
+function renderFieldEditor(host, row){
+  host.innerHTML = "";
+  const fields = row.fields || [];
+  if(!fields.length){
+    host.innerHTML = `<div class="hint" style="color:var(--ink-soft);font-size:.78rem;">No fields. These render as free-text inputs beneath the options.</div>`;
+    return;
+  }
+  fields.forEach((f, i)=>{
+    const r = document.createElement("div");
+    r.className = "fe-row";
+    const key = document.createElement("input");
+    key.type = "text"; key.placeholder = "key"; key.value = f.key;
+    key.addEventListener("change", ()=>{ f.key = key.value.trim(); afterTextChange(); });
+    const label = document.createElement("input");
+    label.type = "text"; label.placeholder = "Label shown to user"; label.value = f.label;
+    label.addEventListener("input", ()=>{ f.label = label.value; afterTextChange(); });
+    const type = document.createElement("select");
+    type.innerHTML = `<option value="text"${f.type==="text"?" selected":""}>Text</option><option value="textarea"${f.type==="textarea"?" selected":""}>Text area</option>`;
+    type.addEventListener("change", ()=>{ f.type = type.value; afterTextChange(); });
+    const del = iconBtn("🗑","Remove field", ()=>{ row.fields.splice(i,1); if(!row.fields.length) delete row.fields; afterStructuralChange(); }, true);
+    r.appendChild(key); r.appendChild(label); r.appendChild(type); r.appendChild(del);
+    host.appendChild(r);
+  });
+}
+
+/* ---- editor mutations ---- */
+function swap(arr,a,b){ const t=arr[a]; arr[a]=arr[b]; arr[b]=t; }
+
+function addTable(){
+  const taken = defs.tables.map(t=>t.id);
+  const id = uniqueId("table", taken);
+  defs.tables.push({ id, label:"New Table", title:"New Table", rows:[] });
+  selectedTableIndex = defs.tables.length - 1;
+  afterStructuralChange();
+}
+function duplicateTable(i){
+  const copy = clone(defs.tables[i]);
+  copy.id = uniqueId(copy.id + "-copy", defs.tables.map(t=>t.id));
+  copy.label = copy.label + " (copy)";
+  defs.tables.splice(i+1, 0, copy);
+  selectedTableIndex = i+1;
+  afterStructuralChange();
+}
+function deleteTable(i){
+  if(!confirm(`Delete table "${defs.tables[i].label}" and all its rows?`)) return;
+  defs.tables.splice(i,1);
+  if(selectedTableIndex >= defs.tables.length) selectedTableIndex = Math.max(0, defs.tables.length-1);
+  afterStructuralChange();
+}
+function addRow(table){
+  const id = uniqueId("row", table.rows.map(r=>r.id));
+  const row = { id, item:"New row", instruction:"", type:"single", options:["Option 1"], _open:true };
+  table.rows.push(row);
+  afterStructuralChange();
+}
+function duplicateRow(table, i){
+  const copy = clone(table.rows[i]);
+  copy.id = uniqueId(copy.id + "-copy", table.rows.map(r=>r.id));
+  copy._open = true;
+  table.rows.splice(i+1, 0, copy);
+  afterStructuralChange();
+}
+function deleteRow(table, i){
+  if(!confirm(`Delete row "${table.rows[i].item}"?`)) return;
+  table.rows.splice(i,1);
+  afterStructuralChange();
+}
+function addOptionSet(){
+  const base = "newSet";
+  const name = uniqueId(base, Object.keys(defs.optionSets));
+  defs.optionSets[name] = ["Option 1"];
+  afterStructuralChange();
+}
+function renameOptionSet(oldName, newName){
+  if(!newName || newName === oldName){ renderOptionSets(); return; }
+  if(defs.optionSets[newName]){ alert(`A set named "${newName}" already exists.`); renderOptionSets(); return; }
+  // Rebuild keeping order.
+  const rebuilt = {};
+  Object.keys(defs.optionSets).forEach(k=>{
+    rebuilt[k === oldName ? newName : k] = defs.optionSets[k];
+  });
+  defs.optionSets = rebuilt;
+  // Update references.
+  defs.tables.forEach(t=>t.rows.forEach(r=>{ if(r.optionSet === oldName) r.optionSet = newName; }));
+  afterStructuralChange();
+}
+function deleteOptionSet(name){
+  const users = defs.tables.flatMap(t=>t.rows.filter(r=>r.optionSet === name));
+  const msg = users.length
+    ? `Delete set "${name}"? ${users.length} row(s) use it — they will keep a copy of the current options as a custom list.`
+    : `Delete set "${name}"?`;
+  if(!confirm(msg)) return;
+  const values = defs.optionSets[name] || [];
+  defs.tables.forEach(t=>t.rows.forEach(r=>{
+    if(r.optionSet === name){ delete r.optionSet; r.options = values.slice(); }
+  }));
+  delete defs.optionSets[name];
+  afterStructuralChange();
+}
+
+function iconBtn(glyph, title, handler, danger){
+  const b = document.createElement("button");
+  b.className = "icon-btn" + (danger ? " danger" : "");
+  b.type = "button";
+  b.title = title;
+  b.textContent = glyph;
+  b.addEventListener("click", (e)=>{ e.stopPropagation(); handler(); });
+  return b;
+}
+
+/* ===================== DATA SOURCE ACTIONS ===================== */
+const importFileEl = document.getElementById("importFile");
+
+function mStatus(msg, isError){
+  const el = document.getElementById("mStatus");
+  if(!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? "var(--danger)" : "var(--accent-dark)";
+  setTimeout(()=>{ if(el) el.textContent = ""; }, 4000);
+}
+
+function exportDefinitions(){
+  const data = JSON.stringify(exportableDefinitions(), null, 2) + "\n";
+  const blob = new Blob([data], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = DEFINITIONS_FILE;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  mStatus("Downloaded " + DEFINITIONS_FILE);
+}
+
+importFileEl.addEventListener("change", (e)=>{
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const parsed = JSON.parse(reader.result);
+      applyDefinitions(parsed, "imported");
+      writeLocal();                       // persist the imported copy…
+      localStorage.removeItem(LS_URL);    // …and forget any remembered URL
+      mStatus("Imported " + file.name);
+    }catch(err){
+      mStatus("Import failed: " + err.message, true);
+    }
+    importFileEl.value = "";
+  };
+  reader.readAsText(file);
+});
+
+function promptLoadUrl(){
+  const existing = localStorage.getItem(LS_URL) || "";
+  const url = prompt("URL of a definitions.json to load (e.g. a SharePoint / on-prem link):", existing);
+  if(url === null) return;
+  const trimmed = url.trim();
+  if(!trimmed){ localStorage.removeItem(LS_URL); mStatus("Cleared saved URL."); return; }
+  loadFromUrl(trimmed, true);
+}
+
+async function loadFromUrl(url, remember){
+  try{
+    mStatus("Loading…");
+    const d = await fetchDefs(url);
+    if(remember) localStorage.setItem(LS_URL, url);
+    localStorage.removeItem(LS_DEFS);   // URL is authoritative until edited
+    applyDefinitions(d, "url");
+    mStatus("Loaded from URL.");
+  }catch(err){
+    mStatus("Load failed: " + err.message, true);
+  }
+}
+
+function resetToPublished(){
+  if(!confirm("Discard local edits and reload the published definitions file? This clears your in-browser copy.")) return;
+  localStorage.removeItem(LS_DEFS);
+  localStorage.removeItem(LS_URL);
+  boot(true);
+}
+
+async function fetchDefs(url){
+  const res = await fetch(url, { cache:"no-store" });
+  if(!res.ok) throw new Error("HTTP " + res.status);
+  const json = await res.json();
+  if(!json || typeof json !== "object" || !Array.isArray(json.tables)){
+    throw new Error("not a valid definitions file");
+  }
+  return json;
+}
+
+// Set new definitions from any source and refresh everything.
+function applyDefinitions(raw, origin){
+  defs = normalizeDefinitions(raw);
+  defsOrigin = origin;
+  selectedTableIndex = 0;
+  reconcileState();
+  renderSourceChip();
+  renderBuilder();
+  if(mode === "manage") renderManage();
+}
+
+function renderSourceChip(){
+  const map = {
+    file:   ["", "Definitions: published file"],
+    url:    ["", "Definitions: loaded from URL"],
+    imported:["local", "Definitions: imported file (browser only)"],
+    local:  ["local", "Definitions: edited in this browser"],
+    none:   ["none", "No definitions loaded"]
+  };
+  const [cls, label] = map[defsOrigin] || map.none;
+  sourceLabelEl.textContent = label;
+  sourceChipEl.querySelector(".dot").className = "dot " + cls;
+}
+
+/* ===================== NO-DEFS EMPTY STATE ===================== */
+function renderNoDefsHtml(){
+  return `
+    <div class="empty-state">
+      <h3>No definitions loaded</h3>
+      <p>The app could not automatically load <code>${escapeHtml(DEFINITIONS_FILE)}</code>.
+      If you opened this page directly from disk, your browser may block that load —
+      import the file or load it from a URL instead.</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="nsImport">Import JSON…</button>
+        <button class="btn btn-secondary" id="nsUrl">Load from URL…</button>
+        <button class="btn btn-secondary" id="nsNew">Start a blank set</button>
+      </div>
+    </div>`;
+}
+function wireNoDefs(){
+  const imp = document.getElementById("nsImport");
+  if(imp) imp.addEventListener("click", ()=>importFileEl.click());
+  const url = document.getElementById("nsUrl");
+  if(url) url.addEventListener("click", promptLoadUrl);
+  const nw = document.getElementById("nsNew");
+  if(nw) nw.addEventListener("click", ()=>{
+    applyDefinitions({ version:1, meta:{appTitle:"SORT Forum Scope Builder"}, optionSets:{}, tables:[] }, "local");
+    addTable();
+  });
+}
+
+/* ===================== MODE SWITCHING ===================== */
+function setMode(next){
+  mode = next;
+  document.querySelectorAll(".mode-btn").forEach(b=>b.classList.toggle("active", b.dataset.mode === mode));
+  const isBuilder = mode === "builder";
+  builderView.classList.toggle("hidden", !isBuilder);
+  manageView.classList.toggle("hidden", isBuilder);
+  builderToolbar.classList.toggle("hidden", !isBuilder);
+  wrapEl.classList.toggle("manage", !isBuilder);
+  if(isBuilder){ reconcileState(); renderBuilder(); }
+  else renderManage();
+}
+document.querySelectorAll(".mode-btn").forEach(b=>{
+  b.addEventListener("click", ()=>setMode(b.dataset.mode));
+});
+
+/* ===================== BOOTSTRAP ===================== */
+async function boot(forceFile){
+  // 1. Local edits win (unless we are explicitly resetting to the file).
+  if(!forceFile){
+    const saved = localStorage.getItem(LS_DEFS);
+    if(saved){
+      try{ applyDefinitions(JSON.parse(saved), "local"); return; }
+      catch(e){ console.warn("Corrupt local definitions, ignoring.", e); }
+    }
+    // 2. Remembered URL (e.g. a SharePoint link).
+    const url = new URLSearchParams(location.search).get("defs") || localStorage.getItem(LS_URL);
+    if(url){
+      try{ const d = await fetchDefs(url); applyDefinitions(d, "url"); return; }
+      catch(e){ console.warn("Remembered URL failed, falling back to file.", e); }
+    }
+  }
+  // 3. Bundled sibling file.
+  try{
+    const d = await fetchDefs(DEFINITIONS_FILE);
+    applyDefinitions(d, "file");
+    return;
+  }catch(e){
+    console.warn("Could not load " + DEFINITIONS_FILE, e);
+  }
+  // 4. Nothing available — show the empty state.
+  defs = null;
+  defsOrigin = "none";
+  renderSourceChip();
+  renderBuilder();
+  if(mode === "manage") renderManage();
+}
+
+boot();
 </script>
 </body>
 </html>
