@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SORT Forum Scope Builder</title>
+<style>
+  :root{
+    --ink:#152531;
+    --ink-soft:#4b5f6d;
+    --paper:#f5f7f6;
+    --card:#ffffff;
+    --line:#dbe3e0;
+    --accent:#0f6e6a;
+    --accent-dark:#0b4f4c;
+    --accent-soft:#e4f1ef;
+    --amber:#b5760a;
+    --amber-soft:#fbf1de;
+    --radius:8px;
+    font-size:15px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Segoe UI", "Calibri", Arial, sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  header.app-header{
+    background:var(--accent-dark);
+    color:#fff;
+    padding:18px 28px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+    border-bottom:4px solid var(--accent);
+  }
+  header.app-header h1{
+    margin:0;
+    font-size:1.25rem;
+    letter-spacing:.2px;
+    font-weight:600;
+  }
+  header.app-header .sub{
+    font-size:.82rem;
+    color:#cfe6e3;
+  }
+  .wrap{
+    max-width:1080px;
+    margin:0 auto;
+    padding:20px 20px 140px;
+  }
+  .meta-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin-bottom:18px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+  }
+  .meta-card .field{display:flex; flex-direction:column; gap:4px;}
+  .meta-card label{font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); font-weight:600;}
+  .meta-card input[type=text]{
+    border:1px solid var(--line); border-radius:6px; padding:8px 10px; font-size:.92rem; font-family:inherit;
+  }
+  .meta-card .toggles{grid-column:1 / -1; display:flex; gap:18px; font-size:.82rem; color:var(--ink-soft); align-items:center;}
+  .meta-card .toggles label{display:flex; align-items:center; gap:6px; text-transform:none; font-weight:500; color:var(--ink);}
+
+  .tabs{
+    display:flex;
+    gap:6px;
+    margin-bottom:16px;
+    border-bottom:1px solid var(--line);
+  }
+  .tab-btn{
+    appearance:none; border:1px solid transparent; background:transparent;
+    padding:10px 16px; font-size:.9rem; font-weight:600; color:var(--ink-soft);
+    cursor:pointer; border-radius:6px 6px 0 0; font-family:inherit;
+  }
+  .tab-btn:hover{ color:var(--accent-dark); background:var(--accent-soft); }
+  .tab-btn.active{
+    color:var(--accent-dark);
+    background:var(--card);
+    border-color:var(--line);
+    border-bottom-color:var(--card);
+    transform:translateY(1px);
+  }
+
+  .progress{
+    display:flex; align-items:center; gap:10px; margin-bottom:16px;
+    font-size:.82rem; color:var(--ink-soft);
+  }
+  .progress-bar{ flex:1; height:6px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .progress-bar-fill{ height:100%; background:var(--accent); width:0%; transition:width .25s ease; }
+
+  .row{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    margin-bottom:12px;
+    display:grid;
+    grid-template-columns:250px 1fr;
+    overflow:hidden;
+  }
+  .row.has-content{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .row-item{
+    background:#eef4f3;
+    padding:14px 16px;
+    border-right:1px solid var(--line);
+  }
+  .row-item .label{ font-weight:700; font-size:.9rem; color:var(--ink); }
+  .row-item .instruction{ font-size:.76rem; color:var(--ink-soft); margin-top:4px; font-style:italic; }
+  .row-item .note-helper{ font-size:.74rem; color:var(--amber); margin-top:8px; background:var(--amber-soft); padding:6px 8px; border-radius:5px; }
+
+  .row-controls{ padding:14px 16px; }
+  .options-list{ display:flex; flex-direction:column; gap:7px; margin-bottom:8px; }
+  .option-divider{ font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--accent-dark); margin:8px 0 2px; }
+  .option-divider:first-child{ margin-top:0; }
+  .option-row{ display:flex; align-items:flex-start; gap:8px; font-size:.87rem; cursor:pointer; line-height:1.35; }
+  .option-row input{ margin-top:3px; accent-color:var(--accent); flex-shrink:0; }
+
+  .fields-list{ display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+  .fields-list .field label{ display:block; font-size:.76rem; color:var(--ink-soft); font-weight:600; margin-bottom:3px; }
+  .fields-list input[type=text], .fields-list textarea{
+    width:100%; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:.87rem; font-family:inherit;
+    resize:vertical;
+  }
+
+  .note-toggle{
+    display:inline-flex; align-items:center; gap:5px; font-size:.76rem; color:var(--accent-dark);
+    background:none; border:none; cursor:pointer; padding:4px 0; font-family:inherit; font-weight:600;
+  }
+  .note-box{ margin-top:6px; display:none; }
+  .note-box.open{ display:block; }
+  .note-box textarea{ width:100%; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:.85rem; font-family:inherit; min-height:50px; }
+
+  .preview{
+    margin-top:10px; padding:8px 10px; background:var(--paper); border-radius:6px;
+    font-size:.78rem; color:var(--ink-soft); white-space:pre-wrap; border-left:3px solid var(--line);
+  }
+  .preview.filled{ border-left-color:var(--accent); color:var(--ink); }
+  .preview .preview-label{ font-weight:700; text-transform:uppercase; font-size:.66rem; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:3px; }
+
+  .row-clear{
+    float:right; font-size:.72rem; color:var(--ink-soft); background:none; border:none; cursor:pointer;
+    text-decoration:underline; font-family:inherit;
+  }
+  .row-clear:hover{ color:var(--accent-dark); }
+
+  .toolbar{
+    position:fixed; bottom:0; left:0; right:0;
+    background:var(--card); border-top:1px solid var(--line);
+    padding:14px 20px; display:flex; align-items:center; justify-content:center; gap:12px;
+    box-shadow:0 -4px 14px rgba(0,0,0,.06);
+  }
+  .toolbar-inner{ max-width:1080px; width:100%; display:flex; align-items:center; gap:12px; }
+  .btn{
+    font-family:inherit; font-size:.9rem; font-weight:600; padding:11px 20px; border-radius:7px;
+    border:1px solid transparent; cursor:pointer;
+  }
+  .btn-primary{ background:var(--accent); color:#fff; }
+  .btn-primary:hover{ background:var(--accent-dark); }
+  .btn-secondary{ background:transparent; color:var(--ink-soft); border-color:var(--line); }
+  .btn-secondary:hover{ color:var(--ink); border-color:var(--ink-soft); }
+  .status-msg{ font-size:.85rem; color:var(--accent-dark); font-weight:600; min-width:140px; }
+
+  @media (max-width: 720px){
+    .row{ grid-template-columns:1fr; }
+    .row-item{ border-right:none; border-bottom:1px solid var(--line); }
+    .meta-card{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>SORT Forum Scope Builder</h1>
+  <div class="sub">Click through a table, then copy the finished result straight into your report</div>
+</header>
+
+<div class="wrap">
+
+  <div class="meta-card">
+    <div class="field">
+      <label for="forumDate">SORT Forum Date</label>
+      <input type="text" id="forumDate" placeholder="dd/mm/yyyy">
+    </div>
+    <div class="field">
+      <label for="forumAttendees">SORT Forum Attendees</label>
+      <input type="text" id="forumAttendees" placeholder="Names">
+    </div>
+    <div class="toggles">
+      <label><input type="checkbox" id="includeHeader" checked> Include title/date/attendees when copying</label>
+      <label><input type="checkbox" id="includeEmpty"> Include rows with nothing filled in</label>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="progress">
+    <span id="progressText">0 of 0 rows filled</span>
+    <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+  </div>
+
+  <div id="rowsContainer"></div>
+
+</div>
+
+<div class="toolbar">
+  <div class="toolbar-inner">
+    <button class="btn btn-primary" id="copyBtn">Copy table for Word</button>
+    <button class="btn btn-secondary" id="resetBtn">Reset this table</button>
+    <span class="status-msg" id="statusMsg"></span>
+  </div>
+</div>
+
+<script>
+/* ===================== DATA MODEL ===================== */
+// type: 'single' -> radio buttons, 'multi' -> checkboxes, null -> no option list (fields/text only)
+// options: array of strings. An option starting with "### " is rendered as a non-selectable divider.
+// fields: extra small inputs rendered below the options, always available.
+// note: helper text shown under the item label (e.g. approval requirements).
+
+const ACCESSIBILITY_OPTIONS = [
+  "All weather access","Dry weather access only","Concrete truck","Flatbed truck","4WD with tandem trailer","4WD only"
+];
+
+const DEMOLITION_OPTIONS = [
+  "Standard: Complete demolition and disposal",
+  "Complex: Parts to be returned to the Hub/Council",
+  "Complex: Drop-off contact/address required for Gas Cylinders"
+];
+
+const COMMS_OPTIONS = [
+  "IP Logger - Cellular Communications",
+  "IP Logger - Satellite Communications",
+  "IP Logger - Campbell Scientific - ERRTS VHF Communications",
+  "Local Processing Unit - Elpro ERRTS VHF Communications",
+  "AL200X Campbell Scientific - ERRTS VHF Communications"
+];
+
+function remediationOptions(cabinetWording){
+  return [
+    "Vendor/Contractor site visit required prior to complex installation",
+    "Vegetation management",
+    cabinetWording,
+    "Data access to be provided to Council via satellite modem",
+    "Track / stairs required to access orifice / gauge boards"
+  ];
+}
+
+const TABLES = [
+  {
+    id: "rainfall",
+    label: "Rainfall Table",
+    title: "Rainfall Table",
+    rows: [
+      { id:"stationType", item:"Station Type", instruction:"(Choose relevant option)", type:"single",
+        options:["Rain Gauge"] },
+      { id:"complexity", item:"Complexity, Scope & Type", instruction:"(Choose 1 option)", type:"single",
+        options:[
+          "### High Complexity",
+          "High Complexity Total Rebuild – Type 1","High Complexity Total Rebuild – Type 2","High Complexity Total Rebuild – Type 3","High Complexity Bespoke Rebuild",
+          "### Moderate Complexity",
+          "Moderate Complexity Total Rebuild – Type 1","Moderate Complexity Total Rebuild – Type 2","Moderate Complexity Total Rebuild – Type 3",
+          "Moderate Complexity Bespoke Upgrade","Moderate Complexity – Cabinet & Equipment Replacement","Moderate Complexity Platform Replacement",
+          "### Low Complexity",
+          "Low Complexity Remediation – Instrumentation Only","Low Complexity Remediation – Raintree Retrofit",
+          "Low Complexity Remediation – Raintree Retrofit – Vegetation Management",
+          "Low Complexity Remediation - Co-Located Equipment Upgrade",
+          "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
+          "### Other",
+          "Vegetation Management","Acquire & Decommission","Acquire & Relocate","Acquired – No Remediation Required","Do Not Acquire"
+        ]},
+      { id:"comms", item:"Comms Option", instruction:"(Choose 1 option)", type:"single", options: COMMS_OPTIONS },
+      { id:"fadeMargin", item:"Fade Margin >20db", instruction:"(If station is ERRTS)", type:"single", options:["Yes","No"] },
+      { id:"reasonComms", item:"Reason for Changing Comms Type", instruction:"", type:"single", options:["Yes","NA"],
+        note:"Changing comms type requires GM Approval — ERRTS to SAT",
+        fields:[{key:"reasonDetail", label:"Reason (if Yes)", type:"text"}] },
+      { id:"stockFence", item:"Stock Fence", instruction:"(Yes/No, details)", type:"single", options:["Yes","No"],
+        fields:[{key:"size", label:"Size (eg. 3x3)", type:"text"},{key:"gate", label:"Gate", type:"text"}] },
+      { id:"demolition", item:"Demolition / Disposal", instruction:"(Yes/No, details)", type:"multi", options: DEMOLITION_OPTIONS },
+      { id:"relocation", item:"Relocation", instruction:"(Yes/No, </>25m)", type:"single", options:["Yes","No"],
+        note:"WL Relocation requires EPS & GM Approval",
+        fields:[{key:"distance", label:"Distance (>25m or <25m)", type:"text"}] },
+      { id:"coords", item:"Instrumentation Coordinates", instruction:"(Existing or, Proposed)", type:null,
+        fields:[{key:"existing", label:"Existing", type:"text"},{key:"proposed", label:"Proposed", type:"text"}] },
+      { id:"accessibility", item:"Accessibility", instruction:"(Delete irrelevant options)", type:"multi", options: ACCESSIBILITY_OPTIONS },
+      { id:"nonStandard", item:"Non-Standard options", instruction:"(Please avoid if possible)", type:"single", options:["Yes","NA"],
+        fields:[{key:"detail", label:"If chosen: drawings, part numbers, exact locations etc. (must be provided)", type:"textarea"}] },
+      { id:"remediation", item:"Remediation / Additional Works", instruction:"(Delete irrelevant options)", type:"multi",
+        options: remediationOptions("Bollards for site protection"),
+        fields:[{key:"other", label:"Other", type:"text"}] },
+      { id:"photos", item:"Site Assessment Photos", instruction:"", type:null,
+        fields:[{key:"link", label:"Insert link & confirm access", type:"text"}] },
+      { id:"installNotes", item:"Installation Notes", instruction:"(Freeform section)", type:null,
+        fields:[{key:"notes", label:"Notes", type:"textarea"}] }
+    ]
+  },
+  {
+    id: "waterlevel",
+    label: "Water Level Table",
+    title: "Water Level (+/- Rainfall) Table",
+    rows: [
+      { id:"stationType", item:"Station Type", instruction:"(Choose relevant option)", type:"single",
+        options:["Rain Gauge / Water Level","Rain Gauge / Water Level / Repeater","Rain Gauge / Water Level / Reservoir",
+          "Rain Gauge / Water Level / Tide","Water Level","Water Level / Reservoir","Water Level / Tide Gauge","Base Station"] },
+      { id:"complexity", item:"Complexity, Scope & Type", instruction:"(Choose 1 option)", type:"single",
+        options:[
+          "### High Complexity",
+          "High Complexity Total Rebuild – Type 1","High Complexity Total Rebuild – Type 2","High Complexity Total Rebuild – Type 3",
+          "High Complexity Total Rebuild – Type 4","High Complexity Total Rebuild – Type 5A (Integrated)","High Complexity Total Rebuild – Type 5B (Remote)",
+          "High Complexity Bespoke Rebuild",
+          "### Moderate Complexity",
+          "Moderate Complexity Total Rebuild – Type 1","Moderate Complexity Total Rebuild – Type 2","Moderate Complexity Total Rebuild – Type 3",
+          "Moderate Complexity Bespoke Upgrade","Moderate Complexity – Cabinet & Equipment Replacement","Moderate Complexity Platform Replacement",
+          "### Low Complexity",
+          "Low Complexity Remediation – Instrumentation Only",
+          "Low Complexity Remediation - Co-Located Equipment Upgrade",
+          "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
+          "Low Complexity – Type 4",
+          "### Other",
+          "Vegetation Management","Acquire & Decommission","Acquire & Relocate","Acquired – No Remediation Required","Do Not Acquire"
+        ]},
+      { id:"comms", item:"Comms Option", instruction:"(Choose 1 option)", type:"single", options: COMMS_OPTIONS },
+      { id:"reasonComms", item:"Reason for Changing Comms Type", instruction:"", type:"single", options:["Yes","NA"],
+        note:"Changing comms type requires GM Approval — ERRTS to SAT",
+        fields:[{key:"reasonDetail", label:"Reason (if Yes)", type:"text"}] },
+      { id:"sensorOption", item:"Sensor Option with River Line Termination", instruction:"(Choose 1 option, details)", type:"single",
+        options:["HS40 with GCO (define range)","Amazon Bubbler with BU07 (define psi pressure)","Vega C23"],
+        fields:[{key:"detail", label:"Range / pressure detail", type:"text"}] },
+      { id:"rainfallLocation", item:"Rainfall Mounted Location", instruction:"(Details / NA)", type:null,
+        fields:[{key:"detail", label:"Details", type:"text"}] },
+      { id:"stockFence", item:"Stock Fence", instruction:"(Yes/No, details)", type:"single", options:["Yes","No"],
+        fields:[{key:"size", label:"Size (eg. 3x3)", type:"text"},{key:"gate", label:"Gate", type:"text"}] },
+      { id:"demolition", item:"Demolition / Disposal", instruction:"(Yes/No, details)", type:"multi", options: DEMOLITION_OPTIONS },
+      { id:"relocation", item:"Relocation", instruction:"(Yes/No, </>25m)", type:"single", options:["Yes","No"],
+        note:"WL Relocation requires EPS & GM Approval",
+        fields:[{key:"distance", label:"Distance (>25m or <25m)", type:"text"}] },
+      { id:"coords", item:"Instrumentation Coordinates", instruction:"(Existing or, Proposed)", type:null,
+        fields:[{key:"existing", label:"Existing", type:"text"},{key:"proposed", label:"Proposed", type:"text"}] },
+      { id:"riverCoords", item:"River Line Termination Coordinates", instruction:"", type:null,
+        fields:[{key:"detail", label:"Coordinates", type:"text"}] },
+      { id:"gaugeBoards", item:"1m Gauge Boards", instruction:"(Yes/No, add details)", type:"single", options:["Yes","No","TBA"],
+        fields:[{key:"quantity", label:"Quantity", type:"text"},{key:"distance", label:"Distance", type:"text"}] },
+      { id:"accessibility", item:"Accessibility", instruction:"(Delete irrelevant options)", type:"multi", options: ACCESSIBILITY_OPTIONS },
+      { id:"nonStandard", item:"Non-Standard options", instruction:"(Please avoid if possible)", type:"single", options:["Yes","NA"],
+        fields:[{key:"detail", label:"If chosen: drawings, part numbers, exact locations etc. (must be provided)", type:"textarea"}] },
+      { id:"remediation", item:"Remediation / Additional Works", instruction:"(Delete irrelevant options)", type:"multi",
+        options: remediationOptions("Bollards for cabinet protection").concat(["Plinth under cabinet"]),
+        fields:[{key:"other", label:"Other", type:"text"}] },
+      { id:"photos", item:"Site Assessment Photos", instruction:"", type:null,
+        fields:[{key:"link", label:"Insert link & confirm access", type:"text"}] },
+      { id:"installNotes", item:"Installation Notes", instruction:"(Freeform section)", type:null,
+        fields:[{key:"notes", label:"Notes", type:"textarea"}] }
+    ]
+  },
+  {
+    id: "repeater",
+    label: "Repeater / Gateway Table",
+    title: "Repeater / Gateway Table",
+    rows: [
+      { id:"stationType", item:"Station Type", instruction:"(Delete irrelevant options)", type:"single",
+        options:["Rain Gauge / Repeater","Rain Gauge / Water Level / Repeater","Rain Gauge / Water Level / Reservoir",
+          "Rain Gauge / Water Level / Tide","Water Level / Reservoir","Water Level / Tide Gauge","Repeater","Gateway","Base Station"] },
+      { id:"complexity", item:"Complexity & Scope", instruction:"(Choose 1 option)", type:"single",
+        options:[
+          "### High Complexity",
+          "High Complexity Total Rebuild – Type 5A","High Complexity Total Rebuild – Type 5B","High Complexity Bespoke Rebuild",
+          "High Complexity Total Rebuild – Repeater",
+          "### Moderate Complexity",
+          "Moderate Complexity Bespoke Upgrade","Moderate Complexity – Cabinet & Equipment Replacement","Moderate Complexity Platform Replacement",
+          "### Low Complexity",
+          "Low Complexity Remediation – Instrumentation Only",
+          "Low Complexity Remediation - Co-Located Equipment Upgrade",
+          "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
+          "### Other",
+          "Vegetation Management","Acquire & Decommission","Acquire & Relocate","Acquired – No Remediation Required","Do Not Acquire"
+        ]},
+      { id:"infraType", item:"Infra Type", instruction:"(Choose 1 option)", type:"single", options:["Rack Mount","Outdoor Cabinet"] },
+      { id:"mast", item:"Mast", instruction:"(Choose relevant option)", type:"single", options:["8m","4m","Cabinet mount"] },
+      { id:"errts", item:"ERRTS / Frequencies", instruction:"(Choose option, add detail)", type:"single",
+        options:["ERRTS (ELPRO)","ERRTS (Campbell Scientific)","Satellite","Cellular"],
+        fields:[{key:"frequency", label:"Frequency details", type:"text"},{key:"power", label:"Transmitter power", type:"text"}] },
+      { id:"backhaul", item:"Backhaul Options", instruction:"(Choose 1 option)", type:"single", options:["Bureau WAN","Cellular Modem"] },
+      { id:"bgan", item:"Optional BGAN Backup", instruction:"(Yes / No)", type:"single", options:["Yes","No"] },
+      { id:"reasonComms", item:"Reason for Changing Comms Type", instruction:"", type:"single", options:["Yes","NA"],
+        note:"Changing comms type requires GM Approval",
+        fields:[{key:"reasonDetail", label:"Reason (if Yes)", type:"text"}] },
+      { id:"rainfallLocation", item:"Rainfall Mounted Location", instruction:"(Details / NA)", type:null,
+        fields:[{key:"detail", label:"Details", type:"text"}] },
+      { id:"cavityFilters", item:"Cavity Filters", instruction:"(Add relevant detail)", type:null,
+        fields:[{key:"bandpass", label:"Bandpass", type:"text"},{key:"frequency", label:"Frequency", type:"text"}] },
+      { id:"stockFence", item:"Stock / Security Fence", instruction:"(Yes/No, details)", type:"single", options:["Yes","No"],
+        fields:[{key:"size", label:"Size (eg. 3x3)", type:"text"},{key:"gate", label:"Gate", type:"text"}] },
+      { id:"demolition", item:"Demolition / Disposal", instruction:"(Yes/No, details)", type:"multi", options: DEMOLITION_OPTIONS },
+      { id:"relocation", item:"Relocation", instruction:"(Yes/No, </>25m)", type:"single", options:["Yes","No"],
+        note:"Relocations require GM Approval",
+        fields:[{key:"distance", label:"Distance (>25m or <25m)", type:"text"}] },
+      { id:"coords", item:"Instrumentation Coordinates", instruction:"(Existing or, Proposed)", type:null,
+        fields:[{key:"existing", label:"Existing", type:"text"},{key:"proposed", label:"Proposed", type:"text"}] },
+      { id:"accessibility", item:"Accessibility", instruction:"(Delete irrelevant options)", type:"multi", options: ACCESSIBILITY_OPTIONS },
+      { id:"nonStandard", item:"Non-Standard options", instruction:"(Please avoid if possible)", type:"single", options:["Yes","NA"],
+        fields:[{key:"detail", label:"If chosen: drawings, part numbers, exact locations etc. (must be provided)", type:"textarea"}] },
+      { id:"remediation", item:"Remediation / Additional Works", instruction:"(Tick if required)", type:"multi",
+        options: remediationOptions("Bollards for cabinet protection").concat(["Plinth under cabinet"]),
+        fields:[{key:"other", label:"Other", type:"text"}] },
+      { id:"photos", item:"Site Assessment Photos", instruction:"", type:null,
+        fields:[{key:"link", label:"Insert link & confirm access", type:"text"}] },
+      { id:"installNotes", item:"Installation Notes", instruction:"(Freeform section)", type:null,
+        fields:[{key:"notes", label:"Notes", type:"textarea"}] }
+    ]
+  }
+];
+
+/* ===================== STATE ===================== */
+// state[tableId][rowId] = { selected: string|string[]|null, fields: {key:value}, note: string }
+const state = {};
+TABLES.forEach(t=>{
+  state[t.id] = {};
+  t.rows.forEach(r=>{
+    state[t.id][r.id] = {
+      selected: r.type === "multi" ? [] : null,
+      fields: {},
+      note: ""
+    };
+  });
+});
+
+let activeTableId = TABLES[0].id;
+
+/* ===================== RENDER ===================== */
+const tabsEl = document.getElementById("tabs");
+const rowsContainerEl = document.getElementById("rowsContainer");
+const progressTextEl = document.getElementById("progressText");
+const progressFillEl = document.getElementById("progressFill");
+
+function renderTabs(){
+  tabsEl.innerHTML = "";
+  TABLES.forEach(t=>{
+    const btn = document.createElement("button");
+    btn.className = "tab-btn" + (t.id === activeTableId ? " active" : "");
+    btn.textContent = t.label;
+    btn.addEventListener("click", ()=>{ activeTableId = t.id; renderAll(); });
+    tabsEl.appendChild(btn);
+  });
+}
+
+function rowHasContent(table, row){
+  const s = state[table.id][row.id];
+  const hasSelection = row.type === "multi" ? s.selected.length > 0 : !!s.selected;
+  const hasFieldValue = row.fields ? row.fields.some(f => (s.fields[f.key]||"").trim().length>0) : false;
+  const hasNote = s.note.trim().length>0;
+  return hasSelection || hasFieldValue || hasNote;
+}
+
+function rowOutputLines(table, row){
+  const s = state[table.id][row.id];
+  const lines = [];
+  if(row.type === "single" && s.selected){
+    lines.push(s.selected);
+  } else if(row.type === "multi" && s.selected.length){
+    lines.push(...s.selected);
+  }
+  if(row.fields){
+    row.fields.forEach(f=>{
+      const v = (s.fields[f.key]||"").trim();
+      if(v) lines.push(`${f.label}: ${v}`);
+    });
+  }
+  if(s.note.trim()) lines.push(s.note.trim());
+  return lines;
+}
+
+function renderRows(){
+  const table = TABLES.find(t=>t.id === activeTableId);
+  rowsContainerEl.innerHTML = "";
+
+  let filledCount = 0;
+
+  table.rows.forEach(row=>{
+    const s = state[table.id][row.id];
+    const filled = rowHasContent(table, row);
+    if(filled) filledCount++;
+
+    const rowEl = document.createElement("div");
+    rowEl.className = "row" + (filled ? " has-content" : "");
+
+    // left column
+    const itemEl = document.createElement("div");
+    itemEl.className = "row-item";
+    itemEl.innerHTML = `
+      <div class="label">${escapeHtml(row.item)}</div>
+      ${row.instruction ? `<div class="instruction">${escapeHtml(row.instruction)}</div>` : ""}
+      ${row.note ? `<div class="note-helper">${escapeHtml(row.note)}</div>` : ""}
+    `;
+    rowEl.appendChild(itemEl);
+
+    // right column
+    const controlsEl = document.createElement("div");
+    controlsEl.className = "row-controls";
+
+    const clearBtn = document.createElement("button");
+    clearBtn.className = "row-clear";
+    clearBtn.textContent = "Clear";
+    clearBtn.addEventListener("click", ()=>{
+      state[table.id][row.id] = { selected: row.type === "multi" ? [] : null, fields:{}, note:"" };
+      renderRows();
+    });
+    controlsEl.appendChild(clearBtn);
+
+    if(row.type){
+      const optsWrap = document.createElement("div");
+      optsWrap.className = "options-list";
+      row.options.forEach((opt, idx)=>{
+        if(opt.startsWith("###")){
+          const div = document.createElement("div");
+          div.className = "option-divider";
+          div.textContent = opt.replace(/^###\s*/, "");
+          optsWrap.appendChild(div);
+          return;
+        }
+        const label = document.createElement("label");
+        label.className = "option-row";
+        const input = document.createElement("input");
+        input.type = row.type === "single" ? "radio" : "checkbox";
+        input.name = `${table.id}_${row.id}`;
+        if(row.type === "single"){
+          input.checked = s.selected === opt;
+          input.addEventListener("change", ()=>{ s.selected = opt; renderRows(); });
+        } else {
+          input.checked = s.selected.includes(opt);
+          input.addEventListener("change", ()=>{
+            if(input.checked){ s.selected.push(opt); }
+            else { s.selected = s.selected.filter(v=>v!==opt); }
+            renderRows();
+          });
+        }
+        const span = document.createElement("span");
+        span.textContent = opt;
+        label.appendChild(input);
+        label.appendChild(span);
+        optsWrap.appendChild(label);
+      });
+      controlsEl.appendChild(optsWrap);
+    }
+
+    if(row.fields && row.fields.length){
+      const fieldsWrap = document.createElement("div");
+      fieldsWrap.className = "fields-list";
+      row.fields.forEach(f=>{
+        const fieldEl = document.createElement("div");
+        fieldEl.className = "field";
+        const lbl = document.createElement("label");
+        lbl.textContent = f.label;
+        fieldEl.appendChild(lbl);
+        const input = document.createElement(f.type === "textarea" ? "textarea" : "input");
+        if(f.type !== "textarea") input.type = "text";
+        else input.rows = 2;
+        input.value = s.fields[f.key] || "";
+        input.placeholder = f.placeholder || "";
+        input.addEventListener("input", ()=>{ s.fields[f.key] = input.value; renderPreviewAndProgress(); });
+        fieldEl.appendChild(input);
+        fieldsWrap.appendChild(fieldEl);
+      });
+      controlsEl.appendChild(fieldsWrap);
+    }
+
+    // note toggle
+    const noteToggle = document.createElement("button");
+    noteToggle.className = "note-toggle";
+    noteToggle.textContent = s.note ? "− Note added" : "+ Add note";
+    const noteBox = document.createElement("div");
+    noteBox.className = "note-box" + (s.note ? " open" : "");
+    const noteTextarea = document.createElement("textarea");
+    noteTextarea.placeholder = "Any extra free text for this row...";
+    noteTextarea.value = s.note;
+    noteTextarea.addEventListener("input", ()=>{
+      s.note = noteTextarea.value;
+      renderPreviewAndProgress();
+    });
+    noteBox.appendChild(noteTextarea);
+    noteToggle.addEventListener("click", ()=>{
+      noteBox.classList.toggle("open");
+    });
+    controlsEl.appendChild(noteToggle);
+    controlsEl.appendChild(noteBox);
+
+    // preview
+    const previewEl = document.createElement("div");
+    previewEl.className = "preview";
+    previewEl.dataset.previewFor = row.id;
+    rowEl.appendChild(controlsEl);
+    controlsEl.appendChild(previewEl);
+
+    rowsContainerEl.appendChild(rowEl);
+  });
+
+  updatePreviews();
+  updateProgress(filledCount, table.rows.length);
+}
+
+function updatePreviews(){
+  const table = TABLES.find(t=>t.id === activeTableId);
+  table.rows.forEach(row=>{
+    const el = rowsContainerEl.querySelector(`[data-preview-for="${row.id}"]`);
+    if(!el) return;
+    const lines = rowOutputLines(table, row);
+    if(lines.length){
+      el.classList.add("filled");
+      el.innerHTML = `<span class="preview-label">Will appear as</span>${escapeHtml(lines.join("\n"))}`;
+    } else {
+      el.classList.remove("filled");
+      el.innerHTML = `<span class="preview-label">Will appear as</span>(nothing entered)`;
+    }
+  });
+}
+
+function renderPreviewAndProgress(){
+  updatePreviews();
+  const table = TABLES.find(t=>t.id === activeTableId);
+  let filledCount = 0;
+  table.rows.forEach(row=>{
+    if(rowHasContent(table, row)) filledCount++;
+    const rowEl = rowsContainerEl.children[table.rows.indexOf(row)];
+    if(rowEl){
+      rowEl.classList.toggle("has-content", rowHasContent(table, row));
+    }
+  });
+  updateProgress(filledCount, table.rows.length);
+}
+
+function updateProgress(filled, total){
+  progressTextEl.textContent = `${filled} of ${total} rows filled`;
+  progressFillEl.style.width = total ? `${(filled/total)*100}%` : "0%";
+}
+
+function renderAll(){
+  renderTabs();
+  renderRows();
+}
+
+function escapeHtml(str){
+  return String(str)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+/* ===================== COPY TO CLIPBOARD ===================== */
+const copyBtn = document.getElementById("copyBtn");
+const resetBtn = document.getElementById("resetBtn");
+const statusMsg = document.getElementById("statusMsg");
+const includeHeaderEl = document.getElementById("includeHeader");
+const includeEmptyEl = document.getElementById("includeEmpty");
+const forumDateEl = document.getElementById("forumDate");
+const forumAttendeesEl = document.getElementById("forumAttendees");
+
+function buildHtmlTable(){
+  const table = TABLES.find(t=>t.id === activeTableId);
+  const includeHeader = includeHeaderEl.checked;
+  const includeEmpty = includeEmptyEl.checked;
+
+  let rowsHtml = "";
+  table.rows.forEach(row=>{
+    const lines = rowOutputLines(table, row);
+    if(!lines.length && !includeEmpty) return;
+    const detail = lines.length ? lines.map(escapeHtml).join("<br>") : "";
+    rowsHtml += `<tr>
+      <td style="font-weight:bold;vertical-align:top;padding:6px 8px;border:1px solid #999;width:28%;">${escapeHtml(row.item)}</td>
+      <td style="vertical-align:top;padding:6px 8px;border:1px solid #999;">${detail}</td>
+    </tr>`;
+  });
+
+  let headHtml = "";
+  if(includeHeader){
+    headHtml += `<tr><td colspan="2" style="background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;border:1px solid #999;">SORT Forum Agreed Remediation</td></tr>`;
+    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><b>SORT Forum Date:</b> ${escapeHtml(forumDateEl.value || "dd/mm/yyyy")}</td></tr>`;
+    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><b>SORT Forum Attendees:</b> ${escapeHtml(forumAttendeesEl.value || "")}</td></tr>`;
+    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><i><b>${escapeHtml(table.title)}</b></i></td></tr>`;
+  }
+  headHtml += `<tr><td style="background:#e8e8e8;font-weight:bold;padding:6px 8px;border:1px solid #999;">Item</td><td style="background:#e8e8e8;font-weight:bold;padding:6px 8px;border:1px solid #999;">Details</td></tr>`;
+
+  return `<table style="border-collapse:collapse;width:100%;font-family:Calibri,Arial,sans-serif;font-size:11pt;">${headHtml}${rowsHtml}</table>`;
+}
+
+function buildPlainText(){
+  const table = TABLES.find(t=>t.id === activeTableId);
+  const includeHeader = includeHeaderEl.checked;
+  const includeEmpty = includeEmptyEl.checked;
+  let out = "";
+  if(includeHeader){
+    out += "SORT Forum Agreed Remediation\n";
+    out += `SORT Forum Date: ${forumDateEl.value || "dd/mm/yyyy"}\n`;
+    out += `SORT Forum Attendees: ${forumAttendeesEl.value || ""}\n`;
+    out += `${table.title}\n\n`;
+  }
+  out += "Item\tDetails\n";
+  table.rows.forEach(row=>{
+    const lines = rowOutputLines(table, row);
+    if(!lines.length && !includeEmpty) return;
+    out += `${row.item}\t${lines.join("; ")}\n`;
+  });
+  return out;
+}
+
+async function copyTable(){
+  const html = buildHtmlTable();
+  const text = buildPlainText();
+
+  // Preferred: modern async clipboard with real HTML mime type (best fidelity into Word)
+  try{
+    if(navigator.clipboard && window.ClipboardItem){
+      const item = new ClipboardItem({
+        "text/html": new Blob([html], {type:"text/html"}),
+        "text/plain": new Blob([text], {type:"text/plain"})
+      });
+      await navigator.clipboard.write([item]);
+      showStatus("Copied — paste into Word");
+      return;
+    }
+  }catch(e){ /* fall through to legacy method */ }
+
+  // Fallback: build a hidden real table, select it, and use execCommand('copy')
+  try{
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-9999px";
+    container.style.top = "0";
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    const range = document.createRange();
+    range.selectNodeContents(container);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const ok = document.execCommand("copy");
+    sel.removeAllRanges();
+    document.body.removeChild(container);
+
+    if(ok){
+      showStatus("Copied — paste into Word");
+    } else {
+      throw new Error("execCommand failed");
+    }
+  }catch(e){
+    // Last resort: plain text only
+    try{
+      await navigator.clipboard.writeText(text);
+      showStatus("Copied as plain text only");
+    }catch(e2){
+      showStatus("Copy failed — see console");
+      console.error(e2);
+    }
+  }
+}
+
+function showStatus(msg){
+  statusMsg.textContent = msg;
+  setTimeout(()=>{ statusMsg.textContent = ""; }, 3500);
+}
+
+copyBtn.addEventListener("click", copyTable);
+resetBtn.addEventListener("click", ()=>{
+  const table = TABLES.find(t=>t.id === activeTableId);
+  table.rows.forEach(r=>{
+    state[table.id][r.id] = { selected: r.type === "multi" ? [] : null, fields:{}, note:"" };
+  });
+  renderRows();
+});
+
+renderAll();
+</script>
+</body>
+</html>
