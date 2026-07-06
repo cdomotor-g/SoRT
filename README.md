@@ -11,25 +11,31 @@ them straight into Word. It has two modes:
 | File | Purpose |
 | --- | --- |
 | `index.html` | The whole application (no build step, no dependencies). |
-| `definitions.json` | The table, row, and option definitions. **This is the file that evolves over time** — the app reads it at startup. |
+| `definitions.json` | Seed / offline copy of the table, row, and option definitions. Also used to first-load the central store, and as the fallback when the store can't be reached. |
 
-The definitions used to be hard-coded inside `index.html`. They now live in
-`definitions.json` so they can change without touching the app code, and so the
-file can be hosted centrally (SharePoint or an on-prem file share).
+The definitions used to be hard-coded inside `index.html`. They now live outside
+the app so they can change without touching the code. The **recommended** setup
+is a single **central store** (a Supabase row) that everyone reads and that
+editors publish to — see [Central store (Supabase)](#central-store-supabase).
+With no store configured the app still works fully offline from
+`definitions.json` + Import/Export.
 
 ## How definitions are loaded
 
 At startup the app picks the first source that is available:
 
-1. **Local edits** saved in your browser (from the Manage Tables editor).
-2. A **URL** you previously loaded from (e.g. a SharePoint link), or one passed
-   as `?defs=<url>` in the address bar.
-3. The bundled **`definitions.json`** sitting next to `index.html`.
-4. If none load, an empty state offers **Import** / **Load from URL** / start blank.
+1. **Central store** — the master Supabase row (when `SUPABASE` is configured in
+   `index.html`). This is the source of truth; it always wins on load, so every
+   user gets the latest published definitions automatically.
+2. **Local edits** saved in your browser (only when no store is configured, or
+   as an *unpublished draft* you choose to resume).
+3. A **URL** you previously loaded from, or one passed as `?defs=<url>`.
+4. The bundled **`definitions.json`** sitting next to `index.html`.
+5. If none load, an empty state offers **Import** / **Load from URL** / start blank.
 
-> Opening `index.html` directly from disk (`file://`) usually blocks step 3 for
-> security reasons. Either host the two files on a web server / SharePoint, or
-> use **Import JSON…** to load `definitions.json` manually.
+> With the central store on, the master row is fetched over HTTPS regardless of
+> how the page is opened — so it even works from a `file://` copy. The bundled
+> `definitions.json` is only used if the store is unreachable (offline).
 
 ## Editing definitions (Manage Tables)
 
@@ -50,16 +56,110 @@ non-selectable heading/divider.
 
 ### Publishing your changes
 
-Edits are saved **in your browser only**. To share them with the team:
+**With the central store on (recommended):**
 
-1. Make your changes in **Manage Tables**.
-2. Click **Export JSON** — this downloads an updated `definitions.json`.
-3. Upload that file to your shared location (SharePoint / on-prem), replacing the
-   old `definitions.json`.
+1. Make your changes in **Manage Tables** (auto-saved in your browser as you go).
+2. Click **Publish to central store**.
 
-Everyone loading the app from that location then picks up the new definitions.
-Use **Reset to published file** to discard your local edits and reload the shared
-copy.
+That's it — the master row is updated and everyone else picks it up the next
+time they open the app. No files to download, rename, or upload, and no "reset"
+step for other users. Extras you get for free:
+
+- **Reload latest** — throw away your local edits and reload the published copy.
+- **Conflict guard** — if someone else published while you were editing, Publish
+  is refused with a prompt to reload and re-apply, so nobody silently clobbers
+  another edit.
+- **Resume draft** — if you close the tab mid-edit, your unpublished draft is
+  offered back next time (you can resume or discard it).
+- **History / rollback** — every publish is archived (see the setup section), so
+  a bad change can be rolled back.
+
+**With no store configured (offline mode):** edits are saved in your browser
+only. Click **Export JSON**, upload the file to your shared location as
+`definitions.json`, and others use **Reset to published file** to pick it up.
+
+## Central store (Supabase)
+
+The central store is a single row in a free [Supabase](https://supabase.com)
+project. No Azure / M365 app registration and no per-user accounts are required —
+the app talks to Supabase's REST API with the public **anon** key, and
+[Row Level Security](https://supabase.com/docs/guides/auth/row-level-security)
+controls what that key may do.
+
+### One-time setup
+
+1. Create a free Supabase project.
+2. In the **SQL Editor**, run the following. Paste the current contents of
+   `definitions.json` where indicated to seed the first row.
+
+   ```sql
+   -- Master table: one row holds the whole definitions document.
+   create table definitions (
+     id         int primary key,
+     doc        jsonb        not null,
+     version    int          not null default 1,
+     updated_at timestamptz  not null default now()
+   );
+
+   -- Archive of every past version, for audit / rollback.
+   create table definitions_history (
+     history_id  bigint generated always as identity primary key,
+     id          int,
+     doc         jsonb,
+     version     int,
+     archived_at timestamptz default now()
+   );
+   create function log_definitions_history() returns trigger as $$
+   begin
+     insert into definitions_history(id, doc, version)
+     values (old.id, old.doc, old.version);
+     return new;
+   end;
+   $$ language plpgsql;
+   create trigger definitions_history_trg
+     before update on definitions
+     for each row execute function log_definitions_history();
+
+   -- Seed the single master row (id = 1). Paste definitions.json below.
+   insert into definitions (id, doc, version) values (1, '<PASTE definitions.json HERE>'::jsonb, 1);
+
+   -- Row Level Security: allow the public anon key to read and update the row.
+   alter table definitions enable row level security;
+   create policy "read definitions"   on definitions for select using (true);
+   create policy "update definitions" on definitions for update using (true) with check (true);
+   ```
+
+3. In **Project Settings → API**, copy the **Project URL** and the **anon /
+   public** key.
+4. Open `index.html` and fill in the `SUPABASE` block near the top:
+
+   ```js
+   const SUPABASE = {
+     url:     "https://YOURPROJECT.supabase.co",
+     anonKey: "eyJhbGciOi...",   // the public anon key
+     table:   "definitions",
+     rowId:   1,
+     publishPassphrase: ""       // optional; see below
+   };
+   ```
+
+5. Host `index.html` anywhere your users can reach (GitHub Pages, a web server,
+   a SharePoint page, even a shared drive). Done.
+
+### Notes on access & security
+
+- The **anon key is meant to be public** — it ships in the browser. RLS is what
+  protects the data, so the policies above are the real access control. To make
+  the store **read-only for everyone** and manage edits yourself, drop the
+  `update` policy; to lock writes to signed-in editors, replace `using (true)`
+  with a check against `auth.role()` / `auth.uid()` and turn on Supabase Auth
+  (email magic-link works without any app registration).
+- `publishPassphrase` adds a prompt before publishing. It is a speed-bump to
+  stop accidental edits, **not** real security (anyone with the anon key can
+  still write per your RLS policy). Leave it `""` to let any editor publish.
+- **Rollback:** every publish copies the previous document into
+  `definitions_history`. To restore one, copy its `doc` back onto the master row
+  (`update definitions set doc = (...), version = version + 1 where id = 1;`).
 
 ## Definition format
 
