@@ -109,13 +109,19 @@ controls what that key may do.
      version     int,
      archived_at timestamptz default now()
    );
-   create function log_definitions_history() returns trigger as $$
+   -- SECURITY DEFINER lets this trigger write to the (RLS-locked) history
+   -- table on behalf of the anon caller, without exposing that table.
+   create function log_definitions_history() returns trigger
+   language plpgsql
+   security definer
+   set search_path = public
+   as $$
    begin
      insert into definitions_history(id, doc, version)
      values (old.id, old.doc, old.version);
      return new;
    end;
-   $$ language plpgsql;
+   $$;
    create trigger definitions_history_trg
      before update on definitions
      for each row execute function log_definitions_history();
@@ -160,6 +166,17 @@ controls what that key may do.
 - **Rollback:** every publish copies the previous document into
   `definitions_history`. To restore one, copy its `doc` back onto the master row
   (`update definitions set doc = (...), version = version + 1 where id = 1;`).
+
+### Troubleshooting
+
+- **Publish fails with `new row violates row-level security policy for table
+  "definitions_history"`** — the history trigger can't write to the RLS-locked
+  history table. Make the trigger function `SECURITY DEFINER` (re-run the
+  `create or replace function log_definitions_history() …` block above; it swaps
+  the function in place, no other changes needed).
+- **`HTTP 401: Invalid API key` / `No API key found`** — the `anonKey` or `url`
+  in the `SUPABASE` block is wrong, mismatched, or a placeholder. Re-copy both
+  from Project Settings → API (URL must have no trailing slash).
 
 ## Definition format
 
