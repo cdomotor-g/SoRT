@@ -1661,12 +1661,25 @@ function sbHeaders(extra){
   }, extra || {});
 }
 
+// Turn a failed Supabase response into an Error carrying its real message.
+// (e.g. "HTTP 401: Invalid API key" instead of a bare "HTTP 401".)
+async function sbError(res){
+  let detail = "";
+  try{
+    const text = await res.text();
+    try{ const j = JSON.parse(text); detail = j.message || j.msg || j.error_description || j.error || j.hint || text; }
+    catch(_){ detail = text; }
+  }catch(_){}
+  detail = String(detail || "").trim().slice(0, 300);
+  return new Error("HTTP " + res.status + (detail ? ": " + detail : ""));
+}
+
 // Read the single master row. Sets remoteVersion for the optimistic-lock check.
 async function remoteLoad(){
   const url = `${SUPABASE.url}/rest/v1/${encodeURIComponent(SUPABASE.table)}` +
               `?id=eq.${encodeURIComponent(SUPABASE.rowId)}&select=doc,version,updated_at`;
   const res = await fetch(url, { headers: sbHeaders(), cache:"no-store" });
-  if(!res.ok) throw new Error("HTTP " + res.status);
+  if(!res.ok) throw await sbError(res);
   const rows = await res.json();
   if(!rows.length) throw new Error("no master row (id=" + SUPABASE.rowId + ") in table " + SUPABASE.table);
   const row = rows[0];
@@ -1692,7 +1705,7 @@ async function remotePublish(doc){
     headers: sbHeaders({ "Content-Type":"application/json", "Prefer":"return=representation" }),
     body: JSON.stringify({ doc: doc, version: next, updated_at: new Date().toISOString() })
   });
-  if(!res.ok) throw new Error("HTTP " + res.status);
+  if(!res.ok) throw await sbError(res);
   const rows = await res.json();
   if(!rows.length){
     const err = new Error("someone else published first");
