@@ -433,13 +433,14 @@
 /* =========================================================================
    SORT Forum Scope Builder
    -------------------------------------------------------------------------
-   Table + row definitions live in an external file (definitions.json) so
-   they can evolve without editing this page and can be hosted on SharePoint
-   or an on-prem file share. This file provides:
+   Table + row definitions live outside this page so they can evolve without
+   editing the app. This file provides:
      • the end-user "Scope Builder" (unchanged behaviour), and
      • a "Manage Tables" CRUD editor for the definitions.
-   Edits are kept in the browser (localStorage). Use Export to download the
-   JSON and re-publish it to the shared location for the whole team.
+   Definitions are read from a central Supabase row when the SUPABASE config
+   below is filled in (edit → Publish → everyone gets it on next load). If it
+   is left blank the app falls back to the bundled definitions.json plus
+   manual Import/Export, i.e. the original offline behaviour.
 
    Definition shape:
    {
@@ -455,9 +456,31 @@
    An option string beginning with "### " renders as a non-selectable divider.
    ========================================================================= */
 
-const LS_DEFS = "sort.definitions.v1";   // saved (edited) definitions
+const LS_DEFS = "sort.definitions.v1";   // saved (edited) definitions / unpublished draft
 const LS_URL  = "sort.definitionsUrl";   // remembered "load from URL" source
 const DEFINITIONS_FILE = "definitions.json";
+
+/* ===================== CENTRAL STORE (SUPABASE) =====================
+   Fill these in to turn on the shared central store. One master JSON row
+   lives in a Supabase table; the app reads it on startup and writes back
+   when someone clicks "Publish to central store". See README for the exact
+   table + policy setup.
+     • Leave `url` or `anonKey` blank to stay in offline mode (bundled
+       definitions.json + Import/Export), i.e. the original behaviour.
+     • `anonKey` is the PUBLIC "anon" key — it is designed to be shipped to
+       the browser; Row Level Security is what actually protects the data.  */
+const SUPABASE = {
+  url:      "",             // e.g. "https://abcdefgh.supabase.co"  (no trailing slash)
+  anonKey:  "",             // the public anon key from Project Settings → API
+  table:    "definitions",  // table holding the master row
+  rowId:    1,              // primary-key id of the single master row
+  // Optional friction before publishing. NOTE: this is a speed-bump, not real
+  // security (anyone with the anon key can write per your RLS policy). Leave
+  // "" to let anyone who can open this page publish.
+  publishPassphrase: ""
+};
+const REMOTE_ON = !!(SUPABASE.url && SUPABASE.anonKey);
+let remoteVersion = null;   // version of the row we last loaded (optimistic-lock check)
 
 let defs = null;          // active definitions used by the builder + editor
 let defsOrigin = "none";  // "file" | "url" | "local" | "imported" | "none"
@@ -1000,20 +1023,42 @@ function renderManage(){
   if(selectedTableIndex >= defs.tables.length) selectedTableIndex = Math.max(0, defs.tables.length-1);
 
   const issues = collectIssues();
+  const hasDraft = REMOTE_ON && !!localStorage.getItem(LS_DEFS);
+  const actions = REMOTE_ON
+    ? `<button class="btn btn-primary" id="btnPublish">Publish to central store</button>
+       <button class="btn btn-secondary" id="btnReloadRemote">Reload latest</button>
+       <button class="btn btn-secondary" id="btnExport">Export JSON</button>
+       <button class="btn btn-secondary" id="btnImport">Import JSON…</button>`
+    : `<button class="btn btn-secondary" id="btnImport">Import JSON…</button>
+       <button class="btn btn-secondary" id="btnUrl">Load from URL…</button>
+       <button class="btn btn-primary" id="btnExport">Export JSON</button>
+       <button class="btn btn-secondary" id="btnReset">Reset to published file</button>`;
+  const note = REMOTE_ON
+    ? `<div class="admin-note">
+         Changes are saved in <b>this browser</b> as you type. Click <b>Publish to central store</b>
+         to share them — everyone else picks up the update automatically the next time they open the app.
+         ${defsOrigin === "local" ? `<b>You have unpublished changes.</b>` : ""}
+       </div>`
+    : `<div class="admin-note">
+         <b>Heads up:</b> changes here are saved in <b>this browser only</b>. When you are happy,
+         click <b>Export JSON</b> and upload the file to your shared location (SharePoint / on-prem)
+         as <code>${escapeHtml(DEFINITIONS_FILE)}</code> so the whole team gets the update.
+       </div>`;
+  const draftBanner = (hasDraft && defsOrigin !== "local")
+    ? `<div class="admin-note">
+         You have an <b>unpublished draft</b> saved in this browser from a previous session.
+         <button class="mini-btn" id="btnResumeDraft">Resume draft</button>
+         <button class="mini-btn" id="btnDiscardDraft">Discard</button>
+       </div>`
+    : "";
   manageView.innerHTML = `
     <div class="admin-actions">
-      <button class="btn btn-secondary" id="btnImport">Import JSON…</button>
-      <button class="btn btn-secondary" id="btnUrl">Load from URL…</button>
-      <button class="btn btn-primary" id="btnExport">Export JSON</button>
-      <button class="btn btn-secondary" id="btnReset">Reset to published file</button>
+      ${actions}
       <span class="grow"></span>
       <span class="status-msg" id="mStatus"></span>
     </div>
-    <div class="admin-note">
-      <b>Heads up:</b> changes here are saved in <b>this browser only</b>. When you are happy,
-      click <b>Export JSON</b> and upload the file to your shared location (SharePoint / on-prem)
-      as <code>${escapeHtml(DEFINITIONS_FILE)}</code> so the whole team gets the update.
-    </div>
+    ${note}
+    ${draftBanner}
     ${issues.length ? `<div class="warn-banner"><b>Please fix before publishing:</b><ul>${issues.map(i=>`<li>${escapeHtml(i)}</li>`).join("")}</ul></div>` : ""}
     <div class="admin-cols">
       <div>
@@ -1034,10 +1079,18 @@ function renderManage(){
   `;
 
   // top actions
-  document.getElementById("btnImport").addEventListener("click", ()=>importFileEl.click());
-  document.getElementById("btnUrl").addEventListener("click", promptLoadUrl);
-  document.getElementById("btnExport").addEventListener("click", exportDefinitions);
-  document.getElementById("btnReset").addEventListener("click", resetToPublished);
+  const bind = (id, fn)=>{ const el = document.getElementById(id); if(el) el.addEventListener("click", fn); };
+  bind("btnImport", ()=>importFileEl.click());
+  bind("btnExport", exportDefinitions);
+  if(REMOTE_ON){
+    bind("btnPublish", publishToRemote);
+    bind("btnReloadRemote", reloadFromRemote);
+    bind("btnResumeDraft", resumeDraft);
+    bind("btnDiscardDraft", discardDraft);
+  }else{
+    bind("btnUrl", promptLoadUrl);
+    bind("btnReset", resetToPublished);
+  }
   document.getElementById("btnAddTable").addEventListener("click", addTable);
   document.getElementById("btnAddSet").addEventListener("click", addOptionSet);
 
@@ -1545,10 +1598,11 @@ function applyDefinitions(raw, origin){
 
 function renderSourceChip(){
   const map = {
+    remote: ["", "Definitions: central store (published)"],
     file:   ["", "Definitions: published file"],
     url:    ["", "Definitions: loaded from URL"],
     imported:["local", "Definitions: imported file (browser only)"],
-    local:  ["local", "Definitions: edited in this browser"],
+    local:  ["local", "Definitions: unpublished changes in this browser"],
     none:   ["none", "No definitions loaded"]
   };
   const [cls, label] = map[defsOrigin] || map.none;
@@ -1599,8 +1653,117 @@ document.querySelectorAll(".mode-btn").forEach(b=>{
   b.addEventListener("click", ()=>setMode(b.dataset.mode));
 });
 
+/* ===================== CENTRAL STORE (SUPABASE) ===================== */
+function sbHeaders(extra){
+  return Object.assign({
+    "apikey": SUPABASE.anonKey,
+    "Authorization": "Bearer " + SUPABASE.anonKey
+  }, extra || {});
+}
+
+// Read the single master row. Sets remoteVersion for the optimistic-lock check.
+async function remoteLoad(){
+  const url = `${SUPABASE.url}/rest/v1/${encodeURIComponent(SUPABASE.table)}` +
+              `?id=eq.${encodeURIComponent(SUPABASE.rowId)}&select=doc,version,updated_at`;
+  const res = await fetch(url, { headers: sbHeaders(), cache:"no-store" });
+  if(!res.ok) throw new Error("HTTP " + res.status);
+  const rows = await res.json();
+  if(!rows.length) throw new Error("no master row (id=" + SUPABASE.rowId + ") in table " + SUPABASE.table);
+  const row = rows[0];
+  if(!row.doc || typeof row.doc !== "object" || !Array.isArray(row.doc.tables)){
+    throw new Error("stored value is not a valid definitions object");
+  }
+  remoteVersion = row.version;
+  return row.doc;
+}
+
+// Publish a doc, but only if nobody else has published since we loaded.
+// Throws err.conflict === true when the version has moved on.
+async function remotePublish(doc){
+  if(remoteVersion == null){
+    // We never successfully loaded a version, so we can't safely overwrite.
+    throw new Error("load the latest before publishing");
+  }
+  const next = remoteVersion + 1;
+  const url = `${SUPABASE.url}/rest/v1/${encodeURIComponent(SUPABASE.table)}` +
+              `?id=eq.${encodeURIComponent(SUPABASE.rowId)}&version=eq.${encodeURIComponent(remoteVersion)}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: sbHeaders({ "Content-Type":"application/json", "Prefer":"return=representation" }),
+    body: JSON.stringify({ doc: doc, version: next, updated_at: new Date().toISOString() })
+  });
+  if(!res.ok) throw new Error("HTTP " + res.status);
+  const rows = await res.json();
+  if(!rows.length){
+    const err = new Error("someone else published first");
+    err.conflict = true;
+    throw err;
+  }
+  remoteVersion = rows[0].version;
+  return rows[0].doc;
+}
+
+async function publishToRemote(){
+  if(!REMOTE_ON){ mStatus("No central store is configured.", true); return; }
+  const issues = collectIssues();
+  if(issues.length){ mStatus("Fix the listed problems before publishing.", true); return; }
+  if(SUPABASE.publishPassphrase){
+    const pass = prompt("Enter the publish passphrase:");
+    if(pass === null) return;
+    if(pass !== SUPABASE.publishPassphrase){ mStatus("Wrong passphrase — not published.", true); return; }
+  }
+  mStatus("Publishing…");
+  try{
+    const saved = await remotePublish(exportableDefinitions());
+    applyDefinitions(saved, "remote");
+    localStorage.removeItem(LS_DEFS);   // the draft is now the published copy
+    mStatus("Published to the central store — everyone gets it on next load.");
+  }catch(err){
+    if(err.conflict){
+      mStatus("Someone else published since you loaded. Click “Reload latest”, re-apply your change, then publish again. (Your edits are still saved in this browser.)", true);
+    }else{
+      mStatus("Publish failed: " + err.message + " — your changes are still saved locally.", true);
+    }
+  }
+}
+
+async function reloadFromRemote(){
+  if(!confirm("Discard local edits and reload the latest published definitions? This clears your unpublished changes in this browser.")) return;
+  localStorage.removeItem(LS_DEFS);
+  try{
+    applyDefinitions(await remoteLoad(), "remote");
+    mStatus("Reloaded the latest from the central store.");
+  }catch(err){
+    mStatus("Reload failed: " + err.message, true);
+  }
+}
+
+function resumeDraft(){
+  const draft = localStorage.getItem(LS_DEFS);
+  if(!draft){ renderManage(); return; }
+  try{ applyDefinitions(JSON.parse(draft), "local"); mStatus("Resumed your unpublished draft."); }
+  catch(e){ localStorage.removeItem(LS_DEFS); mStatus("The saved draft was corrupt and has been discarded.", true); }
+}
+function discardDraft(){
+  localStorage.removeItem(LS_DEFS);
+  mStatus("Discarded the unpublished draft.");
+  renderManage();
+}
+
 /* ===================== BOOTSTRAP ===================== */
 async function boot(forceFile){
+  // 0. Central store leads: when configured, the published row is the source
+  //    of truth. A local copy is only an *unpublished draft* the editor
+  //    resumes on purpose (see the Manage toolbar) — it never silently wins.
+  if(REMOTE_ON){
+    try{
+      applyDefinitions(await remoteLoad(), "remote");
+      return;
+    }catch(e){
+      console.warn("Central store unavailable — using offline fallback.", e);
+      // fall through to the offline chain so the tool still works offline
+    }
+  }
   // 1. Local edits win (unless we are explicitly resetting to the file).
   if(!forceFile){
     const saved = localStorage.getItem(LS_DEFS);
