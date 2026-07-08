@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SORT Forum Scope Builder</title>
+
+<xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%230f6e6a'/%3E%3Ctext x='50%25' y='50%25' font-size='36' text-anchor='middle' dominant-baseline='central'%3E🛠️%3C/text%3E%3C/svg%3E">
+  
 <style>
   :root{
     --ink:#152531;
@@ -400,7 +403,7 @@
       </div>
       <div class="toggles">
         <label><input type="checkbox" id="includeHeader" checked> Include title/date/attendees when copying</label>
-        <label><input type="checkbox" id="includeEmpty"> Include rows with nothing filled in</label>
+        <label><input type="checkbox" id="includeEmpty" checked> Include rows with nothing filled in</label>
       </div>
     </div>
 
@@ -844,6 +847,12 @@ const includeEmptyEl = document.getElementById("includeEmpty");
 const forumDateEl = document.getElementById("forumDate");
 const forumAttendeesEl = document.getElementById("forumAttendees");
 
+const today = new Date();
+forumDateEl.value =
+  String(today.getDate()).padStart(2, "0") + "/" +
+  String(today.getMonth() + 1).padStart(2, "0") + "/" +
+  today.getFullYear();
+  
 function buildHtmlTable(){
   const table = activeTable();
   const includeHeader = includeHeaderEl.checked;
