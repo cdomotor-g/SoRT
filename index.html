@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SORT Forum Scope Builder</title>
+<title>SoRT Forum Scope Builder</title>
 
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='8'%20fill='%230f6e6a'/%3E%3Ctext%20x='50%25'%20y='50%25'%20font-size='36'%20font-weight='700'%20text-anchor='middle'%20dominant-baseline='central'%20fill='%23ffffff'%20font-family='Segoe%20UI,Arial,sans-serif'%3ES%3C/text%3E%3C/svg%3E">
   
@@ -373,7 +373,7 @@
 
 <header class="app-header">
   <div class="header-titles">
-    <h1>SORT Forum Scope Builder</h1>
+    <h1>SoRT Forum Scope Builder</h1>
     <div class="sub">Click through a table, then copy the finished result straight into your report</div>
   </div>
   <button type="button" id="themeToggle" class="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false" title="Toggle dark mode">
@@ -394,11 +394,11 @@
   <div id="builderView">
     <div class="meta-card">
       <div class="field">
-        <label for="forumDate">SORT Forum Date</label>
+        <label for="forumDate">SoRT Forum Date</label>
         <input type="text" id="forumDate" placeholder="dd/mm/yyyy">
       </div>
       <div class="field">
-        <label for="forumAttendees">SORT Forum Attendees</label>
+        <label for="forumAttendees">SoRT Forum Attendees</label>
         <input type="text" id="forumAttendees" placeholder="Initials">
       </div>
       <div class="toggles">
@@ -434,7 +434,7 @@
 
 <script>
 /* =========================================================================
-   SORT Forum Scope Builder
+   SoRT Forum Scope Builder
    -------------------------------------------------------------------------
    Table + row definitions live outside this page so they can evolve without
    editing the app. This file provides:
@@ -871,9 +871,9 @@ function buildHtmlTable(){
 
   let headHtml = "";
   if(includeHeader){
-    headHtml += `<tr><td colspan="2" style="background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;border:1px solid #999;">SORT Forum Agreed Remediation</td></tr>`;
-    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><b>SORT Forum Date:</b> ${escapeHtml(forumDateEl.value || "dd/mm/yyyy")}</td></tr>`;
-    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><b>SORT Forum Attendees:</b> ${escapeHtml(forumAttendeesEl.value || "")}</td></tr>`;
+    headHtml += `<tr><td colspan="2" style="background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;border:1px solid #999;">SoRT Forum Agreed Remediation</td></tr>`;
+    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><b>SoRT Forum Date:</b> ${escapeHtml(forumDateEl.value || "dd/mm/yyyy")}</td></tr>`;
+    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><b>SoRT Forum Attendees:</b> ${escapeHtml(forumAttendeesEl.value || "")}</td></tr>`;
     headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><i><b>${escapeHtml(table.title)}</b></i></td></tr>`;
   }
   headHtml += `<tr><td style="background:#e8e8e8;font-weight:bold;padding:6px 8px;border:1px solid #999;">Item</td><td style="background:#e8e8e8;font-weight:bold;padding:6px 8px;border:1px solid #999;">Details</td></tr>`;
@@ -887,9 +887,9 @@ function buildPlainText(){
   const includeEmpty = includeEmptyEl.checked;
   let out = "";
   if(includeHeader){
-    out += "SORT Forum Agreed Remediation\n";
-    out += `SORT Forum Date: ${forumDateEl.value || "dd/mm/yyyy"}\n`;
-    out += `SORT Forum Attendees: ${forumAttendeesEl.value || ""}\n`;
+    out += "SoRT Forum Agreed Remediation\n";
+    out += `SoRT Forum Date: ${forumDateEl.value || "dd/mm/yyyy"}\n`;
+    out += `SoRT Forum Attendees: ${forumAttendeesEl.value || ""}\n`;
     out += `${table.title}\n\n`;
   }
   out += "Item\tDetails\n";
@@ -1641,7 +1641,7 @@ function wireNoDefs(){
   if(url) url.addEventListener("click", promptLoadUrl);
   const nw = document.getElementById("nsNew");
   if(nw) nw.addEventListener("click", ()=>{
-    applyDefinitions({ version:1, meta:{appTitle:"SORT Forum Scope Builder"}, optionSets:{}, tables:[] }, "local");
+    applyDefinitions({ version:1, meta:{appTitle:"SoRT Forum Scope Builder"}, optionSets:{}, tables:[] }, "local");
     addTable();
   });
 }
