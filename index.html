@@ -346,6 +346,45 @@
 
   .hidden{ display:none !important; }
 
+  /* ===================== SHARED / COMMON ROWS + TABLE MAP ===================== */
+  .er-shared{
+    background:var(--amber-soft); color:var(--amber); border:1px solid #efdcb3;
+    font-size:.64rem; text-transform:uppercase; letter-spacing:.05em; font-weight:700;
+    padding:2px 7px; border-radius:10px;
+  }
+  .ed-row.ref{ border-style:dashed; }
+  .ed-row.ref .ed-row-head{ cursor:default; background:var(--amber-soft); }
+  .ref-note{ font-size:.76rem; color:var(--ink-soft); padding:9px 12px; line-height:1.4; }
+  .link-btn{ color:var(--accent-dark); background:none; border:none; padding:0;
+    font:inherit; cursor:pointer; text-decoration:underline; }
+  .add-common{ display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  .add-common select{ border:1px solid var(--line); border-radius:6px; padding:6px 8px;
+    font-size:.82rem; font-family:inherit; }
+
+  .map-scroll{ overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); background:var(--card); }
+  table.map-grid{ border-collapse:separate; border-spacing:0; width:100%; font-size:.84rem; }
+  table.map-grid th, table.map-grid td{ border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:9px 12px; }
+  table.map-grid thead th{
+    background:var(--accent-soft); color:var(--accent-dark);
+    position:sticky; top:0; z-index:1; text-align:center; font-size:.78rem; font-weight:700;
+  }
+  table.map-grid thead th.corner{ text-align:left; left:0; z-index:3; }
+  table.map-grid tbody th.row-head{
+    text-align:left; background:var(--card); position:sticky; left:0; z-index:1;
+    font-weight:600; min-width:200px;
+  }
+  table.map-grid tbody th.row-head .r-instr{ font-weight:400; color:var(--ink-soft); font-size:.74rem; display:block; margin-top:2px; }
+  table.map-grid td.cell{ text-align:center; cursor:pointer; }
+  table.map-grid td.cell:hover{ background:var(--accent-soft); }
+  table.map-grid tbody tr:hover th.row-head{ background:var(--accent-soft); }
+  table.map-grid input[type=checkbox]{ width:18px; height:18px; accent-color:var(--accent); cursor:pointer; }
+  .map-type{
+    font-size:.66rem; color:var(--accent-dark); background:var(--accent-soft);
+    border-radius:9px; padding:1px 6px; margin-left:6px; text-transform:uppercase; letter-spacing:.04em;
+  }
+  .map-intro{ margin-bottom:14px; }
+  :root[data-theme="dark"] .er-shared{ border-color:#5a4a1f; }
+
   @media (max-width: 860px){
     .admin-cols{ grid-template-columns:1fr; }
   }
@@ -385,6 +424,7 @@
 <nav class="mode-nav">
   <button class="mode-btn active" data-mode="builder">Scope Builder</button>
   <button class="mode-btn" data-mode="manage">Manage Tables</button>
+  <button class="mode-btn" data-mode="map">Table Map</button>
   <span class="source-chip" id="sourceChip"><span class="dot"></span><span id="sourceLabel">Loading…</span></span>
 </nav>
 
@@ -420,6 +460,9 @@
   <!-- ===================== MANAGE VIEW ===================== -->
   <div id="manageView" class="hidden"></div>
 
+  <!-- ===================== TABLE MAP VIEW ===================== -->
+  <div id="mapView" class="hidden"></div>
+
 </div>
 
 <div class="toolbar" id="builderToolbar">
@@ -449,7 +492,8 @@
    {
      version, meta:{...},
      optionSets: { <name>: [ "opt", "### Divider", ... ] },
-     tables: [ { id, label, title, rows:[ ROW ] } ]
+     sharedRows: [ ROW ],                 // "common" rows reused across tables
+     tables: [ { id, label, title, rows:[ ROW | {shared:<id>} ] } ]
    }
    ROW = {
      id, item, instruction, type:"single"|"multi"|"none",
@@ -457,6 +501,9 @@
    }
    type: single -> radio, multi -> checkbox, none -> fields/text only.
    An option string beginning with "### " renders as a non-selectable divider.
+   A table row may instead be { shared:<id> } — a reference to a sharedRows
+   entry, so one "common row" definition can appear in many tables (managed
+   via the Common rows editor + the Table Map). See effectiveRows().
    ========================================================================= */
 
 const LS_DEFS = "sort.definitions.v1";   // saved (edited) definitions / unpublished draft
@@ -498,6 +545,7 @@ function normalizeDefinitions(raw){
     version: d.version || 1,
     meta: (d.meta && typeof d.meta === "object") ? d.meta : {},
     optionSets: (d.optionSets && typeof d.optionSets === "object") ? d.optionSets : {},
+    sharedRows: Array.isArray(d.sharedRows) ? d.sharedRows : [],
     tables: Array.isArray(d.tables) ? d.tables : []
   };
   // Coerce every set to an array of strings.
@@ -505,13 +553,30 @@ function normalizeDefinitions(raw){
     if(!Array.isArray(out.optionSets[k])) out.optionSets[k] = [];
     out.optionSets[k] = out.optionSets[k].map(String);
   });
+  // Shared ("common") rows: full row definitions stored once and referenced by
+  // any number of tables. Ensure each has a unique id.
+  const sharedTaken = [];
+  out.sharedRows = out.sharedRows.map((r,ri)=>{
+    const row = normalizeRow(r, ri);
+    row.id = uniqueId(row.id || ("commonRow" + (ri+1)), sharedTaken);
+    sharedTaken.push(row.id);
+    return row;
+  });
   out.tables = out.tables.map((t,ti)=>({
     id: t.id || ("table" + (ti+1)),
     label: t.label || t.title || ("Table " + (ti+1)),
     title: t.title || t.label || ("Table " + (ti+1)),
-    rows: Array.isArray(t.rows) ? t.rows.map((r,ri)=>normalizeRow(r,ri)) : []
+    rows: Array.isArray(t.rows) ? t.rows.map((r,ri)=>normalizeTableRow(r,ri)) : []
   }));
   return out;
+}
+// A table row is either a reference to a shared/common row ({shared:<id>}) or
+// an inline row definition (the original shape).
+function normalizeTableRow(r, ri){
+  if(r && typeof r === "object" && typeof r.shared === "string" && r.shared){
+    return { shared: r.shared };
+  }
+  return normalizeRow(r, ri);
 }
 function normalizeRow(r, ri){
   const type = (r.type === "single" || r.type === "multi") ? r.type
@@ -545,17 +610,33 @@ function rowOptions(row){
 }
 function rowHasOptions(row){ return row.type === "single" || row.type === "multi"; }
 
+/* ---- shared ("common") row helpers ----
+   A table's rows may contain references of the form { shared:<id> } pointing
+   into defs.sharedRows. resolveTableRow turns an entry into the concrete row
+   object; effectiveRows is the resolved, render-ready row list for a table
+   (dangling references are dropped). */
+function isSharedRef(entry){ return !!(entry && typeof entry.shared === "string"); }
+function sharedRowById(id){ return (defs && Array.isArray(defs.sharedRows) ? defs.sharedRows : []).find(r=>r.id === id) || null; }
+function resolveTableRow(entry){ return isSharedRef(entry) ? sharedRowById(entry.shared) : entry; }
+function effectiveRows(table){ return table.rows.map(resolveTableRow).filter(Boolean); }
+function tableUsesShared(table, id){ return table.rows.some(e=>isSharedRef(e) && e.shared === id); }
+function tablesUsingShared(id){ return defs.tables.filter(t=>tableUsesShared(t, id)); }
+
 /* Produce a clean copy for export (drops empty option lines, unused keys). */
 function exportableDefinitions(){
   const d = clone(defs);
   Object.keys(d.optionSets).forEach(k=>{
     d.optionSets[k] = d.optionSets[k].filter(o => String(o).trim() !== "");
   });
-  d.tables.forEach(t=>t.rows.forEach(r=>{
+  const cleanRow = r=>{
+    delete r._open;
     if(rowHasOptions(r) && Array.isArray(r.options)){
       r.options = r.options.filter(o => String(o).trim() !== "");
     }
-  }));
+  };
+  if(!Array.isArray(d.sharedRows)) d.sharedRows = [];
+  d.sharedRows.forEach(cleanRow);
+  d.tables.forEach(t=>t.rows.forEach(r=>{ if(!isSharedRef(r)) cleanRow(r); }));
   if(!d.meta) d.meta = {};
   d.meta.updated = new Date().toISOString().slice(0,10);
   return d;
@@ -575,7 +656,7 @@ function reconcileState(){
   const next = {};
   (defs ? defs.tables : []).forEach(t=>{
     next[t.id] = {};
-    t.rows.forEach(r=>{
+    effectiveRows(t).forEach(r=>{
       const prev = state[t.id] && state[t.id][r.id];
       if(prev){
         const wantsArray = r.type === "multi";
@@ -601,6 +682,7 @@ function activeTable(){ return defs ? defs.tables.find(t=>t.id === activeTableId
 const wrapEl = document.getElementById("wrap");
 const builderView = document.getElementById("builderView");
 const manageView = document.getElementById("manageView");
+const mapView = document.getElementById("mapView");
 const tabsEl = document.getElementById("tabs");
 const rowsContainerEl = document.getElementById("rowsContainer");
 const progressTextEl = document.getElementById("progressText");
@@ -653,8 +735,9 @@ function renderRows(){
   if(!table) return;
 
   let filledCount = 0;
+  const rows = effectiveRows(table);
 
-  table.rows.forEach(row=>{
+  rows.forEach(row=>{
     const s = state[table.id][row.id];
     const filled = rowHasContent(table, row);
     if(filled) filledCount++;
@@ -773,13 +856,13 @@ function renderRows(){
   });
 
   updatePreviews();
-  updateProgress(filledCount, table.rows.length);
+  updateProgress(filledCount, rows.length);
 }
 
 function updatePreviews(){
   const table = activeTable();
   if(!table) return;
-  table.rows.forEach(row=>{
+  effectiveRows(table).forEach(row=>{
     const el = rowsContainerEl.querySelector(`[data-preview-for="${cssEscape(row.id)}"]`);
     if(!el) return;
     const lines = rowOutputLines(table, row);
@@ -798,14 +881,15 @@ function renderPreviewAndProgress(){
   const table = activeTable();
   if(!table) return;
   let filledCount = 0;
-  table.rows.forEach((row, idx)=>{
+  const rows = effectiveRows(table);
+  rows.forEach((row, idx)=>{
     if(rowHasContent(table, row)) filledCount++;
     const rowEl = rowsContainerEl.children[idx];
     if(rowEl){
       rowEl.classList.toggle("has-content", rowHasContent(table, row));
     }
   });
-  updateProgress(filledCount, table.rows.length);
+  updateProgress(filledCount, rows.length);
 }
 
 function updateProgress(filled, total){
@@ -859,7 +943,7 @@ function buildHtmlTable(){
   const includeEmpty = includeEmptyEl.checked;
 
   let rowsHtml = "";
-  table.rows.forEach(row=>{
+  effectiveRows(table).forEach(row=>{
     const lines = rowOutputLines(table, row);
     if(!lines.length && !includeEmpty) return;
     const detail = lines.length ? lines.map(escapeHtml).join("<br>") : "";
@@ -893,7 +977,7 @@ function buildPlainText(){
     out += `${table.title}\n\n`;
   }
   out += "Item\tDetails\n";
-  table.rows.forEach(row=>{
+  effectiveRows(table).forEach(row=>{
     const lines = rowOutputLines(table, row);
     if(!lines.length && !includeEmpty) return;
     out += `${row.item}\t${lines.join("; ")}\n`;
@@ -958,7 +1042,7 @@ copyBtn.addEventListener("click", copyTable);
 resetBtn.addEventListener("click", ()=>{
   const table = activeTable();
   if(!table) return;
-  table.rows.forEach(r=>{ state[table.id][r.id] = emptyRowState(r); });
+  effectiveRows(table).forEach(r=>{ state[table.id][r.id] = emptyRowState(r); });
   renderRows();
 });
 
@@ -990,11 +1074,13 @@ function persistLocal(){
     if(defsOrigin !== "local"){ defsOrigin = "local"; renderSourceChip(); }
   }, 300);
 }
-// A structural change: persist, refresh dependent builder state, re-render editor.
+// A structural change: persist, refresh dependent builder state, re-render the
+// currently visible editor (Manage Tables or the Table Map).
 function afterStructuralChange(){
   reconcileState();
   persistLocal();
-  renderManage();
+  if(mode === "map") renderMap();
+  else renderManage();
 }
 // A text-only change: persist quietly, keep focus (no re-render).
 function afterTextChange(){ persistLocal(); }
@@ -1006,20 +1092,34 @@ function collectIssues(){
     if(!id.trim()) issues.push("A table has a blank ID.");
     else if(tIds.indexOf(id) !== i) issues.push(`Duplicate table ID "${id}".`);
   });
+  // Shared/common rows: unique, non-blank ids and valid option-set references.
+  const shared = defs.sharedRows || [];
+  const sIds = shared.map(r=>r.id);
+  shared.forEach((r,i)=>{
+    if(!String(r.id||"").trim()) issues.push("A common row has a blank ID.");
+    else if(sIds.indexOf(r.id) !== i) issues.push(`Duplicate common row ID "${r.id}".`);
+    if(r.optionSet && !defs.optionSets[r.optionSet]){
+      issues.push(`Common row "${r.item}" references missing option set "${r.optionSet}".`);
+    }
+  });
   defs.tables.forEach(t=>{
-    const rIds = t.rows.map(r=>r.id);
-    rIds.forEach((id,i)=>{
-      if(!id.trim()) issues.push(`Table "${t.label}" has a row with a blank ID.`);
-      else if(rIds.indexOf(id) !== i) issues.push(`Table "${t.label}" has duplicate row ID "${id}".`);
-    });
-    t.rows.forEach(r=>{
-      if(r.optionSet && !defs.optionSets[r.optionSet]){
-        issues.push(`Row "${r.item}" references missing option set "${r.optionSet}".`);
+    const effIds = [];
+    t.rows.forEach(e=>{
+      if(isSharedRef(e)){
+        if(!sharedRowById(e.shared)) issues.push(`Table "${t.label}" references missing common row "${e.shared}".`);
+        else effIds.push(e.shared);
+      } else {
+        if(!String(e.id||"").trim()) issues.push(`Table "${t.label}" has a row with a blank ID.`);
+        else effIds.push(e.id);
+        if(e.optionSet && !defs.optionSets[e.optionSet]){
+          issues.push(`Row "${e.item}" references missing option set "${e.optionSet}".`);
+        }
       }
     });
+    effIds.forEach((id,i)=>{
+      if(effIds.indexOf(id) !== i) issues.push(`Table "${t.label}" has duplicate row ID "${id}".`);
+    });
   });
-  const sNames = Object.keys(defs.optionSets);
-  // (object keys are inherently unique; nothing to check for duplicates)
   return [...new Set(issues)];
 }
 
@@ -1085,6 +1185,20 @@ function renderManage(){
         <div class="panel-body" id="tableEditor"></div>
       </div>
     </div>
+    <div class="panel" style="margin-top:16px;">
+      <div class="panel-head">
+        Common rows (shared across tables)
+        <button class="mini-btn" id="btnAddCommon">+ Add common row</button>
+      </div>
+      <div class="panel-body">
+        <div class="hint" style="color:var(--ink-soft);margin-bottom:10px;">
+          Define a row once here, then tick it into any tables from the <b>Table Map</b> tab
+          (or a table's “add common row” control). Editing a common row updates it in every
+          table that uses it.
+        </div>
+        <div id="commonRowList"></div>
+      </div>
+    </div>
   `;
 
   // top actions
@@ -1102,10 +1216,12 @@ function renderManage(){
   }
   document.getElementById("btnAddTable").addEventListener("click", addTable);
   document.getElementById("btnAddSet").addEventListener("click", addOptionSet);
+  document.getElementById("btnAddCommon").addEventListener("click", addSharedRow);
 
   renderTableList();
   renderOptionSets();
   renderTableEditor();
+  renderCommonRows();
 }
 
 function renderTableList(){
@@ -1145,7 +1261,7 @@ function renderOptionSets(){
   }
   names.forEach(name=>{
     const usedIn = defs.tables
-      .filter(t=>t.rows.some(r=>r.optionSet === name))
+      .filter(t=>effectiveRows(t).some(r=>r.optionSet === name))
       .map(t=>t.label);
     const box = document.createElement("div");
     box.className = "oset";
@@ -1211,6 +1327,7 @@ function renderTableEditor(){
         <button class="mini-btn" id="btnAddRow">+ Add row</button>
       </div>
       <div id="rowEditors"></div>
+      <div id="addCommonToTable" class="add-common"></div>
     </div>
   `;
 
@@ -1229,6 +1346,34 @@ function renderTableEditor(){
   document.getElementById("btnAddRow").addEventListener("click", ()=>addRow(table));
 
   renderRowEditors(table);
+  renderAddCommonToTable(table);
+}
+
+// Dropdown to add an existing common row into the selected table.
+function renderAddCommonToTable(table){
+  const host = document.getElementById("addCommonToTable");
+  if(!host) return;
+  host.innerHTML = "";
+  const shared = defs.sharedRows || [];
+  if(!shared.length){
+    host.innerHTML = `<span class="hint">No common rows yet — create some under “Common rows”, then add them here.</span>`;
+    return;
+  }
+  const available = shared.filter(sr=>!tableUsesShared(table, sr.id));
+  const label = document.createElement("span");
+  label.className = "hint";
+  label.textContent = available.length ? "Add a common row:" : "All common rows are already in this table.";
+  host.appendChild(label);
+  if(!available.length) return;
+  const sel = document.createElement("select");
+  sel.innerHTML = `<option value="">Choose a common row…</option>` +
+    available.map(sr=>`<option value="${escapeHtml(sr.id)}">${escapeHtml(sr.item || sr.id)}</option>`).join("");
+  const btn = document.createElement("button");
+  btn.className = "mini-btn";
+  btn.textContent = "Add to table";
+  btn.addEventListener("click", ()=>{ if(sel.value) addSharedRefToTable(table, sel.value); });
+  host.appendChild(sel);
+  host.appendChild(btn);
 }
 
 function renderRowEditors(table){
@@ -1238,33 +1383,17 @@ function renderRowEditors(table){
     host.innerHTML = `<div class="hint" style="color:var(--ink-soft);">No rows yet — click “+ Add row”.</div>`;
     return;
   }
-  table.rows.forEach((row, i)=>{
-    host.appendChild(buildRowEditor(table, row, i));
+  table.rows.forEach((entry, i)=>{
+    if(isSharedRef(entry)) host.appendChild(buildSharedRefCard(table, entry, i));
+    else host.appendChild(buildRowEditor(table, entry, i));
   });
 }
 
-function buildRowEditor(table, row, i){
-  const box = document.createElement("div");
-  box.className = "ed-row" + (row._open ? " open" : "");
-
-  const head = document.createElement("div");
-  head.className = "ed-row-head";
-  head.innerHTML = `
-    <span class="caret">▶</span>
-    <span class="er-title">${escapeHtml(row.item || "(untitled row)")}</span>
-    <span class="er-type">${row.type}</span>`;
-  head.addEventListener("click", (e)=>{
-    if(e.target.closest(".icon-btn")) return;
-    row._open = !box.classList.contains("open");
-    box.classList.toggle("open");
-  });
-  const up = iconBtn("↑","Move up", ()=>{ if(i>0){ swap(table.rows,i,i-1); afterStructuralChange(); }});
-  const down = iconBtn("↓","Move down", ()=>{ if(i<table.rows.length-1){ swap(table.rows,i,i+1); afterStructuralChange(); }});
-  const dup = iconBtn("⧉","Duplicate row", ()=>duplicateRow(table,i));
-  const del = iconBtn("🗑","Delete row", ()=>deleteRow(table,i), true);
-  [up,down,dup,del].forEach(b=>head.appendChild(b));
-  box.appendChild(head);
-
+// The collapsible body shared by the inline-row editor and the common-row
+// editor. opts.onId customises how a row-ID change is handled; opts.onTitle
+// keeps the header title in sync as the user types.
+function buildRowBody(row, opts){
+  opts = opts || {};
   const body = document.createElement("div");
   body.className = "ed-row-body";
   body.innerHTML = `
@@ -1303,16 +1432,19 @@ function buildRowEditor(table, row, i){
       <div class="field-editor fieldEditor"></div>
     </div>
   `;
-  box.appendChild(body);
 
   // text inputs (no re-render)
   const itemInput = body.querySelector(".f-item");
   itemInput.addEventListener("input", ()=>{
     row.item = itemInput.value;
-    head.querySelector(".er-title").textContent = row.item || "(untitled row)";
+    if(opts.onTitle) opts.onTitle(row.item || "(untitled row)");
     afterTextChange();
   });
-  body.querySelector(".f-id").addEventListener("change", (e)=>{ row.id = e.target.value.trim(); afterStructuralChange(); });
+  body.querySelector(".f-id").addEventListener("change", (e)=>{
+    const v = e.target.value.trim();
+    if(opts.onId) opts.onId(v);
+    else { row.id = v; afterStructuralChange(); }
+  });
   body.querySelector(".f-instruction").addEventListener("input", (e)=>{ row.instruction = e.target.value; afterTextChange(); });
   body.querySelector(".f-note").addEventListener("input", (e)=>{ row.note = e.target.value; afterTextChange(); });
   body.querySelector(".f-type").addEventListener("change", (e)=>{
@@ -1336,6 +1468,65 @@ function buildRowEditor(table, row, i){
 
   renderOptionsBlock(body.querySelector(".optionsBlock"), row);
   renderFieldEditor(body.querySelector(".fieldEditor"), row);
+  return body;
+}
+
+function buildRowEditor(table, row, i){
+  const box = document.createElement("div");
+  box.className = "ed-row" + (row._open ? " open" : "");
+
+  const head = document.createElement("div");
+  head.className = "ed-row-head";
+  head.innerHTML = `
+    <span class="caret">▶</span>
+    <span class="er-title">${escapeHtml(row.item || "(untitled row)")}</span>
+    <span class="er-type">${row.type}</span>`;
+  head.addEventListener("click", (e)=>{
+    if(e.target.closest(".icon-btn")) return;
+    row._open = !box.classList.contains("open");
+    box.classList.toggle("open");
+  });
+  const up = iconBtn("↑","Move up", ()=>{ if(i>0){ swap(table.rows,i,i-1); afterStructuralChange(); }});
+  const down = iconBtn("↓","Move down", ()=>{ if(i<table.rows.length-1){ swap(table.rows,i,i+1); afterStructuralChange(); }});
+  const dup = iconBtn("⧉","Duplicate row", ()=>duplicateRow(table,i));
+  const mk = iconBtn("✦","Make this a common (shared) row so other tables can use it", ()=>promoteRowToShared(table,i));
+  const del = iconBtn("🗑","Delete row", ()=>deleteRow(table,i), true);
+  [up,down,dup,mk,del].forEach(b=>head.appendChild(b));
+  box.appendChild(head);
+
+  box.appendChild(buildRowBody(row, {
+    onTitle: (t)=>{ head.querySelector(".er-title").textContent = t; }
+  }));
+  return box;
+}
+
+// A locked card shown in the table editor for a { shared:<id> } reference.
+// The definition is edited under "Common rows"; here you only reorder or remove.
+function buildSharedRefCard(table, entry, i){
+  const sr = sharedRowById(entry.shared);
+  const box = document.createElement("div");
+  box.className = "ed-row ref";
+  const head = document.createElement("div");
+  head.className = "ed-row-head";
+  head.innerHTML = `
+    <span class="er-shared">shared</span>
+    <span class="er-title">${escapeHtml(sr ? (sr.item || "(untitled row)") : entry.shared)}</span>
+    <span class="er-type">${sr ? sr.type : "missing"}</span>`;
+  const up = iconBtn("↑","Move up", ()=>{ if(i>0){ swap(table.rows,i,i-1); afterStructuralChange(); }});
+  const down = iconBtn("↓","Move down", ()=>{ if(i<table.rows.length-1){ swap(table.rows,i,i+1); afterStructuralChange(); }});
+  const remove = iconBtn("✕","Remove from this table (keeps the common row)", ()=>{ table.rows.splice(i,1); afterStructuralChange(); }, true);
+  [up,down,remove].forEach(b=>head.appendChild(b));
+  box.appendChild(head);
+
+  const note = document.createElement("div");
+  note.className = "ref-note";
+  if(sr){
+    note.innerHTML = `Shared common row — edit it under <button class="link-btn" type="button">Common rows</button> to change it in every table at once.`;
+    note.querySelector(".link-btn").addEventListener("click", ()=>openCommonRow(entry.shared));
+  } else {
+    note.innerHTML = `⚠ References a missing common row “${escapeHtml(entry.shared)}”. Remove it, or recreate that common row.`;
+  }
+  box.appendChild(note);
   return box;
 }
 
@@ -1483,21 +1674,155 @@ function renameOptionSet(oldName, newName){
     rebuilt[k === oldName ? newName : k] = defs.optionSets[k];
   });
   defs.optionSets = rebuilt;
-  // Update references.
-  defs.tables.forEach(t=>t.rows.forEach(r=>{ if(r.optionSet === oldName) r.optionSet = newName; }));
+  // Update references on inline table rows and shared/common rows.
+  defs.tables.forEach(t=>t.rows.forEach(r=>{ if(!isSharedRef(r) && r.optionSet === oldName) r.optionSet = newName; }));
+  (defs.sharedRows || []).forEach(r=>{ if(r.optionSet === oldName) r.optionSet = newName; });
   afterStructuralChange();
 }
 function deleteOptionSet(name){
-  const users = defs.tables.flatMap(t=>t.rows.filter(r=>r.optionSet === name));
+  const users = [];
+  (defs.sharedRows || []).forEach(r=>{ if(r.optionSet === name) users.push(r); });
+  defs.tables.forEach(t=>t.rows.forEach(r=>{ if(!isSharedRef(r) && r.optionSet === name) users.push(r); }));
   const msg = users.length
     ? `Delete set "${name}"? ${users.length} row(s) use it — they will keep a copy of the current options as a custom list.`
     : `Delete set "${name}"?`;
   if(!confirm(msg)) return;
   const values = defs.optionSets[name] || [];
-  defs.tables.forEach(t=>t.rows.forEach(r=>{
-    if(r.optionSet === name){ delete r.optionSet; r.options = values.slice(); }
-  }));
+  users.forEach(r=>{ delete r.optionSet; r.options = values.slice(); });
   delete defs.optionSets[name];
+  afterStructuralChange();
+}
+
+/* ---- common (shared) rows: library editor + mutations ---- */
+function renderCommonRows(){
+  const host = document.getElementById("commonRowList");
+  if(!host) return;
+  host.innerHTML = "";
+  const rows = defs.sharedRows || [];
+  if(!rows.length){
+    host.innerHTML = `<div class="hint" style="color:var(--ink-soft);">
+      No common rows yet. Click “+ Add common row”, or open a table above, expand a row and
+      click ✦ to “make common”.</div>`;
+    return;
+  }
+  rows.forEach((row,i)=>host.appendChild(buildSharedRowEditor(row,i)));
+}
+
+function buildSharedRowEditor(row, i){
+  const box = document.createElement("div");
+  box.className = "ed-row" + (row._open ? " open" : "");
+  box.dataset.sharedId = row.id;
+
+  const head = document.createElement("div");
+  head.className = "ed-row-head";
+  head.innerHTML = `
+    <span class="caret">▶</span>
+    <span class="er-shared">shared</span>
+    <span class="er-title">${escapeHtml(row.item || "(untitled row)")}</span>
+    <span class="er-type">${row.type}</span>`;
+  head.addEventListener("click", (e)=>{
+    if(e.target.closest(".icon-btn")) return;
+    row._open = !box.classList.contains("open");
+    box.classList.toggle("open");
+  });
+  const up = iconBtn("↑","Move up", ()=>{ if(i>0){ swap(defs.sharedRows,i,i-1); afterStructuralChange(); }});
+  const down = iconBtn("↓","Move down", ()=>{ if(i<defs.sharedRows.length-1){ swap(defs.sharedRows,i,i+1); afterStructuralChange(); }});
+  const dup = iconBtn("⧉","Duplicate common row", ()=>duplicateSharedRow(i));
+  const del = iconBtn("🗑","Delete common row", ()=>deleteSharedRow(i), true);
+  [up,down,dup,del].forEach(b=>head.appendChild(b));
+  box.appendChild(head);
+
+  const body = buildRowBody(row, {
+    onTitle: (t)=>{ head.querySelector(".er-title").textContent = t; },
+    onId: (v)=>renameSharedRow(row, v)
+  });
+  const users = tablesUsingShared(row.id);
+  const usage = document.createElement("div");
+  usage.className = "ref-note";
+  usage.innerHTML = users.length
+    ? `In use by: ${users.map(t=>escapeHtml(t.label)).join(", ")}.`
+    : `Not in any table yet — tick it in from the <b>Table Map</b>, or a table's “add common row”.`;
+  body.appendChild(usage);
+  box.appendChild(body);
+  return box;
+}
+
+// Expand a common row's editor and scroll to it (switching to Manage first).
+function openCommonRow(id){
+  const sr = sharedRowById(id);
+  if(!sr) return;
+  sr._open = true;
+  if(mode !== "manage") setMode("manage");
+  else renderManage();
+  setTimeout(()=>{
+    const el = document.querySelector(`#commonRowList [data-shared-id="${cssEscape(id)}"]`);
+    if(el) el.scrollIntoView({ behavior:"smooth", block:"center" });
+  }, 40);
+}
+
+function addSharedRow(){
+  if(!Array.isArray(defs.sharedRows)) defs.sharedRows = [];
+  const id = uniqueId("commonRow", defs.sharedRows.map(r=>r.id));
+  defs.sharedRows.push({ id, item:"New common row", instruction:"", type:"single", options:["Option 1"], _open:true });
+  afterStructuralChange();
+}
+function duplicateSharedRow(i){
+  const copy = clone(defs.sharedRows[i]);
+  copy.id = uniqueId(copy.id + "-copy", defs.sharedRows.map(r=>r.id));
+  copy.item = (copy.item || "") + " (copy)";
+  copy._open = true;
+  defs.sharedRows.splice(i+1, 0, copy);
+  afterStructuralChange();
+}
+function deleteSharedRow(i){
+  const row = defs.sharedRows[i];
+  const users = tablesUsingShared(row.id);
+  const msg = users.length
+    ? `Delete common row "${row.item}"? It will be removed from ${users.length} table(s): ${users.map(t=>t.label).join(", ")}.`
+    : `Delete common row "${row.item}"?`;
+  if(!confirm(msg)) return;
+  defs.tables.forEach(t=>{ t.rows = t.rows.filter(e=>!(isSharedRef(e) && e.shared === row.id)); });
+  defs.sharedRows.splice(i,1);
+  afterStructuralChange();
+}
+function renameSharedRow(row, newId){
+  const old = row.id;
+  newId = (newId || "").trim();
+  if(!newId){ afterStructuralChange(); return; }
+  if(newId === old){ afterTextChange(); return; }
+  if(defs.sharedRows.some(r=>r !== row && r.id === newId)){
+    alert(`A common row with ID "${newId}" already exists.`); renderManage(); return;
+  }
+  row.id = newId;
+  defs.tables.forEach(t=>t.rows.forEach(e=>{ if(isSharedRef(e) && e.shared === old) e.shared = newId; }));
+  afterStructuralChange();
+}
+// Promote an inline table row into a reusable common row, replacing it in place
+// with a reference so this table keeps showing it.
+function promoteRowToShared(table, i){
+  const row = table.rows[i];
+  if(isSharedRef(row)) return;
+  if(!Array.isArray(defs.sharedRows)) defs.sharedRows = [];
+  const sharedId = uniqueId(row.id || "commonRow", defs.sharedRows.map(r=>r.id));
+  const def = clone(row);
+  def.id = sharedId;
+  def._open = true;
+  defs.sharedRows.push(def);
+  table.rows[i] = { shared: sharedId };
+  afterStructuralChange();
+}
+function addSharedRefToTable(table, sharedId){
+  if(!sharedRowById(sharedId)) return;
+  if(tableUsesShared(table, sharedId)) return;
+  if(table.rows.some(e=>!isSharedRef(e) && e.id === sharedId)){
+    alert(`This table already has its own row with ID "${sharedId}". Rename or remove it before adding the common row.`);
+    return;
+  }
+  table.rows.push({ shared: sharedId });
+  afterStructuralChange();
+}
+function removeSharedRefFromTable(table, sharedId){
+  table.rows = table.rows.filter(e=>!(isSharedRef(e) && e.shared === sharedId));
   afterStructuralChange();
 }
 
@@ -1515,7 +1840,9 @@ function iconBtn(glyph, title, handler, danger){
 const importFileEl = document.getElementById("importFile");
 
 function mStatus(msg, isError){
-  const el = document.getElementById("mStatus");
+  // Target the status line inside whichever editor view is visible.
+  const host = mode === "map" ? mapView : manageView;
+  const el = host ? host.querySelector(".status-msg") : null;
   if(!el) return;
   el.textContent = msg;
   el.style.color = isError ? "var(--danger)" : "var(--accent-dark)";
@@ -1603,6 +1930,7 @@ function applyDefinitions(raw, origin){
   renderSourceChip();
   renderBuilder();
   if(mode === "manage") renderManage();
+  else if(mode === "map") renderMap();
 }
 
 function renderSourceChip(){
@@ -1641,8 +1969,83 @@ function wireNoDefs(){
   if(url) url.addEventListener("click", promptLoadUrl);
   const nw = document.getElementById("nsNew");
   if(nw) nw.addEventListener("click", ()=>{
-    applyDefinitions({ version:1, meta:{appTitle:"SoRT Forum Scope Builder"}, optionSets:{}, tables:[] }, "local");
+    applyDefinitions({ version:1, meta:{appTitle:"SoRT Forum Scope Builder"}, optionSets:{}, sharedRows:[], tables:[] }, "local");
     addTable();
+  });
+}
+
+/* ===================== TABLE MAP (common rows × tables) ===================== */
+function renderMap(){
+  if(!defs){ mapView.innerHTML = renderNoDefsHtml(); wireNoDefs(); return; }
+  const shared = defs.sharedRows || [];
+  const tables = defs.tables;
+  const issues = collectIssues();
+
+  const publishActions = REMOTE_ON
+    ? `<button class="btn btn-primary" id="btnPublishMap">Publish to central store</button>
+       <button class="btn btn-secondary" id="btnReloadMap">Reload latest</button>`
+    : `<button class="btn btn-primary" id="btnExportMap">Export JSON</button>`;
+
+  let gridHtml;
+  if(!shared.length || !tables.length){
+    gridHtml = `<div class="empty-state">
+      <h3>${shared.length ? "No tables to map yet" : "No common rows yet"}</h3>
+      <p>${shared.length
+          ? "Add a table under <b>Manage Tables</b>, then tick common rows into it here."
+          : "Common rows are rows shared across tables. Add one below, or open a table under <b>Manage Tables</b>, expand a row and click ✦ <b>Make common</b>."}</p>
+      <button class="btn btn-primary" id="btnAddCommonMapEmpty">+ Add common row</button>
+    </div>`;
+  } else {
+    const head = `<tr><th class="corner">Common row</th>${
+      tables.map(t=>`<th>${escapeHtml(t.label || "(untitled)")}<br><span style="font-weight:400;font-size:.72rem;">${t.rows.length} row(s)</span></th>`).join("")
+    }</tr>`;
+    const body = shared.map(sr=>{
+      const cells = tables.map(t=>{
+        const on = tableUsesShared(t, sr.id);
+        return `<td class="cell" data-shared="${escapeHtml(sr.id)}" data-table="${escapeHtml(t.id)}">
+          <input type="checkbox" ${on ? "checked" : ""} aria-label="${escapeHtml(sr.item || sr.id)} in ${escapeHtml(t.label)}">
+        </td>`;
+      }).join("");
+      return `<tr>
+        <th class="row-head">${escapeHtml(sr.item || sr.id)}<span class="map-type">${sr.type}</span>
+          ${sr.instruction ? `<span class="r-instr">${escapeHtml(sr.instruction)}</span>` : ""}</th>
+        ${cells}
+      </tr>`;
+    }).join("");
+    gridHtml = `<div class="map-scroll"><table class="map-grid"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  mapView.innerHTML = `
+    <div class="admin-actions">
+      ${publishActions}
+      <button class="btn btn-secondary" id="btnAddCommonMap">+ Add common row</button>
+      <span class="grow"></span>
+      <span class="status-msg" id="mStatusMap"></span>
+    </div>
+    <div class="admin-note map-intro">
+      Tick a box to include that <b>common row</b> in a table; untick to remove it. Only rows shared
+      across tables appear here — a table's own one-off rows live under <b>Manage Tables</b>.
+      Changes are saved in <b>this browser</b>${REMOTE_ON ? ` — click <b>Publish</b> to share them` : ``}.
+    </div>
+    ${issues.length ? `<div class="warn-banner"><b>Please fix before publishing:</b><ul>${issues.map(i=>`<li>${escapeHtml(i)}</li>`).join("")}</ul></div>` : ""}
+    ${gridHtml}
+  `;
+
+  const bind = (id, fn)=>{ const el = document.getElementById(id); if(el) el.addEventListener("click", fn); };
+  bind("btnAddCommonMap", addSharedRow);
+  bind("btnAddCommonMapEmpty", addSharedRow);
+  if(REMOTE_ON){ bind("btnPublishMap", publishToRemote); bind("btnReloadMap", reloadFromRemote); }
+  else bind("btnExportMap", exportDefinitions);
+
+  mapView.querySelectorAll("td.cell input[type=checkbox]").forEach(cb=>{
+    cb.addEventListener("change", ()=>{
+      const td = cb.closest("td.cell");
+      const table = defs.tables.find(t=>t.id === td.getAttribute("data-table"));
+      const sid = td.getAttribute("data-shared");
+      if(!table) return;
+      if(cb.checked) addSharedRefToTable(table, sid);
+      else removeSharedRefFromTable(table, sid);
+    });
   });
 }
 
@@ -1652,10 +2055,12 @@ function setMode(next){
   document.querySelectorAll(".mode-btn").forEach(b=>b.classList.toggle("active", b.dataset.mode === mode));
   const isBuilder = mode === "builder";
   builderView.classList.toggle("hidden", !isBuilder);
-  manageView.classList.toggle("hidden", isBuilder);
+  manageView.classList.toggle("hidden", mode !== "manage");
+  mapView.classList.toggle("hidden", mode !== "map");
   builderToolbar.classList.toggle("hidden", !isBuilder);
   wrapEl.classList.toggle("manage", !isBuilder);
   if(isBuilder){ reconcileState(); renderBuilder(); }
+  else if(mode === "map") renderMap();
   else renderManage();
 }
 document.querySelectorAll(".mode-btn").forEach(b=>{
@@ -1814,6 +2219,7 @@ async function boot(forceFile){
   renderSourceChip();
   renderBuilder();
   if(mode === "manage") renderManage();
+  else if(mode === "map") renderMap();
 }
 
 /* ===================== THEME TOGGLE ===================== */
