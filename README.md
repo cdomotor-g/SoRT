@@ -52,6 +52,10 @@ The editor lets you:
 - Give a row a **custom option list** or point it at a **shared option set**
   (e.g. the Comms / Accessibility / Demolition lists reused across tables — edit
   them in one place).
+- Give a row an **icon** — shown beside the item name in the Scope Builder (and
+  in the Table Map). Click **Choose icon…** in the row editor to pick one from
+  the built-in palette, or type/paste any emoji. Icons are a visual aid in the
+  app only; they are not included in the table copied into Word.
 - Add free-text **fields** and an amber **approval note**.
 
 Options are entered one per line. A line starting with `### ` becomes a
@@ -233,6 +237,7 @@ controls what that key may do.
         {
           "id": "stationType",                    // unique within the table
           "item": "Station Type",                 // row name (left column)
+          "icon": "🌧",                           // optional, shown beside the item in the app
           "instruction": "(Choose relevant option)",
           "type": "single",                       // "single" | "multi" | "none"
           "options": ["Rain Gauge"],              // inline list …
