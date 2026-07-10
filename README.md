@@ -1,10 +1,13 @@
 # SoRT — Forum Scope Builder
 
 A single-page tool for building SORT Forum remediation scope tables and copying
-them straight into Word. It has two modes:
+them straight into Word. It has three modes:
 
 - **Scope Builder** — click through a table, fill in the rows, copy the result.
-- **Manage Tables** — a CRUD editor for the table/row definitions themselves.
+- **Manage Tables** — a CRUD editor for the table/row definitions themselves,
+  including a library of **common rows** shared across tables.
+- **Table Map** — a grid of *common rows × tables*; tick a box to add that row
+  to a table, untick to remove it, all in one view.
 
 ## Files
 
@@ -53,6 +56,32 @@ The editor lets you:
 
 Options are entered one per line. A line starting with `### ` becomes a
 non-selectable heading/divider.
+
+### Common rows (shared across tables)
+
+Rows that belong in more than one table (Comms Option, Accessibility, Site
+Assessment Photos, …) can be defined **once** and reused, so a change flows to
+every table that uses them instead of being re-typed table by table.
+
+- The **Common rows** panel at the bottom of *Manage Tables* is the library:
+  add / edit / duplicate / reorder / delete a common row there, exactly like a
+  normal row. Each editor shows which tables currently use it.
+- Inside a table, a common row appears as a locked **shared** card — reorder it
+  or remove it from that table, but edit the definition from the library.
+- To turn an existing one-off row into a common row, expand it in the table
+  editor and click the **✦** ("make common") button — it moves into the library
+  and stays in that table as a reference.
+- Add a common row to a table from the table editor's **"add common row"**
+  dropdown, or from the **Table Map**.
+
+### Table Map
+
+The **Table Map** tab shows a grid: **common rows** down the side, **tables**
+across the top. Each cell is a checkbox — tick it to include that row in that
+table, untick it to remove it. It's the fastest way to see and change, at a
+glance, which shared rows appear where. (Only common rows appear in the map; a
+table's own one-off rows stay in *Manage Tables*.) Changes save to your browser
+and, with the central store on, go live for everyone when you **Publish**.
 
 ### Publishing your changes
 
@@ -187,6 +216,14 @@ controls what that key may do.
   "optionSets": {
     "comms": ["Option one", "Option two"]        // reusable, referenced by rows
   },
+  "sharedRows": [                                 // "common" rows reused by tables
+    {
+      "id": "comms",                             // unique among sharedRows
+      "item": "Comms Option",
+      "type": "single",
+      "optionSet": "comms"
+    }
+  ],
   "tables": [
     {
       "id": "rainfall",                           // unique internal key
@@ -204,9 +241,15 @@ controls what that key may do.
           "fields": [                             // optional free-text inputs
             { "key": "detail", "label": "Detail", "type": "text" }  // or "textarea"
           ]
-        }
+        },
+        { "shared": "comms" }                     // reference to a sharedRows entry
       ]
     }
   ]
 }
 ```
+
+A table row is therefore **either** an inline row (the object shape above)
+**or** a reference `{ "shared": "<id>" }` pointing at a `sharedRows` entry with
+that `id`. References are resolved at render time, so one shared definition can
+appear in any number of tables; each table still collects its own answers.
