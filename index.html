@@ -385,6 +385,45 @@
   .map-intro{ margin-bottom:14px; }
   :root[data-theme="dark"] .er-shared{ border-color:#5a4a1f; }
 
+  /* ===================== ROW ICONS + ICON PICKER ===================== */
+  .row-icon{ margin-right:8px; }
+  .er-icon{ font-size:1rem; line-height:1; }
+  .icon-pick{ display:flex; align-items:center; gap:8px; }
+  .icon-pick-btn{
+    appearance:none; font-family:inherit; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px;
+    border:1px solid var(--line); border-radius:6px; background:var(--card);
+    padding:6px 10px; font-size:.84rem; color:var(--ink);
+  }
+  .icon-pick-btn:hover{ border-color:var(--accent); color:var(--accent-dark); }
+  .icon-pick-btn .cur{ font-size:1.15rem; line-height:1; }
+  .modal-overlay{
+    position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal{
+    background:var(--card); border:1px solid var(--line); border-radius:10px;
+    width:100%; max-width:540px; max-height:82vh; display:flex; flex-direction:column;
+    box-shadow:0 12px 40px rgba(0,0,0,.28);
+  }
+  .modal-head{ display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid var(--line); }
+  .modal-head h3{ margin:0; font-size:1rem; flex:1; }
+  .modal-body{ padding:14px 16px; overflow-y:auto; }
+  .icon-cat{ font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); font-weight:700; margin:12px 0 6px; }
+  .icon-cat:first-child{ margin-top:0; }
+  .icon-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(42px,1fr)); gap:6px; }
+  .icon-cell{
+    appearance:none; border:1px solid var(--line); background:var(--paper); border-radius:7px;
+    font-size:1.3rem; line-height:1; padding:8px 0; cursor:pointer; font-family:inherit;
+  }
+  .icon-cell:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .icon-cell.selected{ border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 1px var(--accent) inset; }
+  .modal-foot{ display:flex; gap:8px; align-items:center; padding:12px 16px; border-top:1px solid var(--line); flex-wrap:wrap; }
+  .modal-foot input[type=text]{
+    flex:1; min-width:180px; border:1px solid var(--line); border-radius:6px;
+    padding:8px 10px; font-size:.87rem; font-family:inherit;
+  }
+
   @media (max-width: 860px){
     .admin-cols{ grid-template-columns:1fr; }
   }
@@ -497,6 +536,7 @@
    }
    ROW = {
      id, item, instruction, type:"single"|"multi"|"none",
+     icon?,   // emoji shown beside the item name in the Scope Builder
      note?, optionSet? (name) OR options?[] , fields?:[{key,label,type,placeholder?}]
    }
    type: single -> radio, multi -> checkbox, none -> fields/text only.
@@ -587,6 +627,7 @@ function normalizeRow(r, ri){
     instruction: r.instruction || "",
     type
   };
+  if(r.icon != null && String(r.icon).trim()) row.icon = String(r.icon).trim();
   if(r.note) row.note = r.note;
   if(type !== "none"){
     if(r.optionSet) row.optionSet = r.optionSet;
@@ -749,7 +790,7 @@ function renderRows(){
     const itemEl = document.createElement("div");
     itemEl.className = "row-item";
     itemEl.innerHTML = `
-      <div class="label">${escapeHtml(row.item)}</div>
+      <div class="label">${row.icon ? `<span class="row-icon">${escapeHtml(row.icon)}</span>` : ""}${escapeHtml(row.item)}</div>
       ${row.instruction ? `<div class="instruction">${escapeHtml(row.instruction)}</div>` : ""}
       ${row.note ? `<div class="note-helper">${escapeHtml(row.note)}</div>` : ""}
     `;
@@ -1418,6 +1459,13 @@ function buildRowBody(row, opts){
           <option value="none"${row.type==="none"?" selected":""}>No options (fields / text only)</option>
         </select>
       </div>
+      <div class="ed-field">
+        <label>Icon (shown in the Scope Builder)</label>
+        <div class="icon-pick">
+          <button type="button" class="icon-pick-btn f-icon"></button>
+          <button type="button" class="mini-btn f-icon-clear">Remove</button>
+        </div>
+      </div>
       <div class="ed-field full">
         <label>Approval note (amber box, optional)</label>
         <input type="text" class="f-note" value="${escapeHtml(row.note || "")}">
@@ -1458,6 +1506,23 @@ function buildRowBody(row, opts){
     row._open = true;
     afterStructuralChange();
   });
+  const iconPickEl = body.querySelector(".f-icon");
+  const iconClearEl = body.querySelector(".f-icon-clear");
+  const syncIconPick = ()=>{
+    iconPickEl.innerHTML = row.icon
+      ? `<span class="cur">${escapeHtml(row.icon)}</span><span>Change icon…</span>`
+      : `<span>Choose icon…</span>`;
+    iconClearEl.classList.toggle("hidden", !row.icon);
+  };
+  const setIcon = (icon)=>{
+    if(icon) row.icon = icon; else delete row.icon;
+    syncIconPick();
+    if(opts.onIcon) opts.onIcon(row.icon || "");
+    afterTextChange();
+  };
+  syncIconPick();
+  iconPickEl.addEventListener("click", ()=>openIconPicker(row.icon || "", setIcon));
+  iconClearEl.addEventListener("click", ()=>setIcon(""));
   body.querySelector(".btnAddField").addEventListener("click", ()=>{
     if(!row.fields) row.fields = [];
     const taken = row.fields.map(f=>f.key);
@@ -1479,6 +1544,7 @@ function buildRowEditor(table, row, i){
   head.className = "ed-row-head";
   head.innerHTML = `
     <span class="caret">▶</span>
+    <span class="er-icon"${row.icon ? "" : ` style="display:none"`}>${escapeHtml(row.icon || "")}</span>
     <span class="er-title">${escapeHtml(row.item || "(untitled row)")}</span>
     <span class="er-type">${row.type}</span>`;
   head.addEventListener("click", (e)=>{
@@ -1495,7 +1561,8 @@ function buildRowEditor(table, row, i){
   box.appendChild(head);
 
   box.appendChild(buildRowBody(row, {
-    onTitle: (t)=>{ head.querySelector(".er-title").textContent = t; }
+    onTitle: (t)=>{ head.querySelector(".er-title").textContent = t; },
+    onIcon: (ic)=>{ const el = head.querySelector(".er-icon"); el.textContent = ic; el.style.display = ic ? "" : "none"; }
   }));
   return box;
 }
@@ -1510,6 +1577,7 @@ function buildSharedRefCard(table, entry, i){
   head.className = "ed-row-head";
   head.innerHTML = `
     <span class="er-shared">shared</span>
+    ${sr && sr.icon ? `<span class="er-icon">${escapeHtml(sr.icon)}</span>` : ""}
     <span class="er-title">${escapeHtml(sr ? (sr.item || "(untitled row)") : entry.shared)}</span>
     <span class="er-type">${sr ? sr.type : "missing"}</span>`;
   const up = iconBtn("↑","Move up", ()=>{ if(i>0){ swap(table.rows,i,i-1); afterStructuralChange(); }});
@@ -1718,6 +1786,7 @@ function buildSharedRowEditor(row, i){
   head.innerHTML = `
     <span class="caret">▶</span>
     <span class="er-shared">shared</span>
+    <span class="er-icon"${row.icon ? "" : ` style="display:none"`}>${escapeHtml(row.icon || "")}</span>
     <span class="er-title">${escapeHtml(row.item || "(untitled row)")}</span>
     <span class="er-type">${row.type}</span>`;
   head.addEventListener("click", (e)=>{
@@ -1734,6 +1803,7 @@ function buildSharedRowEditor(row, i){
 
   const body = buildRowBody(row, {
     onTitle: (t)=>{ head.querySelector(".er-title").textContent = t; },
+    onIcon: (ic)=>{ const el = head.querySelector(".er-icon"); el.textContent = ic; el.style.display = ic ? "" : "none"; },
     onId: (v)=>renameSharedRow(row, v)
   });
   const users = tablesUsingShared(row.id);
@@ -1834,6 +1904,68 @@ function iconBtn(glyph, title, handler, danger){
   b.textContent = glyph;
   b.addEventListener("click", (e)=>{ e.stopPropagation(); handler(); });
   return b;
+}
+
+/* ---- icon picker modal ----
+   Rows may carry an optional `icon` (an emoji, or any short string) shown
+   beside the item name in the Scope Builder. The picker offers a curated grid
+   plus a free-text box for anything not in it. */
+const ICON_CATEGORIES = [
+  ["Weather & water",    ["🌧","⛈","🌦","☔","💧","🌊","🏞","🌡","☀️","❄️","🌫","🌀"]],
+  ["Site & structures",  ["📍","🗺","🧭","🏗","🚧","⛺","🏚","🗼","🚪","🧱","⛰","🕳"]],
+  ["Equipment & tools",  ["🔧","🛠","⚙️","🧰","🔩","🪜","📏","📐","🔋","🔌","⚡","💡"]],
+  ["Comms & data",       ["📡","🛰","📶","📞","☎️","🌐","💾","🖥","📊","📈","📉","🔄"]],
+  ["Vehicles & access",  ["🚗","🛻","🚚","🚜","🚁","⛵","🥾","🚶","🔑","🔒","🚦","🛤"]],
+  ["Docs & media",       ["📷","📸","🎥","🖼","📝","📋","📄","🗂","📁","🏷","📦","✉️"]],
+  ["Status & safety",    ["✅","☑️","⚠️","❗","❓","🚫","⛔","🛑","🦺","👷","🚩","⭐"]],
+  ["Nature",             ["🌱","🌿","🌳","🍃","🐟","🦆","🐄","🐍","🐝","🕷","🔥","♻️"]]
+];
+let iconPickerOverlay = null;
+function closeIconPicker(){
+  if(!iconPickerOverlay) return;
+  iconPickerOverlay.remove();
+  iconPickerOverlay = null;
+  document.removeEventListener("keydown", iconPickerEsc);
+}
+function iconPickerEsc(e){ if(e.key === "Escape") closeIconPicker(); }
+// openIconPicker(currentIcon, onPick) — onPick receives the chosen icon, or ""
+// to remove the icon. Closes itself before calling back.
+function openIconPicker(current, onPick){
+  closeIconPicker();
+  const pick = (icon)=>{ closeIconPicker(); onPick(icon); };
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Choose an icon">
+      <div class="modal-head">
+        <h3>Choose an icon</h3>
+        <button type="button" class="icon-btn modal-close" title="Close">✕</button>
+      </div>
+      <div class="modal-body">${ICON_CATEGORIES.map(([cat, icons])=>`
+        <div class="icon-cat">${escapeHtml(cat)}</div>
+        <div class="icon-grid">${icons.map(ic=>
+          `<button type="button" class="icon-cell${ic === current ? " selected" : ""}" data-icon="${escapeHtml(ic)}">${ic}</button>`
+        ).join("")}</div>`).join("")}
+      </div>
+      <div class="modal-foot">
+        <input type="text" class="customIcon" placeholder="Or type / paste any emoji…" value="${escapeHtml(current)}">
+        <button type="button" class="btn btn-secondary btnNoIcon">No icon</button>
+        <button type="button" class="btn btn-primary btnUseCustom">Use</button>
+      </div>
+    </div>`;
+  overlay.addEventListener("click", (e)=>{ if(e.target === overlay) closeIconPicker(); });
+  overlay.querySelector(".modal-close").addEventListener("click", closeIconPicker);
+  overlay.querySelectorAll(".icon-cell").forEach(b=>{
+    b.addEventListener("click", ()=>pick(b.getAttribute("data-icon")));
+  });
+  overlay.querySelector(".btnNoIcon").addEventListener("click", ()=>pick(""));
+  const customEl = overlay.querySelector(".customIcon");
+  const useCustom = ()=>{ const v = customEl.value.trim(); if(v) pick(v); };
+  overlay.querySelector(".btnUseCustom").addEventListener("click", useCustom);
+  customEl.addEventListener("keydown", (e)=>{ if(e.key === "Enter") useCustom(); });
+  document.addEventListener("keydown", iconPickerEsc);
+  document.body.appendChild(overlay);
+  iconPickerOverlay = overlay;
 }
 
 /* ===================== DATA SOURCE ACTIONS ===================== */
@@ -2007,7 +2139,7 @@ function renderMap(){
         </td>`;
       }).join("");
       return `<tr>
-        <th class="row-head">${escapeHtml(sr.item || sr.id)}<span class="map-type">${sr.type}</span>
+        <th class="row-head">${sr.icon ? `<span class="row-icon">${escapeHtml(sr.icon)}</span>` : ""}${escapeHtml(sr.item || sr.id)}<span class="map-type">${sr.type}</span>
           ${sr.instruction ? `<span class="r-instr">${escapeHtml(sr.instruction)}</span>` : ""}</th>
         ${cells}
       </tr>`;

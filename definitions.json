@@ -34,6 +34,7 @@
     {
       "id": "comms",
       "item": "Comms Option",
+      "icon": "📡",
       "instruction": "(Choose 1 option)",
       "type": "single",
       "optionSet": "comms"
@@ -41,6 +42,7 @@
     {
       "id": "demolition",
       "item": "Demolition / Disposal",
+      "icon": "🏗",
       "instruction": "(Yes/No, details)",
       "type": "multi",
       "optionSet": "demolition"
@@ -48,6 +50,7 @@
     {
       "id": "coords",
       "item": "Instrumentation Coordinates",
+      "icon": "📍",
       "instruction": "(Existing or, Proposed)",
       "type": "none",
       "fields": [
@@ -66,6 +69,7 @@
     {
       "id": "accessibility",
       "item": "Accessibility",
+      "icon": "🛻",
       "instruction": "(Delete irrelevant options)",
       "type": "multi",
       "optionSet": "accessibility"
@@ -73,6 +77,7 @@
     {
       "id": "nonStandard",
       "item": "Non-Standard options",
+      "icon": "⚠️",
       "instruction": "(Please avoid if possible)",
       "type": "single",
       "options": [
@@ -90,6 +95,7 @@
     {
       "id": "photos",
       "item": "Site Assessment Photos",
+      "icon": "📷",
       "instruction": "",
       "type": "none",
       "fields": [
@@ -103,6 +109,7 @@
     {
       "id": "installNotes",
       "item": "Installation Notes",
+      "icon": "📝",
       "instruction": "(Freeform section)",
       "type": "none",
       "fields": [
@@ -123,6 +130,7 @@
         {
           "id": "stationType",
           "item": "Station Type",
+          "icon": "🌧",
           "instruction": "(Choose relevant option)",
           "type": "single",
           "options": [
@@ -282,6 +290,7 @@
         {
           "id": "stationType",
           "item": "Station Type",
+          "icon": "🌊",
           "instruction": "(Choose relevant option)",
           "type": "single",
           "options": [
@@ -506,6 +515,7 @@
         {
           "id": "stationType",
           "item": "Station Type",
+          "icon": "🗼",
           "instruction": "(Delete irrelevant options)",
           "type": "single",
           "options": [
