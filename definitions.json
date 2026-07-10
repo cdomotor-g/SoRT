@@ -1,10 +1,26 @@
 {
   "version": 1,
   "meta": {
-    "appTitle": "SORT Forum Scope Builder",
-    "updated": "2026-07-03"
+    "updated": "2026-07-10",
+    "appTitle": "SORT Forum Scope Builder"
   },
   "optionSets": {
+    "comms": [
+      "IP Logger - Cellular Communications",
+      "IP Logger - Satellite Communications",
+      "IP Logger - Campbell Scientific - ERRTS VHF Communications",
+      "Local Processing Unit - Elpro ERRTS VHF Communications",
+      "AL200X Campbell Scientific - ERRTS VHF Communications"
+    ],
+    "demolition": [
+      "Standard: Complete demolition and/or disposal",
+      "Complex: Parts to be returned to the Hub/Council/Other"
+    ],
+    "yesnona": [
+      "Yes",
+      "No",
+      "NA"
+    ],
     "accessibility": [
       "All weather access",
       "Dry weather access only",
@@ -12,18 +28,6 @@
       "Flatbed truck",
       "4WD with tandem trailer",
       "4WD only"
-    ],
-    "demolition": [
-      "Standard: Complete demolition and disposal",
-      "Complex: Parts to be returned to the Hub/Council",
-      "Complex: Drop-off contact/address required for Gas Cylinders"
-    ],
-    "comms": [
-      "IP Logger - Cellular Communications",
-      "IP Logger - Satellite Communications",
-      "IP Logger - Campbell Scientific - ERRTS VHF Communications",
-      "Local Processing Unit - Elpro ERRTS VHF Communications",
-      "AL200X Campbell Scientific - ERRTS VHF Communications"
     ]
   },
   "tables": [
@@ -87,8 +91,10 @@
           "type": "single",
           "options": [
             "Yes",
-            "No"
-          ]
+            "No",
+            "NA"
+          ],
+          "_open": false
         },
         {
           "id": "reasonComms",
@@ -150,7 +156,7 @@
           "fields": [
             {
               "key": "distance",
-              "label": "Distance (>25m or <25m)",
+              "label": "Distance",
               "type": "text"
             }
           ]
@@ -398,7 +404,7 @@
           "fields": [
             {
               "key": "distance",
-              "label": "Distance (>25m or <25m)",
+              "label": "Distance",
               "type": "text"
             }
           ]
@@ -451,8 +457,8 @@
               "type": "text"
             },
             {
-              "key": "distance",
-              "label": "Distance",
+              "key": "comment",
+              "label": "Comment",
               "type": "text"
             }
           ]
@@ -735,7 +741,7 @@
           "fields": [
             {
               "key": "distance",
-              "label": "Distance (>25m or <25m)",
+              "label": "Distance",
               "type": "text"
             }
           ]
