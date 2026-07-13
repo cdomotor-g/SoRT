@@ -12,11 +12,6 @@
       "Local Processing Unit - Elpro ERRTS VHF Communications",
       "AL200X Campbell Scientific - ERRTS VHF Communications"
     ],
-    "demolition": [
-      "Standard: Complete demolition and disposal",
-      "Complex: Parts to be returned to the Hub/Council",
-      "Complex: Drop-off contact/address required for Gas Cylinders"
-    ],
     "accessibility": [
       "All weather access",
       "Dry weather access only",
@@ -26,7 +21,250 @@
       "4WD only"
     ]
   },
-  "sharedRows": [],
+  "sharedRows": [
+    {
+      "id": "fadeMargin",
+      "item": "Fade Margin >20db",
+      "instruction": "(If station is ERRTS)",
+      "type": "single",
+      "icon": "📶",
+      "options": [
+        "Yes",
+        "No",
+        "NA"
+      ]
+    },
+    {
+      "id": "comms",
+      "item": "Comms Option",
+      "instruction": "(Choose 1 option)",
+      "type": "single",
+      "icon": "📞",
+      "optionSet": "comms"
+    },
+    {
+      "id": "reasonComms",
+      "item": "Reason for Changing Comms Type",
+      "instruction": "",
+      "type": "single",
+      "icon": "☎️",
+      "note": "Changing comms type requires GM Approval — ERRTS to SAT",
+      "options": [
+        "Yes",
+        "NA"
+      ],
+      "fields": [
+        {
+          "key": "reasonDetail",
+          "label": "Reason (if Yes)",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "stockFence",
+      "item": "Stock Fence",
+      "instruction": "(Yes/No, details)",
+      "type": "single",
+      "icon": "🐄",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "fields": [
+        {
+          "key": "size",
+          "label": "Size (eg. 3x3)",
+          "type": "text"
+        },
+        {
+          "key": "gate",
+          "label": "Gate",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "demolition",
+      "item": "Demolition / Disposal",
+      "instruction": "(Select one, optional details)",
+      "type": "single",
+      "icon": "♻️",
+      "options": [
+        "### Standard: ",
+        "Complete demolition and/or disposal (nothing returned to HUB)",
+        "### Complex",
+        "ALL Parts to be returned to HUB",
+        "LPU to be returned to HUB",
+        "TBRG to be returned to the HUB",
+        "Other:"
+      ]
+    },
+    {
+      "id": "relocation",
+      "item": "Relocation",
+      "instruction": "(Yes/No, </>25m)",
+      "type": "single",
+      "icon": "🚩",
+      "note": "WL Relocation requires EPS & GM Approval",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "fields": [
+        {
+          "key": "distance",
+          "label": "Distance",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "coords",
+      "item": "Instrumentation Coordinates",
+      "instruction": "(Existing or, Proposed)",
+      "type": "none",
+      "icon": "🗺",
+      "fields": [
+        {
+          "key": "existing",
+          "label": "Existing",
+          "type": "text"
+        },
+        {
+          "key": "proposed",
+          "label": "Proposed",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "accessibility",
+      "item": "Accessibility",
+      "instruction": "(Delete irrelevant options)",
+      "type": "multi",
+      "icon": "🚚",
+      "optionSet": "accessibility"
+    },
+    {
+      "id": "installNotes",
+      "item": "Installation Notes",
+      "instruction": "(Freeform section)",
+      "type": "none",
+      "icon": "📝",
+      "fields": [
+        {
+          "key": "notes",
+          "label": "Notes",
+          "type": "textarea"
+        }
+      ]
+    },
+    {
+      "id": "photos",
+      "item": "Site Assessment Photos",
+      "instruction": "",
+      "type": "none",
+      "icon": "📷",
+      "fields": [
+        {
+          "key": "link",
+          "label": "Insert link & confirm access",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "remediation",
+      "item": "Remediation / Additional Works",
+      "instruction": "(Delete irrelevant options)",
+      "type": "multi",
+      "icon": "👷",
+      "options": [
+        "Vendor/Contractor site visit required prior to complex installation",
+        "Vegetation management",
+        "Bollards for site protection",
+        "Data access to be provided to Council via satellite modem",
+        "Track / stairs required to access orifice / gauge boards"
+      ],
+      "fields": [
+        {
+          "key": "other",
+          "label": "Other",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "nonStandard",
+      "item": "Non-Standard options",
+      "instruction": "(Please avoid if possible)",
+      "type": "single",
+      "icon": "⭐",
+      "options": [
+        "Yes",
+        "NA"
+      ],
+      "fields": [
+        {
+          "key": "detail",
+          "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
+          "type": "textarea"
+        }
+      ]
+    },
+    {
+      "id": "rainfallLocation",
+      "item": "Rainfall Mounted Location",
+      "instruction": "(Details / NA)",
+      "type": "none",
+      "icon": "☔",
+      "fields": [
+        {
+          "key": "detail",
+          "label": "Details",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "txpower",
+      "item": "TX power",
+      "instruction": "",
+      "type": "single",
+      "icon": "☀️",
+      "options": [
+        "NA",
+        "1W",
+        "5W"
+      ]
+    },
+    {
+      "id": "errts",
+      "item": "ERRTS / Frequencies",
+      "instruction": "(Choose option, add detail)",
+      "type": "single",
+      "icon": "⚡",
+      "options": [
+        "ERRTS (ELPRO)",
+        "ERRTS (Campbell Scientific)",
+        "Satellite",
+        "Cellular"
+      ],
+      "fields": [
+        {
+          "key": "frequency",
+          "label": "Frequency details",
+          "type": "text"
+        },
+        {
+          "key": "power",
+          "label": "Transmitter power",
+          "type": "text"
+        }
+      ]
+    }
+  ],
   "tables": [
     {
       "id": "rainfall",
@@ -38,6 +276,7 @@
           "item": "Station Type",
           "instruction": "(Choose relevant option)",
           "type": "single",
+          "icon": "🌧",
           "options": [
             "Rain Gauge"
           ]
@@ -47,6 +286,7 @@
           "item": "Complexity, Scope & Type",
           "instruction": "(Choose 1 option)",
           "type": "single",
+          "icon": "❓",
           "options": [
             "### High Complexity",
             "High Complexity Total Rebuild – Type 1",
@@ -75,174 +315,46 @@
           ]
         },
         {
-          "id": "comms",
-          "item": "Comms Option",
-          "instruction": "(Choose 1 option)",
-          "type": "single",
-          "optionSet": "comms"
+          "shared": "comms"
         },
         {
-          "id": "fadeMargin",
-          "item": "Fade Margin >20db",
-          "instruction": "(If station is ERRTS)",
-          "type": "single",
-          "options": [
-            "Yes",
-            "No"
-          ]
+          "shared": "fadeMargin"
         },
         {
-          "id": "reasonComms",
-          "item": "Reason for Changing Comms Type",
-          "instruction": "",
-          "type": "single",
-          "note": "Changing comms type requires GM Approval — ERRTS to SAT",
-          "options": [
-            "Yes",
-            "NA"
-          ],
-          "fields": [
-            {
-              "key": "reasonDetail",
-              "label": "Reason (if Yes)",
-              "type": "text"
-            }
-          ]
+          "shared": "txpower"
         },
         {
-          "id": "stockFence",
-          "item": "Stock Fence",
-          "instruction": "(Yes/No, details)",
-          "type": "single",
-          "options": [
-            "Yes",
-            "No"
-          ],
-          "fields": [
-            {
-              "key": "size",
-              "label": "Size (eg. 3x3)",
-              "type": "text"
-            },
-            {
-              "key": "gate",
-              "label": "Gate",
-              "type": "text"
-            }
-          ]
+          "shared": "reasonComms"
         },
         {
-          "id": "demolition",
-          "item": "Demolition / Disposal",
-          "instruction": "(Yes/No, details)",
-          "type": "multi",
-          "optionSet": "demolition"
+          "shared": "stockFence"
         },
         {
-          "id": "relocation",
-          "item": "Relocation",
-          "instruction": "(Yes/No, </>25m)",
-          "type": "single",
-          "note": "WL Relocation requires EPS & GM Approval",
-          "options": [
-            "Yes",
-            "No"
-          ],
-          "fields": [
-            {
-              "key": "distance",
-              "label": "Distance (>25m or <25m)",
-              "type": "text"
-            }
-          ]
+          "shared": "demolition"
         },
         {
-          "id": "coords",
-          "item": "Instrumentation Coordinates",
-          "instruction": "(Existing or, Proposed)",
-          "type": "none",
-          "fields": [
-            {
-              "key": "existing",
-              "label": "Existing",
-              "type": "text"
-            },
-            {
-              "key": "proposed",
-              "label": "Proposed",
-              "type": "text"
-            }
-          ]
+          "shared": "relocation"
         },
         {
-          "id": "accessibility",
-          "item": "Accessibility",
-          "instruction": "(Delete irrelevant options)",
-          "type": "multi",
-          "optionSet": "accessibility"
+          "shared": "coords"
         },
         {
-          "id": "nonStandard",
-          "item": "Non-Standard options",
-          "instruction": "(Please avoid if possible)",
-          "type": "single",
-          "options": [
-            "Yes",
-            "NA"
-          ],
-          "fields": [
-            {
-              "key": "detail",
-              "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
-              "type": "textarea"
-            }
-          ]
+          "shared": "accessibility"
         },
         {
-          "id": "remediation",
-          "item": "Remediation / Additional Works",
-          "instruction": "(Delete irrelevant options)",
-          "type": "multi",
-          "options": [
-            "Vendor/Contractor site visit required prior to complex installation",
-            "Vegetation management",
-            "Bollards for site protection",
-            "Data access to be provided to Council via satellite modem",
-            "Track / stairs required to access orifice / gauge boards"
-          ],
-          "fields": [
-            {
-              "key": "other",
-              "label": "Other",
-              "type": "text"
-            }
-          ]
+          "shared": "nonStandard"
         },
         {
-          "id": "photos",
-          "item": "Site Assessment Photos",
-          "instruction": "",
-          "type": "none",
-          "fields": [
-            {
-              "key": "link",
-              "label": "Insert link & confirm access",
-              "type": "text"
-            }
-          ]
+          "shared": "remediation"
         },
         {
-          "id": "installNotes",
-          "item": "Installation Notes",
-          "instruction": "(Freeform section)",
-          "type": "none",
-          "fields": [
-            {
-              "key": "notes",
-              "label": "Notes",
-              "type": "textarea"
-            }
-          ]
+          "shared": "photos"
+        },
+        {
+          "shared": "installNotes"
+        },
+        {
+          "shared": "errts"
         }
       ]
     },
@@ -256,6 +368,7 @@
           "item": "Station Type",
           "instruction": "(Choose relevant option)",
           "type": "single",
+          "icon": "🌊",
           "options": [
             "Rain Gauge / Water Level",
             "Rain Gauge / Water Level / Repeater",
@@ -272,6 +385,7 @@
           "item": "Complexity, Scope & Type",
           "instruction": "(Choose 1 option)",
           "type": "single",
+          "icon": "❓",
           "options": [
             "### High Complexity",
             "High Complexity Total Rebuild – Type 1",
@@ -302,35 +416,11 @@
           ]
         },
         {
-          "id": "comms",
-          "item": "Comms Option",
-          "instruction": "(Choose 1 option)",
-          "type": "single",
-          "optionSet": "comms"
-        },
-        {
-          "id": "reasonComms",
-          "item": "Reason for Changing Comms Type",
-          "instruction": "",
-          "type": "single",
-          "note": "Changing comms type requires GM Approval — ERRTS to SAT",
-          "options": [
-            "Yes",
-            "NA"
-          ],
-          "fields": [
-            {
-              "key": "reasonDetail",
-              "label": "Reason (if Yes)",
-              "type": "text"
-            }
-          ]
-        },
-        {
           "id": "sensorOption",
           "item": "Sensor Option with River Line Termination",
           "instruction": "(Choose 1 option, details)",
           "type": "single",
+          "icon": "💧",
           "options": [
             "HS40 with GCO (define range)",
             "Amazon Bubbler with BU07 (define psi pressure)",
@@ -345,88 +435,11 @@
           ]
         },
         {
-          "id": "rainfallLocation",
-          "item": "Rainfall Mounted Location",
-          "instruction": "(Details / NA)",
-          "type": "none",
-          "fields": [
-            {
-              "key": "detail",
-              "label": "Details",
-              "type": "text"
-            }
-          ]
-        },
-        {
-          "id": "stockFence",
-          "item": "Stock Fence",
-          "instruction": "(Yes/No, details)",
-          "type": "single",
-          "options": [
-            "Yes",
-            "No"
-          ],
-          "fields": [
-            {
-              "key": "size",
-              "label": "Size (eg. 3x3)",
-              "type": "text"
-            },
-            {
-              "key": "gate",
-              "label": "Gate",
-              "type": "text"
-            }
-          ]
-        },
-        {
-          "id": "demolition",
-          "item": "Demolition / Disposal",
-          "instruction": "(Yes/No, details)",
-          "type": "multi",
-          "optionSet": "demolition"
-        },
-        {
-          "id": "relocation",
-          "item": "Relocation",
-          "instruction": "(Yes/No, </>25m)",
-          "type": "single",
-          "note": "WL Relocation requires EPS & GM Approval",
-          "options": [
-            "Yes",
-            "No"
-          ],
-          "fields": [
-            {
-              "key": "distance",
-              "label": "Distance (>25m or <25m)",
-              "type": "text"
-            }
-          ]
-        },
-        {
-          "id": "coords",
-          "item": "Instrumentation Coordinates",
-          "instruction": "(Existing or, Proposed)",
-          "type": "none",
-          "fields": [
-            {
-              "key": "existing",
-              "label": "Existing",
-              "type": "text"
-            },
-            {
-              "key": "proposed",
-              "label": "Proposed",
-              "type": "text"
-            }
-          ]
-        },
-        {
           "id": "riverCoords",
           "item": "River Line Termination Coordinates",
           "instruction": "",
           "type": "none",
+          "icon": "📍",
           "fields": [
             {
               "key": "detail",
@@ -437,9 +450,10 @@
         },
         {
           "id": "gaugeBoards",
-          "item": "1m Gauge Boards",
+          "item": "Gauge Boards",
           "instruction": "(Yes/No, add details)",
           "type": "single",
+          "icon": "📏",
           "options": [
             "Yes",
             "No",
@@ -452,82 +466,74 @@
               "type": "text"
             },
             {
-              "key": "distance",
-              "label": "Distance",
+              "key": "comment",
+              "label": "Comment",
               "type": "text"
             }
           ]
         },
         {
-          "id": "accessibility",
-          "item": "Accessibility",
-          "instruction": "(Delete irrelevant options)",
-          "type": "multi",
-          "optionSet": "accessibility"
-        },
-        {
-          "id": "nonStandard",
-          "item": "Non-Standard options",
-          "instruction": "(Please avoid if possible)",
+          "id": "DipPoint",
+          "item": "Dip point",
+          "instruction": "(eg. radars)",
           "type": "single",
+          "icon": "📐",
           "options": [
             "Yes",
-            "NA"
+            "No"
           ],
           "fields": [
             {
-              "key": "detail",
-              "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
+              "key": "comment",
+              "label": "Comments",
               "type": "textarea"
             }
           ]
         },
         {
-          "id": "remediation",
-          "item": "Remediation / Additional Works",
-          "instruction": "(Delete irrelevant options)",
-          "type": "multi",
-          "options": [
-            "Vendor/Contractor site visit required prior to complex installation",
-            "Vegetation management",
-            "Bollards for cabinet protection",
-            "Data access to be provided to Council via satellite modem",
-            "Track / stairs required to access orifice / gauge boards",
-            "Plinth under cabinet"
-          ],
-          "fields": [
-            {
-              "key": "other",
-              "label": "Other",
-              "type": "text"
-            }
-          ]
+          "shared": "comms"
         },
         {
-          "id": "photos",
-          "item": "Site Assessment Photos",
-          "instruction": "",
-          "type": "none",
-          "fields": [
-            {
-              "key": "link",
-              "label": "Insert link & confirm access",
-              "type": "text"
-            }
-          ]
+          "shared": "fadeMargin"
         },
         {
-          "id": "installNotes",
-          "item": "Installation Notes",
-          "instruction": "(Freeform section)",
-          "type": "none",
-          "fields": [
-            {
-              "key": "notes",
-              "label": "Notes",
-              "type": "textarea"
-            }
-          ]
+          "shared": "txpower"
+        },
+        {
+          "shared": "reasonComms"
+        },
+        {
+          "shared": "rainfallLocation"
+        },
+        {
+          "shared": "stockFence"
+        },
+        {
+          "shared": "demolition"
+        },
+        {
+          "shared": "relocation"
+        },
+        {
+          "shared": "coords"
+        },
+        {
+          "shared": "accessibility"
+        },
+        {
+          "shared": "installNotes"
+        },
+        {
+          "shared": "photos"
+        },
+        {
+          "shared": "remediation"
+        },
+        {
+          "shared": "nonStandard"
+        },
+        {
+          "shared": "errts"
         }
       ]
     },
@@ -541,6 +547,7 @@
           "item": "Station Type",
           "instruction": "(Delete irrelevant options)",
           "type": "single",
+          "icon": "🗼",
           "options": [
             "Rain Gauge / Repeater",
             "Rain Gauge / Water Level / Repeater",
@@ -558,6 +565,7 @@
           "item": "Complexity & Scope",
           "instruction": "(Choose 1 option)",
           "type": "single",
+          "icon": "❓",
           "options": [
             "### High Complexity",
             "High Complexity Total Rebuild – Type 5A",
@@ -585,6 +593,7 @@
           "item": "Infra Type",
           "instruction": "(Choose 1 option)",
           "type": "single",
+          "icon": "🚪",
           "options": [
             "Rack Mount",
             "Outdoor Cabinet"
@@ -595,6 +604,7 @@
           "item": "Mast",
           "instruction": "(Choose relevant option)",
           "type": "single",
+          "icon": "🏗",
           "options": [
             "8m",
             "4m",
@@ -602,34 +612,11 @@
           ]
         },
         {
-          "id": "errts",
-          "item": "ERRTS / Frequencies",
-          "instruction": "(Choose option, add detail)",
-          "type": "single",
-          "options": [
-            "ERRTS (ELPRO)",
-            "ERRTS (Campbell Scientific)",
-            "Satellite",
-            "Cellular"
-          ],
-          "fields": [
-            {
-              "key": "frequency",
-              "label": "Frequency details",
-              "type": "text"
-            },
-            {
-              "key": "power",
-              "label": "Transmitter power",
-              "type": "text"
-            }
-          ]
-        },
-        {
           "id": "backhaul",
           "item": "Backhaul Options",
           "instruction": "(Choose 1 option)",
           "type": "single",
+          "icon": "🛰",
           "options": [
             "Bureau WAN",
             "Cellular Modem"
@@ -640,40 +627,10 @@
           "item": "Optional BGAN Backup",
           "instruction": "(Yes / No)",
           "type": "single",
+          "icon": "🌐",
           "options": [
             "Yes",
             "No"
-          ]
-        },
-        {
-          "id": "reasonComms",
-          "item": "Reason for Changing Comms Type",
-          "instruction": "",
-          "type": "single",
-          "note": "Changing comms type requires GM Approval",
-          "options": [
-            "Yes",
-            "NA"
-          ],
-          "fields": [
-            {
-              "key": "reasonDetail",
-              "label": "Reason (if Yes)",
-              "type": "text"
-            }
-          ]
-        },
-        {
-          "id": "rainfallLocation",
-          "item": "Rainfall Mounted Location",
-          "instruction": "(Details / NA)",
-          "type": "none",
-          "fields": [
-            {
-              "key": "detail",
-              "label": "Details",
-              "type": "text"
-            }
           ]
         },
         {
@@ -681,6 +638,7 @@
           "item": "Cavity Filters",
           "instruction": "(Add relevant detail)",
           "type": "none",
+          "icon": "🖥",
           "fields": [
             {
               "key": "bandpass",
@@ -695,140 +653,46 @@
           ]
         },
         {
-          "id": "stockFence",
-          "item": "Stock / Security Fence",
-          "instruction": "(Yes/No, details)",
-          "type": "single",
-          "options": [
-            "Yes",
-            "No"
-          ],
-          "fields": [
-            {
-              "key": "size",
-              "label": "Size (eg. 3x3)",
-              "type": "text"
-            },
-            {
-              "key": "gate",
-              "label": "Gate",
-              "type": "text"
-            }
-          ]
+          "shared": "errts"
         },
         {
-          "id": "demolition",
-          "item": "Demolition / Disposal",
-          "instruction": "(Yes/No, details)",
-          "type": "multi",
-          "optionSet": "demolition"
+          "shared": "txpower"
         },
         {
-          "id": "relocation",
-          "item": "Relocation",
-          "instruction": "(Yes/No, </>25m)",
-          "type": "single",
-          "note": "Relocations require GM Approval",
-          "options": [
-            "Yes",
-            "No"
-          ],
-          "fields": [
-            {
-              "key": "distance",
-              "label": "Distance (>25m or <25m)",
-              "type": "text"
-            }
-          ]
+          "shared": "fadeMargin"
         },
         {
-          "id": "coords",
-          "item": "Instrumentation Coordinates",
-          "instruction": "(Existing or, Proposed)",
-          "type": "none",
-          "fields": [
-            {
-              "key": "existing",
-              "label": "Existing",
-              "type": "text"
-            },
-            {
-              "key": "proposed",
-              "label": "Proposed",
-              "type": "text"
-            }
-          ]
+          "shared": "installNotes"
         },
         {
-          "id": "accessibility",
-          "item": "Accessibility",
-          "instruction": "(Delete irrelevant options)",
-          "type": "multi",
-          "optionSet": "accessibility"
+          "shared": "photos"
         },
         {
-          "id": "nonStandard",
-          "item": "Non-Standard options",
-          "instruction": "(Please avoid if possible)",
-          "type": "single",
-          "options": [
-            "Yes",
-            "NA"
-          ],
-          "fields": [
-            {
-              "key": "detail",
-              "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
-              "type": "textarea"
-            }
-          ]
+          "shared": "remediation"
         },
         {
-          "id": "remediation",
-          "item": "Remediation / Additional Works",
-          "instruction": "(Tick if required)",
-          "type": "multi",
-          "options": [
-            "Vendor/Contractor site visit required prior to complex installation",
-            "Vegetation management",
-            "Bollards for cabinet protection",
-            "Data access to be provided to Council via satellite modem",
-            "Track / stairs required to access orifice / gauge boards",
-            "Plinth under cabinet"
-          ],
-          "fields": [
-            {
-              "key": "other",
-              "label": "Other",
-              "type": "text"
-            }
-          ]
+          "shared": "nonStandard"
         },
         {
-          "id": "photos",
-          "item": "Site Assessment Photos",
-          "instruction": "",
-          "type": "none",
-          "fields": [
-            {
-              "key": "link",
-              "label": "Insert link & confirm access",
-              "type": "text"
-            }
-          ]
+          "shared": "accessibility"
         },
         {
-          "id": "installNotes",
-          "item": "Installation Notes",
-          "instruction": "(Freeform section)",
-          "type": "none",
-          "fields": [
-            {
-              "key": "notes",
-              "label": "Notes",
-              "type": "textarea"
-            }
-          ]
+          "shared": "coords"
+        },
+        {
+          "shared": "relocation"
+        },
+        {
+          "shared": "demolition"
+        },
+        {
+          "shared": "stockFence"
+        },
+        {
+          "shared": "reasonComms"
+        },
+        {
+          "shared": "rainfallLocation"
         }
       ]
     }
