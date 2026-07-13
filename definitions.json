@@ -1,7 +1,7 @@
 {
   "version": 1,
   "meta": {
-    "updated": "2026-07-10",
+    "updated": "2026-07-13",
     "appTitle": "SORT Forum Scope Builder"
   },
   "optionSets": {
@@ -13,13 +13,9 @@
       "AL200X Campbell Scientific - ERRTS VHF Communications"
     ],
     "demolition": [
-      "Standard: Complete demolition and/or disposal",
-      "Complex: Parts to be returned to the Hub/Council/Other"
-    ],
-    "yesnona": [
-      "Yes",
-      "No",
-      "NA"
+      "Standard: Complete demolition and disposal",
+      "Complex: Parts to be returned to the Hub/Council",
+      "Complex: Drop-off contact/address required for Gas Cylinders"
     ],
     "accessibility": [
       "All weather access",
@@ -30,97 +26,7 @@
       "4WD only"
     ]
   },
-  "sharedRows": [
-    {
-      "id": "comms",
-      "item": "Comms Option",
-      "icon": "📡",
-      "instruction": "(Choose 1 option)",
-      "type": "single",
-      "optionSet": "comms"
-    },
-    {
-      "id": "demolition",
-      "item": "Demolition / Disposal",
-      "icon": "🏗",
-      "instruction": "(Yes/No, details)",
-      "type": "multi",
-      "optionSet": "demolition"
-    },
-    {
-      "id": "coords",
-      "item": "Instrumentation Coordinates",
-      "icon": "📍",
-      "instruction": "(Existing or, Proposed)",
-      "type": "none",
-      "fields": [
-        {
-          "key": "existing",
-          "label": "Existing",
-          "type": "text"
-        },
-        {
-          "key": "proposed",
-          "label": "Proposed",
-          "type": "text"
-        }
-      ]
-    },
-    {
-      "id": "accessibility",
-      "item": "Accessibility",
-      "icon": "🛻",
-      "instruction": "(Delete irrelevant options)",
-      "type": "multi",
-      "optionSet": "accessibility"
-    },
-    {
-      "id": "nonStandard",
-      "item": "Non-Standard options",
-      "icon": "⚠️",
-      "instruction": "(Please avoid if possible)",
-      "type": "single",
-      "options": [
-        "Yes",
-        "NA"
-      ],
-      "fields": [
-        {
-          "key": "detail",
-          "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
-          "type": "textarea"
-        }
-      ]
-    },
-    {
-      "id": "photos",
-      "item": "Site Assessment Photos",
-      "icon": "📷",
-      "instruction": "",
-      "type": "none",
-      "fields": [
-        {
-          "key": "link",
-          "label": "Insert link & confirm access",
-          "type": "text"
-        }
-      ]
-    },
-    {
-      "id": "installNotes",
-      "item": "Installation Notes",
-      "icon": "📝",
-      "instruction": "(Freeform section)",
-      "type": "none",
-      "fields": [
-        {
-          "key": "notes",
-          "label": "Notes",
-          "type": "textarea"
-        }
-      ]
-    }
-  ],
+  "sharedRows": [],
   "tables": [
     {
       "id": "rainfall",
@@ -130,7 +36,6 @@
         {
           "id": "stationType",
           "item": "Station Type",
-          "icon": "🌧",
           "instruction": "(Choose relevant option)",
           "type": "single",
           "options": [
@@ -170,7 +75,11 @@
           ]
         },
         {
-          "shared": "comms"
+          "id": "comms",
+          "item": "Comms Option",
+          "instruction": "(Choose 1 option)",
+          "type": "single",
+          "optionSet": "comms"
         },
         {
           "id": "fadeMargin",
@@ -179,10 +88,8 @@
           "type": "single",
           "options": [
             "Yes",
-            "No",
-            "NA"
-          ],
-          "_open": false
+            "No"
+          ]
         },
         {
           "id": "reasonComms",
@@ -225,7 +132,11 @@
           ]
         },
         {
-          "shared": "demolition"
+          "id": "demolition",
+          "item": "Demolition / Disposal",
+          "instruction": "(Yes/No, details)",
+          "type": "multi",
+          "optionSet": "demolition"
         },
         {
           "id": "relocation",
@@ -240,19 +151,52 @@
           "fields": [
             {
               "key": "distance",
-              "label": "Distance",
+              "label": "Distance (>25m or <25m)",
               "type": "text"
             }
           ]
         },
         {
-          "shared": "coords"
+          "id": "coords",
+          "item": "Instrumentation Coordinates",
+          "instruction": "(Existing or, Proposed)",
+          "type": "none",
+          "fields": [
+            {
+              "key": "existing",
+              "label": "Existing",
+              "type": "text"
+            },
+            {
+              "key": "proposed",
+              "label": "Proposed",
+              "type": "text"
+            }
+          ]
         },
         {
-          "shared": "accessibility"
+          "id": "accessibility",
+          "item": "Accessibility",
+          "instruction": "(Delete irrelevant options)",
+          "type": "multi",
+          "optionSet": "accessibility"
         },
         {
-          "shared": "nonStandard"
+          "id": "nonStandard",
+          "item": "Non-Standard options",
+          "instruction": "(Please avoid if possible)",
+          "type": "single",
+          "options": [
+            "Yes",
+            "NA"
+          ],
+          "fields": [
+            {
+              "key": "detail",
+              "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
+              "type": "textarea"
+            }
+          ]
         },
         {
           "id": "remediation",
@@ -275,10 +219,30 @@
           ]
         },
         {
-          "shared": "photos"
+          "id": "photos",
+          "item": "Site Assessment Photos",
+          "instruction": "",
+          "type": "none",
+          "fields": [
+            {
+              "key": "link",
+              "label": "Insert link & confirm access",
+              "type": "text"
+            }
+          ]
         },
         {
-          "shared": "installNotes"
+          "id": "installNotes",
+          "item": "Installation Notes",
+          "instruction": "(Freeform section)",
+          "type": "none",
+          "fields": [
+            {
+              "key": "notes",
+              "label": "Notes",
+              "type": "textarea"
+            }
+          ]
         }
       ]
     },
@@ -290,7 +254,6 @@
         {
           "id": "stationType",
           "item": "Station Type",
-          "icon": "🌊",
           "instruction": "(Choose relevant option)",
           "type": "single",
           "options": [
@@ -339,7 +302,11 @@
           ]
         },
         {
-          "shared": "comms"
+          "id": "comms",
+          "item": "Comms Option",
+          "instruction": "(Choose 1 option)",
+          "type": "single",
+          "optionSet": "comms"
         },
         {
           "id": "reasonComms",
@@ -413,7 +380,11 @@
           ]
         },
         {
-          "shared": "demolition"
+          "id": "demolition",
+          "item": "Demolition / Disposal",
+          "instruction": "(Yes/No, details)",
+          "type": "multi",
+          "optionSet": "demolition"
         },
         {
           "id": "relocation",
@@ -428,13 +399,28 @@
           "fields": [
             {
               "key": "distance",
-              "label": "Distance",
+              "label": "Distance (>25m or <25m)",
               "type": "text"
             }
           ]
         },
         {
-          "shared": "coords"
+          "id": "coords",
+          "item": "Instrumentation Coordinates",
+          "instruction": "(Existing or, Proposed)",
+          "type": "none",
+          "fields": [
+            {
+              "key": "existing",
+              "label": "Existing",
+              "type": "text"
+            },
+            {
+              "key": "proposed",
+              "label": "Proposed",
+              "type": "text"
+            }
+          ]
         },
         {
           "id": "riverCoords",
@@ -466,17 +452,35 @@
               "type": "text"
             },
             {
-              "key": "comment",
-              "label": "Comment",
+              "key": "distance",
+              "label": "Distance",
               "type": "text"
             }
           ]
         },
         {
-          "shared": "accessibility"
+          "id": "accessibility",
+          "item": "Accessibility",
+          "instruction": "(Delete irrelevant options)",
+          "type": "multi",
+          "optionSet": "accessibility"
         },
         {
-          "shared": "nonStandard"
+          "id": "nonStandard",
+          "item": "Non-Standard options",
+          "instruction": "(Please avoid if possible)",
+          "type": "single",
+          "options": [
+            "Yes",
+            "NA"
+          ],
+          "fields": [
+            {
+              "key": "detail",
+              "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
+              "type": "textarea"
+            }
+          ]
         },
         {
           "id": "remediation",
@@ -500,10 +504,30 @@
           ]
         },
         {
-          "shared": "photos"
+          "id": "photos",
+          "item": "Site Assessment Photos",
+          "instruction": "",
+          "type": "none",
+          "fields": [
+            {
+              "key": "link",
+              "label": "Insert link & confirm access",
+              "type": "text"
+            }
+          ]
         },
         {
-          "shared": "installNotes"
+          "id": "installNotes",
+          "item": "Installation Notes",
+          "instruction": "(Freeform section)",
+          "type": "none",
+          "fields": [
+            {
+              "key": "notes",
+              "label": "Notes",
+              "type": "textarea"
+            }
+          ]
         }
       ]
     },
@@ -515,7 +539,6 @@
         {
           "id": "stationType",
           "item": "Station Type",
-          "icon": "🗼",
           "instruction": "(Delete irrelevant options)",
           "type": "single",
           "options": [
@@ -694,7 +717,11 @@
           ]
         },
         {
-          "shared": "demolition"
+          "id": "demolition",
+          "item": "Demolition / Disposal",
+          "instruction": "(Yes/No, details)",
+          "type": "multi",
+          "optionSet": "demolition"
         },
         {
           "id": "relocation",
@@ -709,19 +736,52 @@
           "fields": [
             {
               "key": "distance",
-              "label": "Distance",
+              "label": "Distance (>25m or <25m)",
               "type": "text"
             }
           ]
         },
         {
-          "shared": "coords"
+          "id": "coords",
+          "item": "Instrumentation Coordinates",
+          "instruction": "(Existing or, Proposed)",
+          "type": "none",
+          "fields": [
+            {
+              "key": "existing",
+              "label": "Existing",
+              "type": "text"
+            },
+            {
+              "key": "proposed",
+              "label": "Proposed",
+              "type": "text"
+            }
+          ]
         },
         {
-          "shared": "accessibility"
+          "id": "accessibility",
+          "item": "Accessibility",
+          "instruction": "(Delete irrelevant options)",
+          "type": "multi",
+          "optionSet": "accessibility"
         },
         {
-          "shared": "nonStandard"
+          "id": "nonStandard",
+          "item": "Non-Standard options",
+          "instruction": "(Please avoid if possible)",
+          "type": "single",
+          "options": [
+            "Yes",
+            "NA"
+          ],
+          "fields": [
+            {
+              "key": "detail",
+              "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
+              "type": "textarea"
+            }
+          ]
         },
         {
           "id": "remediation",
@@ -745,10 +805,30 @@
           ]
         },
         {
-          "shared": "photos"
+          "id": "photos",
+          "item": "Site Assessment Photos",
+          "instruction": "",
+          "type": "none",
+          "fields": [
+            {
+              "key": "link",
+              "label": "Insert link & confirm access",
+              "type": "text"
+            }
+          ]
         },
         {
-          "shared": "installNotes"
+          "id": "installNotes",
+          "item": "Installation Notes",
+          "instruction": "(Freeform section)",
+          "type": "none",
+          "fields": [
+            {
+              "key": "notes",
+              "label": "Notes",
+              "type": "textarea"
+            }
+          ]
         }
       ]
     }
