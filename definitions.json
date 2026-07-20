@@ -1,26 +1,10 @@
 {
   "version": 1,
   "meta": {
-    "updated": "2026-07-13",
+    "updated": "2026-07-20",
     "appTitle": "SORT Forum Scope Builder"
   },
-  "optionSets": {
-    "comms": [
-      "IP Logger - Cellular Communications",
-      "IP Logger - Satellite Communications",
-      "IP Logger - Campbell Scientific - ERRTS VHF Communications",
-      "Local Processing Unit - Elpro ERRTS VHF Communications",
-      "AL200X Campbell Scientific - ERRTS VHF Communications"
-    ],
-    "accessibility": [
-      "All weather access",
-      "Dry weather access only",
-      "Concrete truck",
-      "Flatbed truck",
-      "4WD with tandem trailer",
-      "4WD only"
-    ]
-  },
+  "optionSets": {},
   "sharedRows": [
     {
       "id": "fadeMargin",
@@ -33,14 +17,6 @@
         "No",
         "NA"
       ]
-    },
-    {
-      "id": "comms",
-      "item": "Comms Option",
-      "instruction": "(Choose 1 option)",
-      "type": "single",
-      "icon": "📞",
-      "optionSet": "comms"
     },
     {
       "id": "reasonComms",
@@ -62,24 +38,62 @@
       ]
     },
     {
+      "id": "comms",
+      "item": "Comms Option",
+      "instruction": "(Choose 1 option)",
+      "type": "single",
+      "icon": "📞",
+      "options": [
+        "IP Logger - Cellular Communications",
+        "IP Logger - Satellite Communications",
+        "IP Logger - Campbell Scientific - ERRTS VHF Communications",
+        "Local Processing Unit - Elpro ERRTS VHF Communications",
+        "AL200X Campbell Scientific - ERRTS VHF Communications"
+      ]
+    },
+    {
+      "id": "txpower",
+      "item": "TX power",
+      "instruction": "",
+      "type": "single",
+      "icon": "☀️",
+      "options": [
+        "NA",
+        "1W",
+        "5W",
+        "25W",
+        "Other (Specify)"
+      ]
+    },
+    {
+      "id": "frequency",
+      "item": "ERRTS/ALERT Frequency",
+      "instruction": "",
+      "type": "single",
+      "icon": "🐝",
+      "options": [
+        "NA",
+        "151.500 MHz",
+        "152.400 MHz",
+        "151.950 MHz",
+        "Other or multiple:"
+      ]
+    },
+    {
       "id": "stockFence",
       "item": "Stock Fence",
       "instruction": "(Yes/No, details)",
       "type": "single",
       "icon": "🐄",
       "options": [
-        "Yes",
-        "No"
+        "Yes (standard dimensions and configuration)",
+        "No",
+        "Other"
       ],
       "fields": [
         {
-          "key": "size",
-          "label": "Size (eg. 3x3)",
-          "type": "text"
-        },
-        {
-          "key": "gate",
-          "label": "Gate",
+          "key": "Comments",
+          "label": "Comments (eg: Sprcify non standard size)",
           "type": "text"
         }
       ]
@@ -101,9 +115,23 @@
       ]
     },
     {
+      "id": "coords",
+      "item": "Instrumentation Coordinates",
+      "instruction": "(Existing)",
+      "type": "none",
+      "icon": "🗺",
+      "fields": [
+        {
+          "key": "existing",
+          "label": "Existing",
+          "type": "text"
+        }
+      ]
+    },
+    {
       "id": "relocation",
       "item": "Relocation",
-      "instruction": "(Yes/No, </>25m)",
+      "instruction": "",
       "type": "single",
       "icon": "🚩",
       "note": "WL Relocation requires EPS & GM Approval",
@@ -116,24 +144,10 @@
           "key": "distance",
           "label": "Distance",
           "type": "text"
-        }
-      ]
-    },
-    {
-      "id": "coords",
-      "item": "Instrumentation Coordinates",
-      "instruction": "(Existing or, Proposed)",
-      "type": "none",
-      "icon": "🗺",
-      "fields": [
-        {
-          "key": "existing",
-          "label": "Existing",
-          "type": "text"
         },
         {
-          "key": "proposed",
-          "label": "Proposed",
+          "key": "newLocation",
+          "label": "New Location (coordinates)",
           "type": "text"
         }
       ]
@@ -144,7 +158,14 @@
       "instruction": "(Delete irrelevant options)",
       "type": "multi",
       "icon": "🚚",
-      "optionSet": "accessibility"
+      "options": [
+        "All weather access",
+        "Dry weather access only",
+        "Concrete truck",
+        "Flatbed truck",
+        "4WD with tandem trailer",
+        "4WD only"
+      ]
     },
     {
       "id": "installNotes",
@@ -157,20 +178,6 @@
           "key": "notes",
           "label": "Notes",
           "type": "textarea"
-        }
-      ]
-    },
-    {
-      "id": "photos",
-      "item": "Site Assessment Photos",
-      "instruction": "",
-      "type": "none",
-      "icon": "📷",
-      "fields": [
-        {
-          "key": "link",
-          "label": "Insert link & confirm access",
-          "type": "text"
         }
       ]
     },
@@ -228,38 +235,26 @@
       ]
     },
     {
-      "id": "txpower",
-      "item": "TX power",
+      "id": "Benchmark",
+      "item": "Benchmark",
       "instruction": "",
       "type": "single",
-      "icon": "☀️",
+      "icon": "🔩",
       "options": [
-        "NA",
-        "1W",
-        "5W"
+        "Install new BM, surveyed in AHD & LGH (specify location)",
+        "Not required"
       ]
     },
     {
-      "id": "errts",
-      "item": "ERRTS / Frequencies",
-      "instruction": "(Choose option, add detail)",
-      "type": "single",
-      "icon": "⚡",
-      "options": [
-        "ERRTS (ELPRO)",
-        "ERRTS (Campbell Scientific)",
-        "Satellite",
-        "Cellular"
-      ],
+      "id": "photos",
+      "item": "Site Assessment Photos",
+      "instruction": "",
+      "type": "none",
+      "icon": "📷",
       "fields": [
         {
-          "key": "frequency",
-          "label": "Frequency details",
-          "type": "text"
-        },
-        {
-          "key": "power",
-          "label": "Transmitter power",
+          "key": "link",
+          "label": "Insert link & confirm access",
           "type": "text"
         }
       ]
@@ -315,6 +310,15 @@
           ]
         },
         {
+          "shared": "coords"
+        },
+        {
+          "shared": "relocation"
+        },
+        {
+          "shared": "reasonComms"
+        },
+        {
           "shared": "comms"
         },
         {
@@ -324,19 +328,13 @@
           "shared": "txpower"
         },
         {
-          "shared": "reasonComms"
+          "shared": "frequency"
         },
         {
           "shared": "stockFence"
         },
         {
           "shared": "demolition"
-        },
-        {
-          "shared": "relocation"
-        },
-        {
-          "shared": "coords"
         },
         {
           "shared": "accessibility"
@@ -348,13 +346,10 @@
           "shared": "remediation"
         },
         {
-          "shared": "photos"
-        },
-        {
           "shared": "installNotes"
         },
         {
-          "shared": "errts"
+          "shared": "photos"
         }
       ]
     },
@@ -417,35 +412,36 @@
         },
         {
           "id": "sensorOption",
-          "item": "Sensor Option with River Line Termination",
+          "item": "Sensor Option",
           "instruction": "(Choose 1 option, details)",
           "type": "single",
           "icon": "💧",
           "options": [
-            "HS40 with GCO (define range)",
-            "Amazon Bubbler with BU07 (define psi pressure)",
+            "HS40 (define range)",
+            "Amazon Bubbler (define psi pressure)",
             "Vega C23"
-          ],
-          "fields": [
-            {
-              "key": "detail",
-              "label": "Range / pressure detail",
-              "type": "text"
-            }
           ]
         },
         {
-          "id": "riverCoords",
-          "item": "River Line Termination Coordinates",
+          "id": "SensorRange",
+          "item": "Range",
           "instruction": "",
-          "type": "none",
-          "icon": "📍",
-          "fields": [
-            {
-              "key": "detail",
-              "label": "Coordinates",
-              "type": "text"
-            }
+          "type": "single",
+          "options": [
+            "NA (radar)",
+            "0-20m",
+            "0-30psi (20m)",
+            "Other (specify)"
+          ]
+        },
+        {
+          "id": "row",
+          "item": "River line termination type",
+          "instruction": "",
+          "type": "single",
+          "options": [
+            "GCO ",
+            "BU07"
           ]
         },
         {
@@ -491,7 +487,33 @@
           ]
         },
         {
+          "shared": "Benchmark"
+        },
+        {
+          "id": "riverCoords",
+          "item": "River Line Termination Coordinates",
+          "instruction": "",
+          "type": "none",
+          "icon": "📍",
+          "fields": [
+            {
+              "key": "detail",
+              "label": "Coordinates",
+              "type": "text"
+            }
+          ]
+        },
+        {
+          "shared": "coords"
+        },
+        {
+          "shared": "relocation"
+        },
+        {
           "shared": "comms"
+        },
+        {
+          "shared": "reasonComms"
         },
         {
           "shared": "fadeMargin"
@@ -500,10 +522,7 @@
           "shared": "txpower"
         },
         {
-          "shared": "reasonComms"
-        },
-        {
-          "shared": "rainfallLocation"
+          "shared": "frequency"
         },
         {
           "shared": "stockFence"
@@ -512,19 +531,10 @@
           "shared": "demolition"
         },
         {
-          "shared": "relocation"
-        },
-        {
-          "shared": "coords"
-        },
-        {
           "shared": "accessibility"
         },
         {
           "shared": "installNotes"
-        },
-        {
-          "shared": "photos"
         },
         {
           "shared": "remediation"
@@ -533,7 +543,7 @@
           "shared": "nonStandard"
         },
         {
-          "shared": "errts"
+          "shared": "photos"
         }
       ]
     },
@@ -653,19 +663,19 @@
           ]
         },
         {
-          "shared": "errts"
+          "shared": "coords"
         },
         {
-          "shared": "txpower"
+          "shared": "relocation"
         },
         {
           "shared": "fadeMargin"
         },
         {
-          "shared": "installNotes"
+          "shared": "txpower"
         },
         {
-          "shared": "photos"
+          "shared": "frequency"
         },
         {
           "shared": "remediation"
@@ -677,10 +687,7 @@
           "shared": "accessibility"
         },
         {
-          "shared": "coords"
-        },
-        {
-          "shared": "relocation"
+          "shared": "installNotes"
         },
         {
           "shared": "demolition"
@@ -689,10 +696,7 @@
           "shared": "stockFence"
         },
         {
-          "shared": "reasonComms"
-        },
-        {
-          "shared": "rainfallLocation"
+          "shared": "photos"
         }
       ]
     }
