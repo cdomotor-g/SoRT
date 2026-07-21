@@ -243,9 +243,12 @@
   .btn-primary:hover{ background:var(--accent-dark); }
   .btn-secondary{ background:transparent; color:var(--ink-soft); border-color:var(--line); }
   .btn-secondary:hover{ color:var(--ink); border-color:var(--ink-soft); }
+  .btn-reset{ color:var(--danger); }
+  .btn-reset:hover{ color:var(--danger); border-color:var(--danger); }
   .btn-danger{ background:var(--danger-soft); color:var(--danger); border-color:#e9c4c0; }
   .btn-danger:hover{ background:#f6d6d3; }
   .status-msg{ font-size:.85rem; color:var(--accent-dark); font-weight:600; min-width:140px; }
+  .toolbar-spacer{ flex:1; }
 
   /* ===================== ADMIN / CRUD ===================== */
   .admin-actions{
@@ -507,8 +510,10 @@
 <div class="toolbar" id="builderToolbar">
   <div class="toolbar-inner">
     <button class="btn btn-primary" id="copyBtn">Copy table for Word</button>
-    <button class="btn btn-secondary" id="resetBtn">Reset this table</button>
     <span class="status-msg" id="statusMsg"></span>
+    <span class="toolbar-spacer"></span>
+    <button class="btn btn-secondary" id="undoResetBtn" hidden>Undo Clear Table</button>
+    <button class="btn btn-secondary btn-reset" id="resetBtn">Reset this table</button>
   </div>
 </div>
 
@@ -687,6 +692,9 @@ function exportableDefinitions(){
 // state[tableId][rowId] = { selected: string|string[]|null, fields:{key:value}, note:string }
 let state = {};
 let activeTableId = null;
+// Snapshot of a table's answers taken just before "Reset this table" clears it,
+// so the clear can be undone. Shape: { tableId, data } or null when nothing to undo.
+let clearedSnapshot = null;
 
 function emptyRowState(row){
   return { selected: row.type === "multi" ? [] : null, fields:{}, note:"" };
@@ -773,6 +781,7 @@ function rowOutputLines(table, row){
 function renderRows(){
   const table = activeTable();
   rowsContainerEl.innerHTML = "";
+  updateUndoBtn();
   if(!table) return;
 
   let filledCount = 0;
@@ -966,6 +975,7 @@ function cssEscape(str){
 /* ===================== COPY TO CLIPBOARD ===================== */
 const copyBtn = document.getElementById("copyBtn");
 const resetBtn = document.getElementById("resetBtn");
+const undoResetBtn = document.getElementById("undoResetBtn");
 const statusMsg = document.getElementById("statusMsg");
 const includeHeaderEl = document.getElementById("includeHeader");
 const includeEmptyEl = document.getElementById("includeEmpty");
@@ -1080,10 +1090,28 @@ function showStatus(msg){
 }
 
 copyBtn.addEventListener("click", copyTable);
+// Show the "Undo Clear Table" button only while there is a snapshot to restore
+// for the table currently on screen.
+function updateUndoBtn(){
+  const table = activeTable();
+  const canUndo = !!(clearedSnapshot && table && clearedSnapshot.tableId === table.id);
+  undoResetBtn.hidden = !canUndo;
+}
+
 resetBtn.addEventListener("click", ()=>{
   const table = activeTable();
   if(!table) return;
+  // Snapshot the current answers so the clear can be undone.
+  clearedSnapshot = { tableId: table.id, data: JSON.parse(JSON.stringify(state[table.id])) };
   effectiveRows(table).forEach(r=>{ state[table.id][r.id] = emptyRowState(r); });
+  renderRows();
+});
+
+undoResetBtn.addEventListener("click", ()=>{
+  const table = activeTable();
+  if(!table || !clearedSnapshot || clearedSnapshot.tableId !== table.id) return;
+  state[table.id] = clearedSnapshot.data;
+  clearedSnapshot = null;
   renderRows();
 });
 
