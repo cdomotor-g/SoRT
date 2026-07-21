@@ -427,6 +427,111 @@
     padding:8px 10px; font-size:.87rem; font-family:inherit;
   }
 
+  /* ===================== PROPERTY SERVICES (separate table) ===================== */
+  /* A deliberately distinct block sitting at the bottom of the Scope Builder.
+     It is copied into Word as its OWN second table, so it is styled to read as
+     a separate document element rather than more rows of the scope table. */
+  .ps-block{
+    margin-top:30px;
+    border:2px solid var(--accent-dark);
+    border-radius:var(--radius);
+    background:var(--card);
+    overflow:hidden;
+    box-shadow:0 2px 10px rgba(0,0,0,.05);
+  }
+  .ps-banner{
+    background:var(--accent-dark); color:#fff; padding:12px 16px;
+    display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  }
+  .ps-banner .ps-title{ font-size:1.02rem; font-weight:700; letter-spacing:.2px; }
+  .ps-banner .ps-sub{ font-size:.76rem; color:#cfe6e3; }
+  .ps-intro{
+    font-size:.78rem; color:var(--ink-soft); padding:10px 16px;
+    background:var(--accent-soft); border-bottom:1px solid var(--line); line-height:1.45;
+  }
+  .ps-body{ padding:14px 16px; }
+
+  .ps-row{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    margin-bottom:10px; display:grid; grid-template-columns:250px 1fr; overflow:hidden;
+  }
+  .ps-row.filled{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .ps-row.needs{ border-color:var(--amber); box-shadow:0 0 0 1px var(--amber) inset; }
+  .ps-row.muted{ opacity:.72; }
+  .ps-rowitem{ background:#eef4f3; padding:12px 14px; border-right:1px solid var(--line); }
+  .ps-rowitem .label{ font-weight:700; font-size:.88rem; color:var(--ink); }
+  .ps-rowitem .needs-tag{
+    display:inline-block; margin-top:6px; font-size:.66rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--amber); background:var(--amber-soft);
+    border:1px solid #efdcb3; border-radius:10px; padding:2px 7px;
+  }
+  .ps-rowitem .wl-tag{
+    display:inline-block; margin-top:6px; margin-left:6px; font-size:.64rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--accent-dark); background:var(--accent-soft); border-radius:10px; padding:2px 7px;
+  }
+  .ps-controls{ padding:12px 14px; }
+  .ps-controls .options-list{ margin-bottom:6px; }
+
+  .ps-linked-note{
+    font-size:.75rem; color:var(--accent-dark); background:var(--accent-soft);
+    border-left:3px solid var(--accent); border-radius:0 5px 5px 0;
+    padding:6px 9px; margin:2px 0 8px; line-height:1.4;
+  }
+  .ps-linked-note b{ font-weight:700; }
+  .ps-linkbar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; }
+  .ps-link-chip{
+    font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--accent-dark); background:var(--accent-soft); border-radius:10px; padding:2px 7px;
+  }
+  .ps-link-chip.overridden{ color:var(--amber); background:var(--amber-soft); border:1px solid #efdcb3; }
+  .ps-revert{
+    background:none; border:none; padding:0; font:inherit; cursor:pointer;
+    color:var(--accent-dark); text-decoration:underline; font-size:.74rem; font-weight:600;
+  }
+  .ps-revert:hover{ color:var(--accent); }
+
+  /* nested coordinate sub-table */
+  .ps-coordgroup{ border:1px solid var(--line); border-radius:7px; overflow:hidden; }
+  .ps-coord-row{
+    display:grid; grid-template-columns:1fr 1.3fr; border-top:1px solid var(--line); align-items:stretch;
+  }
+  .ps-coord-row:first-child{ border-top:none; }
+  .ps-coord-label{ padding:8px 10px; font-size:.82rem; font-weight:600; background:#f4f8f7; display:flex; align-items:center; }
+  .ps-coord-input{ padding:6px; display:flex; align-items:center; gap:6px; }
+  .ps-coord-input input{
+    width:100%; border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:.84rem; font-family:inherit;
+  }
+  :root[data-theme="dark"] .ps-rowitem{ background:#1d2c34; }
+  :root[data-theme="dark"] .ps-coord-label{ background:#1d2c34; }
+  :root[data-theme="dark"] .ps-coord-input input{ background:#0f1a20; color:var(--ink); }
+
+  .ps-sectionheader{
+    margin:14px 0 8px; padding:7px 12px; border-radius:6px;
+    background:var(--accent-soft); color:var(--accent-dark);
+    font-size:.82rem; font-weight:700; letter-spacing:.02em;
+    display:flex; align-items:center; gap:8px;
+  }
+  .ps-datefield input{
+    border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:.87rem; font-family:inherit; width:200px; max-width:100%;
+  }
+  .ps-note-final{
+    margin-top:16px; padding:11px 13px; border:1px solid var(--line); border-radius:7px;
+    background:var(--paper); font-size:.8rem; line-height:1.5; color:var(--ink);
+  }
+  .ps-note-final .ps-note-head{
+    font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; font-weight:700;
+    color:var(--ink-soft); display:block; margin-bottom:4px;
+  }
+  :root[data-theme="dark"] .ps-block{ border-color:var(--accent); }
+  :root[data-theme="dark"] .ps-datefield input{ background:#0f1a20; color:var(--ink); }
+
+  @media (max-width: 720px){
+    .ps-row{ grid-template-columns:1fr; }
+    .ps-rowitem{ border-right:none; border-bottom:1px solid var(--line); }
+    .ps-coord-row{ grid-template-columns:1fr; }
+    .ps-coord-label{ border-bottom:1px solid var(--line); }
+  }
+
   @media (max-width: 860px){
     .admin-cols{ grid-template-columns:1fr; }
   }
@@ -467,6 +572,7 @@
   <button class="mode-btn active" data-mode="builder">Scope Builder</button>
   <button class="mode-btn" data-mode="manage">Manage Tables</button>
   <button class="mode-btn" data-mode="map">Table Map</button>
+  <button class="mode-btn" data-mode="ps">Property Services</button>
   <span class="source-chip" id="sourceChip"><span class="dot"></span><span id="sourceLabel">Loading…</span></span>
 </nav>
 
@@ -497,6 +603,10 @@
     </div>
 
     <div id="rowsContainer"></div>
+
+    <!-- Property Services — a separate, visually distinct table copied into Word
+         as its own second table. Rendered below whichever scope table is active. -->
+    <div id="psContainer"></div>
   </div>
 
   <!-- ===================== MANAGE VIEW ===================== -->
@@ -504,6 +614,9 @@
 
   <!-- ===================== TABLE MAP VIEW ===================== -->
   <div id="mapView" class="hidden"></div>
+
+  <!-- ===================== PROPERTY SERVICES MANAGE VIEW ===================== -->
+  <div id="psManageView" class="hidden"></div>
 
 </div>
 
@@ -555,6 +668,47 @@ const LS_DEFS = "sort.definitions.v1";   // saved (edited) definitions / unpubli
 const LS_URL  = "sort.definitionsUrl";   // remembered "load from URL" source
 const DEFINITIONS_FILE = "definitions.json";
 
+/* ===================== PROPERTY SERVICES =====================
+   The "Property Services Instruction" block is a *second, separate* table shown
+   at the bottom of the Scope Builder for every station type and copied into Word
+   as its own table. Its shape lives under defs.propertyServices so it can be
+   managed without touching code; this DEFAULT is the built-in fallback used when
+   the loaded definitions (e.g. the central store) do not yet carry one.
+
+   Row kinds:
+     coordGroup    — a titled sub-table of coordinate rows {key,label,source?,default?}
+     question      — a single-choice question (radio) with options
+     text          — a free-text answer
+     sectionHeader — a labelled subsection divider
+     date          — an auto-filled date (today), overridable
+   A row/coord may carry a `source:{row,field}` that derives its default from the
+   active scope table's answers (field:null means the row's selected value). A
+   `wlOnly:true` row is only *required* on the Water Level table. Anything derived
+   or prefilled is always editable — the first manual edit "detaches" it. */
+const DEFAULT_PROPERTY_SERVICES = {
+  title: "Property Services Instruction",
+  note: "Property Services conducts its due diligence and secures tenure agreements based on the information provided in this Site Assessment. If there have been any changes to the coordinates since the completion date of this site assessment, you must inform Property Services (FWINLeasing@bom.gov.au) to ensure that the due diligence performed remains valid.",
+  rows: [
+    { id:"currentCoords", kind:"coordGroup", label:"Current Co-Ordinates", coords:[
+      { key:"primary",    label:"Primary (main equipment)",  source:{ row:"coords",     field:"existing" } },
+      { key:"subsidiary", label:"Subsidiary (orifice line)", source:{ row:"riverCoords", field:"detail" } }
+    ]},
+    { id:"relocating", kind:"question", label:"Is the equipment being relocated?",
+      options:["Yes","No"], source:{ row:"relocation", field:null },
+      linkedNote:"Preselected from the Relocation answer in the table above — change it here if this differs." },
+    { id:"relocationCoords", kind:"coordGroup", label:"Relocation Co-Ordinates", coords:[
+      { key:"primary",   label:"Primary (main equipment)",              source:{ row:"relocation", field:"newLocation" }, default:"na" },
+      { key:"orifice",   label:"Orifice line termination or GCO",        default:"na" },
+      { key:"raingauge", label:"Rain gauge (if not located at primary)", default:"na" }
+    ]},
+    { id:"turnSoil", kind:"question", label:"Does the work require the turning of soil?", options:["Yes","No"], required:true },
+    { id:"wlHeader", kind:"sectionHeader", label:"Water Level site details only", wlOnly:true },
+    { id:"orificeReplace", kind:"question", label:"Will the orifice line be replaced?", options:["Yes","No"], required:true, wlOnly:true },
+    { id:"orificeDirection", kind:"text", label:"What direction does the orifice line run from the primary equipment?", placeholder:"e.g. East-South-East", wlOnly:true },
+    { id:"date", kind:"date", label:"Date" }
+  ]
+};
+
 /* ===================== CENTRAL STORE (SUPABASE) =====================
    Fill these in to turn on the shared central store. One master JSON row
    lives in a Supabase table; the app reads it on startup and writes back
@@ -590,6 +744,7 @@ function normalizeDefinitions(raw){
     version: d.version || 1,
     meta: (d.meta && typeof d.meta === "object") ? d.meta : {},
     optionSets: (d.optionSets && typeof d.optionSets === "object") ? d.optionSets : {},
+    propertyServices: normalizePropertyServices(d.propertyServices),
     sharedRows: Array.isArray(d.sharedRows) ? d.sharedRows : [],
     tables: Array.isArray(d.tables) ? d.tables : []
   };
@@ -648,6 +803,42 @@ function normalizeRow(r, ri){
   return row;
 }
 
+/* Normalise the Property Services block, falling back to the built-in default
+   when a loaded definition set does not carry one (or carries an empty one). */
+function normalizePropertyServices(ps){
+  const src = (ps && typeof ps === "object" && Array.isArray(ps.rows) && ps.rows.length)
+    ? ps : DEFAULT_PROPERTY_SERVICES;
+  const cleanSource = s => (s && typeof s === "object" && s.row)
+    ? { row: String(s.row), field: (s.field == null ? null : String(s.field)) } : null;
+  const rows = (src.rows || []).map((r, ri)=>{
+    const kind = ["coordGroup","question","text","sectionHeader","date"].includes(r.kind) ? r.kind : "text";
+    const row = { id: r.id || ("psRow" + (ri+1)), kind, label: r.label || "" };
+    if(r.wlOnly) row.wlOnly = true;
+    if(r.required) row.required = true;
+    if(r.linkedNote) row.linkedNote = String(r.linkedNote);
+    if(r.placeholder) row.placeholder = String(r.placeholder);
+    if(kind === "coordGroup"){
+      row.coords = (Array.isArray(r.coords) ? r.coords : []).map((c, ci)=>{
+        const coord = { key: c.key || ("c" + (ci+1)), label: c.label || "" };
+        const cs = cleanSource(c.source); if(cs) coord.source = cs;
+        if(c.default != null) coord.default = String(c.default);
+        return coord;
+      });
+    } else if(kind === "question"){
+      row.options = Array.isArray(r.options) ? r.options.map(String).filter(o=>o.trim()!=="") : [];
+      const s = cleanSource(r.source); if(s) row.source = s;
+    } else if(kind === "text"){
+      const s = cleanSource(r.source); if(s) row.source = s;
+    }
+    return row;
+  });
+  return {
+    title: src.title || DEFAULT_PROPERTY_SERVICES.title,
+    note: src.note != null ? String(src.note) : DEFAULT_PROPERTY_SERVICES.note,
+    rows
+  };
+}
+
 // Resolve the option strings for a row (shared set or inline), filtering blanks.
 function rowOptions(row){
   if(!rowHasOptions(row)) return [];
@@ -683,6 +874,8 @@ function exportableDefinitions(){
   if(!Array.isArray(d.sharedRows)) d.sharedRows = [];
   d.sharedRows.forEach(cleanRow);
   d.tables.forEach(t=>t.rows.forEach(r=>{ if(!isSharedRef(r)) cleanRow(r); }));
+  // Property Services survives export re-normalised (drops any transient keys).
+  d.propertyServices = normalizePropertyServices(d.propertyServices);
   if(!d.meta) d.meta = {};
   d.meta.updated = new Date().toISOString().slice(0,10);
   return d;
@@ -719,6 +912,12 @@ function reconcileState(){
         next[t.id][r.id] = emptyRowState(r);
       }
     });
+    // Preserve this table's Property Services answers across reconciliation.
+    const prevPs = state[t.id] && state[t.id].__ps;
+    next[t.id].__ps = {
+      answers: (prevPs && prevPs.answers) || {},
+      dirty:   (prevPs && prevPs.dirty)   || {}
+    };
   });
   state = next;
   const ids = defs ? defs.tables.map(t=>t.id) : [];
@@ -732,8 +931,10 @@ const wrapEl = document.getElementById("wrap");
 const builderView = document.getElementById("builderView");
 const manageView = document.getElementById("manageView");
 const mapView = document.getElementById("mapView");
+const psManageView = document.getElementById("psManageView");
 const tabsEl = document.getElementById("tabs");
 const rowsContainerEl = document.getElementById("rowsContainer");
+const psContainerEl = document.getElementById("psContainer");
 const progressTextEl = document.getElementById("progressText");
 const progressFillEl = document.getElementById("progressFill");
 const builderToolbar = document.getElementById("builderToolbar");
@@ -907,6 +1108,7 @@ function renderRows(){
 
   updatePreviews();
   updateProgress(filledCount, rows.length);
+  renderPropertyServices();
 }
 
 function updatePreviews(){
@@ -940,6 +1142,9 @@ function renderPreviewAndProgress(){
     }
   });
   updateProgress(filledCount, rows.length);
+  // Scope answers can feed the Property Services block (coords, relocation…);
+  // refresh it so any non-overridden derived values follow along live.
+  renderPropertyServices();
 }
 
 function updateProgress(filled, total){
@@ -954,6 +1159,7 @@ function renderBuilder(){
         <h3>No tables defined yet</h3>
         <p>Load or import a definitions file, or add a table from <b>Manage Tables</b>.</p>
       </div>`;
+    if(psContainerEl) psContainerEl.innerHTML = "";
     updateProgress(0,0);
     return;
   }
@@ -1037,9 +1243,14 @@ function buildPlainText(){
 }
 
 async function copyTable(){
-  if(!activeTable()){ showStatus("No table to copy"); return; }
-  const html = buildHtmlTable();
-  const text = buildPlainText();
+  const table = activeTable();
+  if(!table){ showStatus("No table to copy"); return; }
+  // Two separate tables land in Word: the scope table, then the Property Services
+  // table. A paragraph between them stops Word merging them into one.
+  const html = buildHtmlTable() +
+    `<p style="margin:12px 0 0;font-family:Calibri,Arial,sans-serif;">&nbsp;</p>` +
+    buildPropertyServicesHtml(table);
+  const text = buildPlainText() + "\n\n" + buildPropertyServicesText(table);
 
   try{
     if(navigator.clipboard && window.ClipboardItem){
@@ -1104,6 +1315,7 @@ resetBtn.addEventListener("click", ()=>{
   // Snapshot the current answers so the clear can be undone.
   clearedSnapshot = { tableId: table.id, data: JSON.parse(JSON.stringify(state[table.id])) };
   effectiveRows(table).forEach(r=>{ state[table.id][r.id] = emptyRowState(r); });
+  state[table.id].__ps = { answers:{}, dirty:{} };   // also clear Property Services
   renderRows();
 });
 
@@ -1149,6 +1361,7 @@ function afterStructuralChange(){
   reconcileState();
   persistLocal();
   if(mode === "map") renderMap();
+  else if(mode === "ps") renderPsManage();
   else renderManage();
 }
 // A text-only change: persist quietly, keep focus (no re-render).
@@ -2001,7 +2214,7 @@ const importFileEl = document.getElementById("importFile");
 
 function mStatus(msg, isError){
   // Target the status line inside whichever editor view is visible.
-  const host = mode === "map" ? mapView : manageView;
+  const host = mode === "map" ? mapView : (mode === "ps" ? psManageView : manageView);
   const el = host ? host.querySelector(".status-msg") : null;
   if(!el) return;
   el.textContent = msg;
@@ -2091,6 +2304,7 @@ function applyDefinitions(raw, origin){
   renderBuilder();
   if(mode === "manage") renderManage();
   else if(mode === "map") renderMap();
+  else if(mode === "ps") renderPsManage();
 }
 
 function renderSourceChip(){
@@ -2209,6 +2423,596 @@ function renderMap(){
   });
 }
 
+/* =========================================================================
+   PROPERTY SERVICES  — separate table shown at the bottom of the Scope Builder
+   and copied into Word as its own second table.
+   -------------------------------------------------------------------------
+   Answers live in state[tableId].__ps = { answers:{key:val}, dirty:{key:true} }.
+   Fields with a `source` mirror an answer from the active scope table (coords,
+   relocation…). The mirror is *live until the user edits it*: the first manual
+   change sets dirty[key], after which the entered value sticks (an override the
+   user can revert). This one-way, visible link is the "safe" interaction model —
+   scope answers flow down into Property Services, never the other way.
+   ========================================================================= */
+function psDef(){ return (defs && defs.propertyServices) ? defs.propertyServices : DEFAULT_PROPERTY_SERVICES; }
+
+// The orifice / "Water Level site details only" rows are only *required* on a
+// water-level table. Detect one by its river-line row or its title.
+function isWaterLevelTable(table){
+  if(!table) return false;
+  if(effectiveRows(table).some(r=>r.id === "riverCoords")) return true;
+  return /water\s*level/i.test(((table.title||"") + " " + (table.label||"")));
+}
+function todayStr(){
+  const d = new Date();
+  return String(d.getDate()).padStart(2,"0") + "/" +
+         String(d.getMonth()+1).padStart(2,"0") + "/" + d.getFullYear();
+}
+function psState(tableId){
+  if(!state[tableId]) state[tableId] = {};
+  if(!state[tableId].__ps) state[tableId].__ps = { answers:{}, dirty:{} };
+  const ps = state[tableId].__ps;
+  if(!ps.answers) ps.answers = {};
+  if(!ps.dirty) ps.dirty = {};
+  return ps;
+}
+// Pull a value out of the active scope table's answers (field:null = selected).
+function psDerive(table, source){
+  if(!source || !table) return "";
+  const rs = state[table.id] && state[table.id][source.row];
+  if(!rs) return "";
+  if(source.field == null){
+    return Array.isArray(rs.selected) ? rs.selected.join(", ") : (rs.selected || "");
+  }
+  return (rs.fields && rs.fields[source.field]) ? String(rs.fields[source.field]) : "";
+}
+// Effective text value for a coord/text/date key: user override → derived → default.
+function psEffectiveText(table, key, source, def){
+  const ps = psState(table.id);
+  if(ps.dirty[key]) return ps.answers[key] != null ? ps.answers[key] : "";
+  const derived = psDerive(table, source);
+  if(derived) return derived;
+  return def != null ? def : "";
+}
+// Effective selected option for a question: override → mapped derived → "".
+function psQuestionValue(table, row){
+  const ps = psState(table.id);
+  if(ps.dirty[row.id]) return ps.answers[row.id] || "";
+  const derived = psDerive(table, row.source);
+  if(derived){
+    const m = (row.options||[]).find(o => o.toLowerCase() === String(derived).toLowerCase());
+    if(m) return m;
+  }
+  return "";
+}
+function psRowApplies(table, row){ return !(row.wlOnly && !isWaterLevelTable(table)); }
+function psRowNeedsAnswer(table, row){
+  if(!row.required || !psRowApplies(table, row)) return false;
+  if(row.kind === "question") return !psQuestionValue(table, row);
+  if(row.kind === "text") return !psEffectiveText(table, row.id, row.source, "");
+  return false;
+}
+
+/* ---- Builder render ---- */
+function renderPropertyServices(){
+  if(!psContainerEl) return;
+  const table = activeTable();
+  if(!defs || !table){ psContainerEl.innerHTML = ""; return; }
+  const ps = psDef();
+  const wl = isWaterLevelTable(table);
+
+  psContainerEl.innerHTML = "";
+  const block = document.createElement("div");
+  block.className = "ps-block";
+  block.innerHTML = `
+    <div class="ps-banner">
+      <span class="ps-title">${escapeHtml(ps.title)}</span>
+      <span class="ps-sub">Separate table — copied into Word below the scope table above</span>
+    </div>
+    <div class="ps-intro">
+      This is its own table. Coordinates and the relocation answer are pre-filled from your
+      answers above where possible — edit any box to override it. Highlighted rows still need an answer.
+    </div>`;
+  const body = document.createElement("div");
+  body.className = "ps-body";
+  block.appendChild(body);
+
+  ps.rows.forEach(row=>{
+    if(row.kind === "sectionHeader"){
+      const applies = psRowApplies(table, row);
+      const h = document.createElement("div");
+      h.className = "ps-sectionheader" + (applies ? "" : " muted");
+      h.innerHTML = `<span>${escapeHtml(row.label)}</span>` +
+        (row.wlOnly ? `<span class="ps-link-chip">${applies ? "applies to this site" : "not this site type"}</span>` : "");
+      body.appendChild(h);
+      return;
+    }
+    body.appendChild(buildPsRow(table, row, wl));
+  });
+
+  // Final note — appears here AND in the Word copy (unlike the per-row "driven
+  // by above" note, which is HTML-only).
+  if(ps.note){
+    const note = document.createElement("div");
+    note.className = "ps-note-final";
+    note.innerHTML = `<span class="ps-note-head">Note</span>${escapeHtml(ps.note)}`;
+    body.appendChild(note);
+  }
+
+  psContainerEl.appendChild(block);
+}
+
+function buildPsRow(table, row, wl){
+  const applies = psRowApplies(table, row);
+  const needs = psRowNeedsAnswer(table, row);
+  const rowEl = document.createElement("div");
+  rowEl.className = "ps-row" + (needs ? " needs" : "") + (applies ? "" : " muted");
+
+  const item = document.createElement("div");
+  item.className = "ps-rowitem";
+  item.innerHTML = `<div class="label">${escapeHtml(row.label)}</div>` +
+    (needs ? `<span class="needs-tag">Needs an answer</span>` : "") +
+    (row.wlOnly ? `<span class="wl-tag">Water Level only</span>` : "");
+  rowEl.appendChild(item);
+
+  const controls = document.createElement("div");
+  controls.className = "ps-controls";
+  rowEl.appendChild(controls);
+
+  if(row.kind === "question"){
+    // HTML-only "driven by above" note.
+    if(row.linkedNote){
+      const ln = document.createElement("div");
+      ln.className = "ps-linked-note";
+      ln.innerHTML = escapeHtml(row.linkedNote);
+      controls.appendChild(ln);
+    }
+    const value = psQuestionValue(table, row);
+    const opts = document.createElement("div");
+    opts.className = "options-list";
+    (row.options||[]).forEach(opt=>{
+      const label = document.createElement("label");
+      label.className = "option-row";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = `ps_${table.id}_${row.id}`;
+      input.checked = value === opt;
+      input.addEventListener("change", ()=>{
+        const ps = psState(table.id);
+        ps.answers[row.id] = opt; ps.dirty[row.id] = true;
+        renderPropertyServices();
+      });
+      const span = document.createElement("span");
+      span.textContent = opt;
+      label.appendChild(input); label.appendChild(span);
+      opts.appendChild(label);
+    });
+    controls.appendChild(opts);
+    controls.appendChild(psLinkBar(table, row.id, !!row.source));
+
+  } else if(row.kind === "coordGroup"){
+    const group = document.createElement("div");
+    group.className = "ps-coordgroup";
+    (row.coords||[]).forEach(c=>{
+      const key = `${row.id}.${c.key}`;
+      const cr = document.createElement("div");
+      cr.className = "ps-coord-row";
+      const lab = document.createElement("div");
+      lab.className = "ps-coord-label";
+      lab.textContent = c.label;
+      const inWrap = document.createElement("div");
+      inWrap.className = "ps-coord-input";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = psEffectiveText(table, key, c.source, c.default);
+      input.placeholder = c.default || "coordinates";
+      input.addEventListener("input", ()=>{
+        const ps = psState(table.id);
+        ps.answers[key] = input.value; ps.dirty[key] = true;
+        refreshPsLinkBar(cr, table, key, !!c.source);
+      });
+      inWrap.appendChild(input);
+      inWrap.appendChild(psLinkBar(table, key, !!c.source, ()=>{ input.value = psEffectiveText(table, key, c.source, c.default); }));
+      cr.appendChild(lab); cr.appendChild(inWrap);
+      group.appendChild(cr);
+    });
+    controls.appendChild(group);
+
+  } else if(row.kind === "text"){
+    const input = document.createElement("input");
+    input.type = "text";
+    input.style.cssText = "width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:.87rem;font-family:inherit;";
+    input.value = psEffectiveText(table, row.id, row.source, "");
+    input.placeholder = row.placeholder || "";
+    input.addEventListener("input", ()=>{
+      const ps = psState(table.id);
+      ps.answers[row.id] = input.value; ps.dirty[row.id] = true;
+      rowEl.classList.toggle("needs", psRowNeedsAnswer(table, row));
+      const tag = item.querySelector(".needs-tag");
+      if(tag && !psRowNeedsAnswer(table, row)) tag.remove();
+      refreshPsLinkBar(controls, table, row.id, !!row.source);
+    });
+    controls.appendChild(input);
+    controls.appendChild(psLinkBar(table, row.id, !!row.source, ()=>{ input.value = psEffectiveText(table, row.id, row.source, ""); }));
+
+  } else if(row.kind === "date"){
+    const wrap = document.createElement("div");
+    wrap.className = "ps-datefield";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = psEffectiveText(table, row.id, null, todayStr());
+    input.addEventListener("input", ()=>{
+      const ps = psState(table.id);
+      ps.answers[row.id] = input.value; ps.dirty[row.id] = true;
+      refreshPsLinkBar(wrap, table, row.id, false, "today");
+    });
+    wrap.appendChild(input);
+    wrap.appendChild(psLinkBar(table, row.id, false, ()=>{ input.value = todayStr(); }, "today"));
+    controls.appendChild(wrap);
+  }
+
+  return rowEl;
+}
+
+// Small "linked / overridden + revert" bar shown under a field that can be
+// prefilled. `sourceKind` "today" labels the auto-date link. onRevert is called
+// after clearing the override so the caller can refresh its own input value.
+function psLinkBar(table, key, hasSource, onRevert, sourceKind){
+  const bar = document.createElement("div");
+  bar.className = "ps-linkbar";
+  bar.dataset.psKey = key;
+  fillPsLinkBar(bar, table, key, hasSource, onRevert, sourceKind);
+  return bar;
+}
+function fillPsLinkBar(bar, table, key, hasSource, onRevert, sourceKind){
+  bar.innerHTML = "";
+  const ps = psState(table.id);
+  const overridden = !!ps.dirty[key];
+  const linkable = hasSource || sourceKind === "today";
+  if(!linkable && !overridden) return;
+  const chip = document.createElement("span");
+  chip.className = "ps-link-chip" + (overridden ? " overridden" : "");
+  chip.textContent = overridden
+    ? "Overridden"
+    : (sourceKind === "today" ? "Auto: today's date" : "Linked to scope answer");
+  bar.appendChild(chip);
+  if(overridden){
+    const revert = document.createElement("button");
+    revert.type = "button";
+    revert.className = "ps-revert";
+    revert.textContent = sourceKind === "today" ? "Reset to today" : "Reset to scope value";
+    revert.addEventListener("click", ()=>{
+      const p = psState(table.id);
+      delete p.dirty[key]; delete p.answers[key];
+      if(onRevert) onRevert();
+      // Re-render so highlighting / values re-derive everywhere consistently.
+      renderPropertyServices();
+    });
+    bar.appendChild(revert);
+  }
+}
+// Update just one link bar in place (used on keystroke to avoid losing focus).
+function refreshPsLinkBar(scopeEl, table, key, hasSource, sourceKind){
+  const bar = scopeEl.querySelector(`.ps-linkbar[data-ps-key="${cssEscape(key)}"]`)
+           || (scopeEl.classList && scopeEl.classList.contains("ps-linkbar") ? scopeEl : null);
+  if(bar) fillPsLinkBar(bar, table, key, hasSource, null, sourceKind);
+}
+
+/* ---- Word copy (a second, separate table) ---- */
+function buildPropertyServicesHtml(table){
+  const ps = psDef();
+  const B = "border:1px solid #999;";
+  const cell = `style="padding:6px 8px;${B}vertical-align:top;"`;
+  const labelCell = `style="padding:6px 8px;${B}vertical-align:top;font-weight:bold;width:38%;"`;
+  let rows = `<tr><td colspan="2" style="background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;${B}">${escapeHtml(ps.title)}</td></tr>`;
+  ps.rows.forEach(row=>{
+    if(row.kind === "coordGroup"){
+      rows += `<tr><td colspan="2" style="background:#e8e8e8;font-weight:bold;padding:6px 8px;${B}">${escapeHtml(row.label)}</td></tr>`;
+      (row.coords||[]).forEach(c=>{
+        const v = psEffectiveText(table, `${row.id}.${c.key}`, c.source, c.default);
+        rows += `<tr><td ${labelCell}>${escapeHtml(c.label)}</td><td ${cell}>${escapeHtml(v)}</td></tr>`;
+      });
+    } else if(row.kind === "question"){
+      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${escapeHtml(psQuestionValue(table, row))}</td></tr>`;
+    } else if(row.kind === "text"){
+      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${escapeHtml(psEffectiveText(table, row.id, row.source, ""))}</td></tr>`;
+    } else if(row.kind === "sectionHeader"){
+      rows += `<tr><td colspan="2" style="background:#f0f0f0;font-style:italic;font-weight:bold;padding:6px 8px;${B}">${escapeHtml(row.label)}</td></tr>`;
+    } else if(row.kind === "date"){
+      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}:</td><td ${cell}>${escapeHtml(psEffectiveText(table, row.id, null, todayStr()))}</td></tr>`;
+    }
+  });
+  if(ps.note){
+    rows += `<tr><td colspan="2" style="font-weight:bold;padding:6px 8px;${B}">Note</td></tr>`;
+    rows += `<tr><td colspan="2" style="padding:6px 8px;${B}">${escapeHtml(ps.note)}</td></tr>`;
+  }
+  return `<table style="border-collapse:collapse;width:100%;font-family:Calibri,Arial,sans-serif;font-size:11pt;">${rows}</table>`;
+}
+function buildPropertyServicesText(table){
+  const ps = psDef();
+  let out = `${ps.title}\n`;
+  ps.rows.forEach(row=>{
+    if(row.kind === "coordGroup"){
+      out += `${row.label}\n`;
+      (row.coords||[]).forEach(c=>{ out += `\t${c.label}\t${psEffectiveText(table, `${row.id}.${c.key}`, c.source, c.default)}\n`; });
+    } else if(row.kind === "question"){
+      out += `${row.label}\t${psQuestionValue(table, row)}\n`;
+    } else if(row.kind === "text"){
+      out += `${row.label}\t${psEffectiveText(table, row.id, row.source, "")}\n`;
+    } else if(row.kind === "sectionHeader"){
+      out += `${row.label}\n`;
+    } else if(row.kind === "date"){
+      out += `${row.label}:\t${psEffectiveText(table, row.id, null, todayStr())}\n`;
+    }
+  });
+  if(ps.note) out += `Note\n${ps.note}\n`;
+  return out;
+}
+
+/* =========================================================================
+   PROPERTY SERVICES  — management editor (its own tab)
+   ========================================================================= */
+function psStructuralChange(){ persistLocal(); renderPsManage(); }
+
+function renderPsManage(){
+  if(!defs){ psManageView.innerHTML = renderNoDefsHtml(); wireNoDefs(); return; }
+  const ps = defs.propertyServices;
+  const actions = REMOTE_ON
+    ? `<button class="btn btn-primary" id="psPublish">Publish to central store</button>
+       <button class="btn btn-secondary" id="psReload">Reload latest</button>
+       <button class="btn btn-secondary" id="psExport">Export JSON</button>`
+    : `<button class="btn btn-primary" id="psExport">Export JSON</button>
+       <button class="btn btn-secondary" id="psImport">Import JSON…</button>`;
+
+  psManageView.innerHTML = `
+    <div class="admin-actions">
+      ${actions}
+      <span class="grow"></span>
+      <span class="status-msg" id="psStatus"></span>
+    </div>
+    <div class="admin-note">
+      This edits the <b>Property Services Instruction</b> table shown at the bottom of every
+      Scope Builder table. Answers are collected per site in the builder; here you only shape the
+      questions, labels and note. Prefilled values (coordinates, relocation, date) are wired up
+      automatically and can always be overridden by the user.
+    </div>
+    <div class="admin-cols">
+      <div class="panel">
+        <div class="panel-head">Table heading &amp; note</div>
+        <div class="panel-body">
+          <div class="ed-field" style="margin-bottom:12px;">
+            <label>Table title</label>
+            <input type="text" id="psTitle" value="${escapeHtml(ps.title)}">
+          </div>
+          <div class="ed-field">
+            <label>Note (shown in the app <b>and</b> copied into Word)</label>
+            <textarea id="psNote" style="min-height:120px;">${escapeHtml(ps.note)}</textarea>
+            <span class="hint">The per-question "driven by above" note is separate and never copied into Word.</span>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          Rows (${ps.rows.length})
+          <span>
+            <button class="mini-btn" data-add="question">+ Question</button>
+            <button class="mini-btn" data-add="text">+ Text</button>
+            <button class="mini-btn" data-add="sectionHeader">+ Section</button>
+            <button class="mini-btn" data-add="coordGroup">+ Coordinates</button>
+          </span>
+        </div>
+        <div class="panel-body" id="psRowList"></div>
+      </div>
+    </div>
+  `;
+
+  const bind = (id, fn)=>{ const el = document.getElementById(id); if(el) el.addEventListener("click", fn); };
+  bind("psExport", exportDefinitions);
+  if(REMOTE_ON){ bind("psPublish", publishToRemote); bind("psReload", reloadFromRemote); }
+  else bind("psImport", ()=>importFileEl.click());
+
+  const titleEl = document.getElementById("psTitle");
+  titleEl.addEventListener("input", ()=>{ ps.title = titleEl.value; afterTextChange(); });
+  const noteEl = document.getElementById("psNote");
+  noteEl.addEventListener("input", ()=>{ ps.note = noteEl.value; afterTextChange(); });
+  psManageView.querySelectorAll("[data-add]").forEach(b=>{
+    b.addEventListener("click", ()=>psAddRow(b.getAttribute("data-add")));
+  });
+
+  const list = document.getElementById("psRowList");
+  list.innerHTML = "";
+  ps.rows.forEach((row,i)=>list.appendChild(buildPsRowEditor(ps, row, i)));
+}
+
+function buildPsRowEditor(ps, row, i){
+  const box = document.createElement("div");
+  box.className = "ed-row open";
+  const head = document.createElement("div");
+  head.className = "ed-row-head";
+  head.style.cursor = "default";
+  head.innerHTML = `
+    <span class="er-title">${escapeHtml(row.label || "(untitled)")}</span>
+    <span class="er-type">${escapeHtml(row.kind)}</span>`;
+  const up = iconBtn("↑","Move up", ()=>{ if(i>0){ swap(ps.rows,i,i-1); psStructuralChange(); }});
+  const down = iconBtn("↓","Move down", ()=>{ if(i<ps.rows.length-1){ swap(ps.rows,i,i+1); psStructuralChange(); }});
+  const del = iconBtn("🗑","Delete row", ()=>{ if(confirm(`Delete "${row.label||row.kind}"?`)){ ps.rows.splice(i,1); psStructuralChange(); } }, true);
+  [up,down,del].forEach(b=>head.appendChild(b));
+  box.appendChild(head);
+
+  const body = document.createElement("div");
+  body.className = "ed-row-body";
+  body.style.display = "block";
+
+  // Label (all kinds carry one)
+  const labelField = document.createElement("div");
+  labelField.className = "ed-field full";
+  labelField.innerHTML = `<label>${row.kind === "coordGroup" ? "Group heading" : row.kind === "sectionHeader" ? "Section heading" : "Question / label"}</label>`;
+  const labelInput = document.createElement("input");
+  labelInput.type = "text"; labelInput.value = row.label || "";
+  labelInput.addEventListener("input", ()=>{ row.label = labelInput.value; head.querySelector(".er-title").textContent = row.label || "(untitled)"; afterTextChange(); });
+  labelField.appendChild(labelInput);
+  body.appendChild(labelField);
+
+  // Flags row (required / wlOnly) where relevant
+  if(row.kind === "question" || row.kind === "text" || row.kind === "sectionHeader"){
+    const flags = document.createElement("div");
+    flags.className = "opt-source";
+    if(row.kind !== "sectionHeader"){
+      const reqL = document.createElement("label");
+      const reqC = document.createElement("input"); reqC.type = "checkbox"; reqC.checked = !!row.required;
+      reqC.addEventListener("change", ()=>{ if(reqC.checked) row.required = true; else delete row.required; afterTextChange(); });
+      reqL.appendChild(reqC); reqL.appendChild(document.createTextNode(" Required (highlight until answered)"));
+      flags.appendChild(reqL);
+    }
+    const wlL = document.createElement("label");
+    const wlC = document.createElement("input"); wlC.type = "checkbox"; wlC.checked = !!row.wlOnly;
+    wlC.addEventListener("change", ()=>{ if(wlC.checked) row.wlOnly = true; else delete row.wlOnly; afterTextChange(); });
+    wlL.appendChild(wlC); wlL.appendChild(document.createTextNode(" Water Level sites only"));
+    flags.appendChild(wlL);
+    body.appendChild(flags);
+  }
+
+  if(row.kind === "question"){
+    const optField = document.createElement("div");
+    optField.className = "ed-field full";
+    optField.innerHTML = `<label>Options — one per line</label>`;
+    const ta = document.createElement("textarea");
+    ta.style.minHeight = "70px";
+    ta.value = (row.options||[]).join("\n");
+    ta.addEventListener("input", ()=>{ row.options = ta.value.split("\n").map(s=>s.trim()).filter(Boolean); afterTextChange(); });
+    optField.appendChild(ta);
+    body.appendChild(optField);
+
+    const lnField = document.createElement("div");
+    lnField.className = "ed-field full";
+    lnField.innerHTML = `<label>In-app note under this question (never copied into Word)</label>`;
+    const lnInput = document.createElement("input");
+    lnInput.type = "text"; lnInput.value = row.linkedNote || "";
+    lnInput.placeholder = "e.g. Preselected from the Relocation answer above";
+    lnInput.addEventListener("input", ()=>{ if(lnInput.value.trim()) row.linkedNote = lnInput.value; else delete row.linkedNote; afterTextChange(); });
+    lnField.appendChild(lnInput);
+    body.appendChild(lnField);
+
+    body.appendChild(psSourceEditor(row));
+  } else if(row.kind === "text"){
+    const ph = document.createElement("div");
+    ph.className = "ed-field full";
+    ph.innerHTML = `<label>Placeholder</label>`;
+    const phInput = document.createElement("input");
+    phInput.type = "text"; phInput.value = row.placeholder || "";
+    phInput.addEventListener("input", ()=>{ if(phInput.value) row.placeholder = phInput.value; else delete row.placeholder; afterTextChange(); });
+    ph.appendChild(phInput);
+    body.appendChild(ph);
+    body.appendChild(psSourceEditor(row));
+  } else if(row.kind === "coordGroup"){
+    body.appendChild(psCoordsEditor(row));
+  }
+
+  box.appendChild(body);
+  return box;
+}
+
+// Advanced "linked source" editor collapsed by default so it is not fiddled with
+// accidentally. Maps this field onto a scope row id + optional field key.
+function psSourceEditor(target){
+  const det = document.createElement("details");
+  det.style.cssText = "margin-top:8px;border:1px dashed var(--line);border-radius:6px;padding:6px 10px;";
+  const src = target.source || {};
+  det.innerHTML = `
+    <summary style="cursor:pointer;font-size:.78rem;color:var(--ink-soft);font-weight:600;">Linked to a scope answer (advanced)</summary>
+    <div class="ed-grid" style="margin-top:8px;">
+      <div class="ed-field"><label>Scope row id</label><input type="text" class="ps-src-row" value="${escapeHtml(src.row||"")}" placeholder="e.g. relocation"></div>
+      <div class="ed-field"><label>Field key (blank = the selected option)</label><input type="text" class="ps-src-field" value="${escapeHtml(src.field||"")}" placeholder="e.g. newLocation"></div>
+    </div>
+    <span class="hint">Common ids: <code>coords</code>/existing, <code>relocation</code> (selected) or <code>relocation</code>/newLocation, <code>riverCoords</code>/detail.</span>`;
+  if(src.row) det.open = true;
+  const rowIn = det.querySelector(".ps-src-row");
+  const fieldIn = det.querySelector(".ps-src-field");
+  const sync = ()=>{
+    const r = rowIn.value.trim();
+    if(!r){ delete target.source; }
+    else target.source = { row:r, field: fieldIn.value.trim() || null };
+    afterTextChange();
+  };
+  rowIn.addEventListener("input", sync);
+  fieldIn.addEventListener("input", sync);
+  return det;
+}
+
+function psCoordsEditor(row){
+  const wrap = document.createElement("div");
+  wrap.className = "ed-section";
+  const head = document.createElement("div");
+  head.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;";
+  head.innerHTML = `<label style="font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:600;">Coordinate rows</label>`;
+  const addBtn = document.createElement("button");
+  addBtn.className = "mini-btn"; addBtn.textContent = "+ Add coordinate";
+  addBtn.addEventListener("click", ()=>{
+    if(!Array.isArray(row.coords)) row.coords = [];
+    row.coords.push({ key: uniqueId("c", row.coords.map(c=>c.key)), label:"New coordinate" });
+    psStructuralChange();
+  });
+  head.appendChild(addBtn);
+  wrap.appendChild(head);
+
+  (row.coords||[]).forEach((c,ci)=>{
+    const card = document.createElement("div");
+    card.style.cssText = "border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-bottom:8px;";
+    const labField = document.createElement("div");
+    labField.className = "ed-field full";
+    labField.innerHTML = `<label>Coordinate label</label>`;
+    const labIn = document.createElement("input");
+    labIn.type = "text"; labIn.value = c.label || "";
+    labIn.addEventListener("input", ()=>{ c.label = labIn.value; afterTextChange(); });
+    labField.appendChild(labIn);
+    card.appendChild(labField);
+
+    const grid = document.createElement("div");
+    grid.className = "ed-grid";
+    grid.style.marginTop = "6px";
+    grid.innerHTML = `
+      <div class="ed-field"><label>Default when blank</label><input type="text" class="c-default" value="${escapeHtml(c.default||"")}" placeholder="e.g. na"></div>
+      <div class="ed-field"><label>Linked scope row id</label><input type="text" class="c-src-row" value="${escapeHtml((c.source&&c.source.row)||"")}"></div>
+      <div class="ed-field"><label>Linked field key</label><input type="text" class="c-src-field" value="${escapeHtml((c.source&&c.source.field)||"")}"></div>
+    `;
+    const defIn = grid.querySelector(".c-default");
+    defIn.addEventListener("input", ()=>{ if(defIn.value) c.default = defIn.value; else delete c.default; afterTextChange(); });
+    const cRow = grid.querySelector(".c-src-row");
+    const cField = grid.querySelector(".c-src-field");
+    const sync = ()=>{
+      const r = cRow.value.trim();
+      if(!r) delete c.source; else c.source = { row:r, field: cField.value.trim() || null };
+      afterTextChange();
+    };
+    cRow.addEventListener("input", sync);
+    cField.addEventListener("input", sync);
+    card.appendChild(grid);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "mini-btn danger";
+    delBtn.style.marginTop = "6px";
+    delBtn.textContent = "Remove coordinate";
+    delBtn.addEventListener("click", ()=>{ row.coords.splice(ci,1); psStructuralChange(); });
+    card.appendChild(delBtn);
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
+function psAddRow(kind){
+  const ps = defs.propertyServices;
+  const taken = ps.rows.map(r=>r.id);
+  const base = { question:"psQuestion", text:"psText", sectionHeader:"psSection", coordGroup:"psCoords" }[kind] || "psRow";
+  const id = uniqueId(base, taken);
+  let row;
+  if(kind === "question") row = { id, kind, label:"New question", options:["Yes","No"] };
+  else if(kind === "text") row = { id, kind, label:"New field" };
+  else if(kind === "sectionHeader") row = { id, kind, label:"New section" };
+  else row = { id, kind:"coordGroup", label:"New coordinates", coords:[{ key:"primary", label:"Primary" }] };
+  ps.rows.push(row);
+  psStructuralChange();
+}
+
 /* ===================== MODE SWITCHING ===================== */
 function setMode(next){
   mode = next;
@@ -2217,10 +3021,12 @@ function setMode(next){
   builderView.classList.toggle("hidden", !isBuilder);
   manageView.classList.toggle("hidden", mode !== "manage");
   mapView.classList.toggle("hidden", mode !== "map");
+  psManageView.classList.toggle("hidden", mode !== "ps");
   builderToolbar.classList.toggle("hidden", !isBuilder);
   wrapEl.classList.toggle("manage", !isBuilder);
   if(isBuilder){ reconcileState(); renderBuilder(); }
   else if(mode === "map") renderMap();
+  else if(mode === "ps") renderPsManage();
   else renderManage();
 }
 document.querySelectorAll(".mode-btn").forEach(b=>{
@@ -2380,6 +3186,7 @@ async function boot(forceFile){
   renderBuilder();
   if(mode === "manage") renderManage();
   else if(mode === "map") renderMap();
+  else if(mode === "ps") renderPsManage();
 }
 
 /* ===================== THEME TOGGLE ===================== */

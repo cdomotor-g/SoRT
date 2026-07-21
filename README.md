@@ -111,6 +111,35 @@ step for other users. Extras you get for free:
 only. Click **Export JSON**, upload the file to your shared location as
 `definitions.json`, and others use **Reset to published file** to pick it up.
 
+## Property Services (second table)
+
+A separate **Property Services Instruction** table renders at the bottom of the
+Scope Builder for every station type and is copied into Word as its **own second
+table** — so a copy/paste lands the scope table and the Property Services table
+as two tables in the report.
+
+- **Pre-filled from the scope answers above, but overridable.** Current
+  coordinates, the relocation answer, and the relocation coordinates mirror the
+  matching scope rows (`coords`, `riverCoords`, `relocation`). The mirror is live
+  *until you edit the field* — the first manual change detaches it (shown as
+  **Overridden**, with a **Reset to scope value** link to re-link it). This
+  one-way flow (scope → Property Services, never the reverse) is the deliberately
+  safe interaction model.
+- **Relocation preselected.** "Is the equipment being relocated?" is preselected
+  from the Relocation answer above, with an in-app note explaining the link. That
+  note is **not** copied into Word.
+- **Highlighted until answered.** "Turning of soil?" and "Will the orifice line
+  be replaced?" are not auto-derived; they are highlighted until you answer them.
+  The orifice/"Water Level site details only" rows are only *required* on the
+  Water Level table.
+- **Auto date**, and a fixed **Note** (the Property Services due-diligence text)
+  that *is* copied into Word.
+- **Managed in its own tab.** The **Property Services** tab edits the table's
+  title, note, questions and coordinate rows. Its shape lives under
+  `definitions.json → propertyServices` and publishes through the central store
+  like the rest (a built-in default is used if the loaded definitions do not yet
+  carry one).
+
 ## Central store (Supabase)
 
 The central store is a single row in a free [Supabase](https://supabase.com)
