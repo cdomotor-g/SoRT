@@ -20,10 +20,27 @@ acceptance criteria so the work can be picked up later.
 
 ---
 
-## 1. "Property Services" section 📋
+## 1. "Property Services" section 🚧
 
 Add a new section to the **bottom of the SORT tables** called **Property
 Services**. It is a richer, map-aware block rather than a plain option table.
+
+> **Shipped so far** (the "Property Services Instruction" table): a separate,
+> visually distinct block renders at the bottom of the Scope Builder on **every**
+> station type and is copied into Word as its **own second table** (the scope
+> table + the Property Services table land as two tables). Coordinates and the
+> relocation answer are **pre-filled from the scope answers above** (the
+> `coords`/`existing`, `riverCoords`/`detail` and `relocation` rows) and remain
+> **overridable** — the first manual edit detaches a field, with a "reset to
+> scope value" affordance. The relocation question is **preselected from the
+> Relocation answer above** with an in-app-only note explaining the link (this
+> note is **not** copied into Word). The turning-of-soil and orifice-replacement
+> questions are **highlighted until answered** (not auto-derived, by request).
+> The date auto-fills. The block is data-driven via `definitions.json →
+> propertyServices` and editable in a dedicated **Property Services** tab.
+>
+> **Still planned:** the embedded map, the relocation pin-drop that writes back a
+> new lat/long, and the "Check QLDGlobe" deep-link button.
 
 ### Scope
 
