@@ -1306,7 +1306,7 @@ copyBtn.addEventListener("click", copyTable);
 function updateUndoBtn(){
   const table = activeTable();
   const canUndo = !!(clearedSnapshot && table && clearedSnapshot.tableId === table.id);
-  undoResetBtn.hidden = !canUndo;
+  //undoResetBtn.hidden = !canUndo;
 }
 
 resetBtn.addEventListener("click", ()=>{
