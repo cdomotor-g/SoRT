@@ -1,7 +1,7 @@
 {
   "version": 1,
   "meta": {
-    "updated": "2026-07-20",
+    "updated": "2026-07-21",
     "appTitle": "SORT Forum Scope Builder"
   },
   "optionSets": {},
@@ -14,34 +14,77 @@
         "kind": "coordGroup",
         "label": "Current Co-Ordinates",
         "coords": [
-          { "key": "primary", "label": "Primary (main equipment)", "source": { "row": "coords", "field": "existing" } },
-          { "key": "subsidiary", "label": "Subsidiary (orifice line)", "source": { "row": "riverCoords", "field": "detail" } }
+          {
+            "key": "primary",
+            "label": "Primary (main equipment)",
+            "source": {
+              "row": "coords",
+              "field": "existing"
+            }
+          },
+          {
+            "key": "subsidiary",
+            "label": "Subsidiary (orifice line)",
+            "source": {
+              "row": "riverCoords",
+              "field": "detail"
+            }
+          }
         ]
       },
       {
         "id": "relocating",
         "kind": "question",
         "label": "Is the equipment being relocated?",
-        "options": [ "Yes", "No" ],
-        "source": { "row": "relocation", "field": null },
-        "linkedNote": "Preselected from the Relocation answer in the table above — change it here if this differs."
+        "linkedNote": "Preselected from the Relocation answer in the table above — change it here if this differs.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "source": {
+          "row": "relocation",
+          "field": null
+        }
       },
       {
         "id": "relocationCoords",
         "kind": "coordGroup",
         "label": "Relocation Co-Ordinates",
         "coords": [
-          { "key": "primary", "label": "Primary (main equipment)", "source": { "row": "relocation", "field": "newLocation" }, "default": "na" },
-          { "key": "orifice", "label": "Orifice line termination or GCO", "default": "na" },
-          { "key": "raingauge", "label": "Rain gauge (if not located at primary)", "default": "na" }
+          {
+            "key": "primary",
+            "label": "Primary (main equipment)",
+            "source": {
+              "row": "relocation",
+              "field": "newLocation"
+            },
+            "default": "na"
+          },
+          {
+            "key": "orifice",
+            "label": "Orifice line termination or GCO",
+            "source": {
+              "row": "riverCoords",
+              "field": null
+            },
+            "default": "na"
+          },
+          {
+            "key": "raingauge",
+            "label": "Rain gauge (if not located at primary)",
+            "default": "na"
+          }
         ]
       },
       {
         "id": "turnSoil",
         "kind": "question",
         "label": "Does the work require the turning of soil?",
-        "options": [ "Yes", "No" ],
-        "required": true
+        "required": true,
+        "options": [
+          "Yes",
+          "No"
+        ]
       },
       {
         "id": "wlHeader",
@@ -53,16 +96,19 @@
         "id": "orificeReplace",
         "kind": "question",
         "label": "Will the orifice line be replaced?",
-        "options": [ "Yes", "No" ],
+        "wlOnly": true,
         "required": true,
-        "wlOnly": true
+        "options": [
+          "Yes",
+          "No"
+        ]
       },
       {
         "id": "orificeDirection",
         "kind": "text",
         "label": "What direction does the orifice line run from the primary equipment?",
-        "placeholder": "e.g. East-South-East",
-        "wlOnly": true
+        "wlOnly": true,
+        "placeholder": "e.g. East-South-East"
       },
       {
         "id": "date",
@@ -501,7 +547,7 @@
           ]
         },
         {
-          "id": "row",
+          "id": "terminationType",
           "item": "River line termination type",
           "instruction": "",
           "type": "single",
@@ -509,6 +555,26 @@
             "GCO ",
             "BU07"
           ]
+        },
+        {
+          "id": "riverCoords",
+          "item": "River Line Termination Coordinates",
+          "instruction": "",
+          "type": "none",
+          "icon": "📍",
+          "fields": [
+            {
+              "key": "detail",
+              "label": "Coordinates",
+              "type": "text"
+            }
+          ]
+        },
+        {
+          "shared": "coords"
+        },
+        {
+          "shared": "relocation"
         },
         {
           "id": "gaugeBoards",
@@ -554,26 +620,6 @@
         },
         {
           "shared": "Benchmark"
-        },
-        {
-          "id": "riverCoords",
-          "item": "River Line Termination Coordinates",
-          "instruction": "",
-          "type": "none",
-          "icon": "📍",
-          "fields": [
-            {
-              "key": "detail",
-              "label": "Coordinates",
-              "type": "text"
-            }
-          ]
-        },
-        {
-          "shared": "coords"
-        },
-        {
-          "shared": "relocation"
         },
         {
           "shared": "comms"
