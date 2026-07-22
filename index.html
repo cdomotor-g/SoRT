@@ -451,6 +451,18 @@
   }
   .ps-body{ padding:14px 16px; }
 
+  /* Tick box (above the Property Services table) controlling whether that table
+     is included when copying. Ticked by default; untick to copy only the scope
+     table. */
+  .ps-copy-toggle{
+    display:flex; align-items:center; gap:8px; margin:30px 4px 8px;
+    font-size:.85rem; font-weight:600; color:var(--ink); cursor:pointer;
+  }
+  .ps-copy-toggle input{ width:16px; height:16px; cursor:pointer; }
+  .ps-copy-toggle + .ps-block{ margin-top:0; }
+  /* Visual cue that the table will be left out of the copy. */
+  .ps-block.ps-block--excluded{ opacity:.5; }
+
   .ps-row{
     background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
     margin-bottom:10px; display:grid; grid-template-columns:250px 1fr; overflow:hidden;
@@ -1185,6 +1197,10 @@ const undoResetBtn = document.getElementById("undoResetBtn");
 const statusMsg = document.getElementById("statusMsg");
 const includeHeaderEl = document.getElementById("includeHeader");
 const includeEmptyEl = document.getElementById("includeEmpty");
+// Whether the Property Services table is included when copying. Controlled by a
+// tick box above that table (ticked by default); untick to copy only the scope
+// table. Kept in a variable so it survives Property Services re-renders.
+let includePsCopy = true;
 const forumDateEl = document.getElementById("forumDate");
 const forumAttendeesEl = document.getElementById("forumAttendees");
 
@@ -1246,11 +1262,16 @@ async function copyTable(){
   const table = activeTable();
   if(!table){ showStatus("No table to copy"); return; }
   // Two separate tables land in Word: the scope table, then the Property Services
-  // table. A paragraph between them stops Word merging them into one.
-  const html = buildHtmlTable() +
-    `<p style="margin:12px 0 0;font-family:Calibri,Arial,sans-serif;">&nbsp;</p>` +
-    buildPropertyServicesHtml(table);
-  const text = buildPlainText() + "\n\n" + buildPropertyServicesText(table);
+  // table. A paragraph between them stops Word merging them into one. The
+  // Property Services table is only appended when its tick box is ticked — some
+  // users want only the scope table.
+  let html = buildHtmlTable();
+  let text = buildPlainText();
+  if(includePsCopy){
+    html += `<p style="margin:12px 0 0;font-family:Calibri,Arial,sans-serif;">&nbsp;</p>` +
+      buildPropertyServicesHtml(table);
+    text += "\n\n" + buildPropertyServicesText(table);
+  }
 
   try{
     if(navigator.clipboard && window.ClipboardItem){
@@ -2502,8 +2523,22 @@ function renderPropertyServices(){
   const wl = isWaterLevelTable(table);
 
   psContainerEl.innerHTML = "";
+
+  // Tick box (ticked by default) controlling whether the Property Services table
+  // is copied out. Untick to copy only the scope table above.
+  const copyToggle = document.createElement("label");
+  copyToggle.className = "ps-copy-toggle";
+  copyToggle.innerHTML =
+    `<input type="checkbox" id="includePs"${includePsCopy ? " checked" : ""}>` +
+    `<span>Include the Property Services table when copying (untick to copy the scope table only)</span>`;
+  psContainerEl.appendChild(copyToggle);
+
   const block = document.createElement("div");
-  block.className = "ps-block";
+  block.className = "ps-block" + (includePsCopy ? "" : " ps-block--excluded");
+  copyToggle.querySelector("input").addEventListener("change", (e)=>{
+    includePsCopy = e.target.checked;
+    block.classList.toggle("ps-block--excluded", !includePsCopy);
+  });
   block.innerHTML = `
     <div class="ps-banner">
       <span class="ps-title">${escapeHtml(ps.title)}</span>
