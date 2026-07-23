@@ -2211,6 +2211,7 @@ function openIconPicker(current, onPick){
       </div>
       <div class="modal-foot">
         <input type="text" class="customIcon" placeholder="Or type / paste any emoji…" value="${escapeHtml(current)}">
+        <button type="button" class="btn btn-secondary btnOpenEmojiDB" title="Browse more emoji at emojidb.org, then copy one and paste it above">Open EmojiDB ↗</button>
         <button type="button" class="btn btn-secondary btnNoIcon">No icon</button>
         <button type="button" class="btn btn-primary btnUseCustom">Use</button>
       </div>
@@ -2225,6 +2226,13 @@ function openIconPicker(current, onPick){
   const useCustom = ()=>{ const v = customEl.value.trim(); if(v) pick(v); };
   overlay.querySelector(".btnUseCustom").addEventListener("click", useCustom);
   customEl.addEventListener("keydown", (e)=>{ if(e.key === "Enter") useCustom(); });
+  overlay.querySelector(".btnOpenEmojiDB").addEventListener("click", ()=>{
+    // Open EmojiDB in a new tab; the user copies an emoji there and pastes it
+    // into the field above, then clicks "Use". Keep the picker open so the
+    // pasted value lands back in this modal.
+    window.open("https://emojidb.org/", "_blank", "noopener,noreferrer");
+    customEl.focus();
+  });
   document.addEventListener("keydown", iconPickerEsc);
   document.body.appendChild(overlay);
   iconPickerOverlay = overlay;
