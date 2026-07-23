@@ -615,6 +615,11 @@
     position:absolute; inset:0; z-index:5; display:flex; align-items:center; justify-content:center;
     background:rgba(245,247,246,.9); color:var(--ink-soft); font-size:.9rem; text-align:center; padding:20px;
   }
+  /* CRITICAL: `display:flex` above would otherwise beat the [hidden] UA rule, so
+     setting `statusHost.hidden = true` in JS would NOT clear the "Loading map…"
+     overlay — it would sit over a working map forever (the reported symptom).
+     This makes the hidden attribute actually hide it. */
+  .smap-status[hidden]{ display:none; }
   .smap-offline{ line-height:1.6; }
   .smap-offline span{ font-size:.8rem; color:var(--ink-soft); }
   .smap-panel{
@@ -644,7 +649,31 @@
   .smap-pin-err{ color:var(--danger); }
   .smap-legend{ margin-top:6px; border-top:1px solid var(--line); padding-top:8px; display:flex; flex-direction:column; gap:4px; }
   .smap-legend-row{ display:flex; align-items:center; gap:7px; font-size:.8rem; }
-  .smap-credit{ margin-top:auto; padding-top:10px; font-size:.68rem; color:var(--ink-soft); line-height:1.4; }
+  .smap-credit{ padding-top:10px; font-size:.68rem; color:var(--ink-soft); line-height:1.4; }
+
+  /* "Zoom in to see contours / road reserve" hint, over the map (§4.6). */
+  .smap-scalehint{
+    position:absolute; left:50%; bottom:12px; transform:translateX(-50%); z-index:6;
+    max-width:80%; padding:6px 12px; border-radius:16px; font-size:.78rem; text-align:center;
+    background:rgba(21,37,49,.86); color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.25); pointer-events:none;
+  }
+
+  /* In-app diagnostics (§6) — collapsed by default, copyable as plain text. */
+  .smap-diag{ margin-top:auto; padding-top:10px; border-top:1px solid var(--line); }
+  .smap-diag > summary{
+    cursor:pointer; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft); font-weight:700; list-style:revert;
+  }
+  .smap-diag > summary:hover{ color:var(--accent-dark); }
+  .smap-diag-body{ display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+  .smap-diag-hint{ margin:0; font-size:.72rem; color:var(--ink-soft); line-height:1.4; }
+  .smap-diag-copy{ align-self:flex-start; }
+  .smap-diag-text{
+    margin:0; padding:8px 10px; background:var(--code-bg,#0d1b24); color:var(--code-ink,#dfe8ee);
+    border:1px solid var(--line); border-radius:6px; font-size:.68rem; line-height:1.45;
+    white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto;
+    font-family:"Cascadia Code",Consolas,"Courier New",monospace;
+  }
 
   @media (max-width: 720px){
     .smap-body{ flex-direction:column; }
@@ -3756,9 +3785,10 @@ const SITE_MAP_CONFIG = {
   imagery:  "https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer",
   imageryLabels: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Basemaps/QldImageryLabel/MapServer",
   contours: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/Contours/MapServer",
-  // Sublayer 30 = "Contour LiDAR 1m" (confirmed default). 5 m / 10 m IDs are
-  // probed from the live service by name (resolveContourLayers); these are only
-  // the fallback if the probe fails.
+  // Sublayer 30 = "Contour LiDAR 1m" (fallback default — NOT verified against the
+  // live service in this sandbox, egress to the QLD hosts is blocked here). The
+  // live IDs are probed by name at runtime (resolveContourLayers) and whatever it
+  // resolves is reported in the Map diagnostics panel so we can confirm them.
   contourSublayers: { "1": 30, "5": null, "10": null },
   cadastre: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer",
   cadastreParcelsSublayer: 4,
@@ -3769,7 +3799,20 @@ const SITE_MAP_CONFIG = {
   roadFieldCandidates: ["tenure","parcel_typ","parcel_type","feat_name","segpar_typ","lot_area"],
   attribution: "© State of Queensland (Department of Natural Resources and Mines) — CC BY 4.0",
   screenshotWidth: 1600,
-  offscreenSize: { width: 1000, height: 720 }
+  offscreenSize: { width: 1000, height: 720 },
+  // Initial constructor extent (§4.5): the view is built AT the anchor pin's
+  // coordinate at this zoom, so it never renders a CBD-wide default extent and
+  // never issues heavy exportImage requests before framing. goTo only refines it.
+  anchorZoom: 16,
+  // Dynamic MapImageLayers are unreadable when zoomed right out and asking them
+  // to render a whole-state extent is what makes them slow. Suppress them above
+  // this scale and show a "zoom in" hint instead of silently rendering nothing
+  // (§4.6). ~1:20,000. Confirm against each sublayer's own Min/Max scale in ?f=json.
+  dynamicMinScale: 20000,
+  // Every external call is bounded (§4.3). Nothing may block the modal forever.
+  // 8 s per QLD call / layer / view; the Esri bundle is a much larger download so
+  // it gets a little more headroom — still bounded, still bannered on expiry.
+  timeouts: { esri: 12000, meta: 8000, layer: 8000, view: 8000 }
 };
 
 const PIN_RGB = {
@@ -3788,6 +3831,7 @@ let includeMapCopy = false;
 const siteMap = {
   esriPromise: null, esri: null,
   overlay: null, mapHost: null, panelHost: null, bannerHost: null, statusHost: null,
+  diagHost: null, scaleHintHost: null, scaleWatchHandle: null,
   view: null, esriMap: null,
   layers: {},               // { imagery, road, contour, labels }
   contourIds: null,         // { "1":id, "5":id, "10":id } resolved from service
@@ -3797,8 +3841,76 @@ const siteMap = {
   pins: [],                 // resolved pin descriptors for the current table
   triggerEl: null,
   screenshot: { dataUrl: null, valid: false, meta: null },
-  building: false
+  building: false,
+  // In-app diagnostics (§6). The user has no DevTools, so every external
+  // dependency reports its own outcome here and nothing is console-only.
+  diag: null
 };
+
+// ---------------------------------------------------------------------------
+// External-call plumbing (§4.3): timeouts + timing + a self-reporting log.
+// Nothing external may block the modal indefinitely, so every fetch / layer
+// .load() / view.when() below goes through one of these bounded helpers.
+// ---------------------------------------------------------------------------
+function smNow(){ return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now(); }
+
+// A timeout that reads like a sentence a non-developer can relay (§6), e.g.
+// "Contours service did not respond within 8 s" — never a raw TypeError.
+function smTimeoutError(label, ms){
+  const e = new Error(label + " did not respond within " + Math.round(ms/1000) + " s");
+  e.isTimeout = true;
+  return e;
+}
+// Race any promise against a timeout. Rejects with a plain-language error on
+// expiry; clears its own timer either way.
+function withTimeout(promise, ms, label){
+  let timer;
+  const t = new Promise((_, rej)=>{ timer = setTimeout(()=> rej(smTimeoutError(label, ms)), ms); });
+  return Promise.race([promise, t]).finally(()=>{ clearTimeout(timer); });
+}
+// A JSON fetch that actually aborts on timeout (so a hung request is cancelled,
+// not just ignored) and returns how long it took. Throws a plain-language error.
+async function timedFetchJson(url, label, ms){
+  const start = smNow();
+  const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(()=> ctrl.abort(), ms) : null;
+  try{
+    const res = await fetch(url, ctrl ? { cache:"no-store", signal: ctrl.signal } : { cache:"no-store" });
+    const json = await res.json();
+    return { json, ms: Math.round(smNow() - start) };
+  }catch(e){
+    const err = (e && e.name === "AbortError") ? smTimeoutError(label, ms) : e;
+    err._ms = Math.round(smNow() - start);
+    throw err;
+  }finally{ if(timer) clearTimeout(timer); }
+}
+
+/* ---- diagnostics model (§6) ---------------------------------------------- */
+function freshDiag(){
+  return {
+    esri:     { status:"pending", ms:null, note:"" },
+    imagery:  { status:"pending", ms:null, note:"", layerClass:"" },
+    contours: { status:"pending", ms:null, note:"", sublayer:"" },
+    cadastre: { status:"pending", ms:null, note:"", resolved:"" },
+    road:     { status:"pending", ms:null, note:"" },
+    labels:   { status:"pending", ms:null, note:"" },
+    log: []
+  };
+}
+function resetDiag(){ siteMap.diag = freshDiag(); }
+function diagLog(msg){
+  if(!siteMap.diag) resetDiag();
+  const t = new Date().toLocaleTimeString();
+  siteMap.diag.log.push("[" + t + "] " + msg);
+  if(siteMap.diag.log.length > 250) siteMap.diag.log.shift();
+}
+// Record an outcome for one dependency and refresh the panel if it's open.
+function setDiag(key, fields, logMsg){
+  if(!siteMap.diag) resetDiag();
+  if(siteMap.diag[key]) Object.assign(siteMap.diag[key], fields);
+  if(logMsg) diagLog(logMsg);
+  renderDiagnostics();
+}
 
 /* ---- reading coordinates out of the active table (same source as the PS
         mirror: state[table][row].fields[field]) ---- */
@@ -3867,9 +3979,11 @@ function activeSitePins(){ return siteMap.pins.filter(p=>p.on && p.ok); }
 
 /* ---- lazy Esri loader (§5, §7.3): inject CSS + AMD loader once, on demand ---- */
 function loadEsri(){
-  if(siteMap.esri) return Promise.resolve(siteMap.esri);
+  if(siteMap.esri){ setDiag("esri", { status:"loaded" }); return Promise.resolve(siteMap.esri); }
   if(siteMap.esriPromise) return siteMap.esriPromise;
-  siteMap.esriPromise = new Promise((resolve, reject)=>{
+  const start = smNow();
+  diagLog("Loading the Esri map library from " + SITE_MAP_CONFIG.esriBase + " …");
+  const load = new Promise((resolve, reject)=>{
     try{
       const css = document.createElement("link");
       css.rel = "stylesheet";
@@ -3894,23 +4008,39 @@ function loadEsri(){
       document.head.appendChild(s);
     }catch(e){ reject(e); }
   });
-  // A slow/blocked CDN shouldn't hang forever.
-  const timeout = new Promise((_,rej)=> setTimeout(()=>rej(new Error("Timed out loading the map library")), 20000));
-  siteMap.esriPromise = Promise.race([siteMap.esriPromise, timeout]).catch(err=>{
-    siteMap.esriPromise = null;   // allow a later retry
-    throw err;
-  });
+  // A slow/blocked CDN shouldn't hang forever (§4.3). The bundle is large, so it
+  // gets more headroom than the QLD calls — but it is still bounded.
+  siteMap.esriPromise = withTimeout(load, SITE_MAP_CONFIG.timeouts.esri, "Esri map library (js.arcgis.com)")
+    .then(esri=>{
+      setDiag("esri", { status:"loaded", ms: Math.round(smNow()-start) }, "Esri map library loaded.");
+      return esri;
+    })
+    .catch(err=>{
+      siteMap.esriPromise = null;   // allow a later retry
+      setDiag("esri", { status: err.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: err.message||"error" },
+        "Esri map library " + (err.isTimeout ? "timed out" : "failed") + ": " + (err.message||"error"));
+      throw err;
+    });
   return siteMap.esriPromise;
 }
 
-/* ---- resolve the road-reserve filter from the LIVE cadastre schema (§5) ---- */
+/* ---- resolve the road-reserve filter from the LIVE cadastre schema (§5) ----
+   Bounded + timed (§4.3) and self-reporting (§6). Returns { field, where } on a
+   confident match, or null (caller withholds the layer and banners it). This is
+   deliberately OFF the modal's critical path (§4.1): the map opens without it. */
 async function resolveRoadWhere(){
   const base = SITE_MAP_CONFIG.cadastre + "/" + SITE_MAP_CONFIG.cadastreParcelsSublayer;
+  const T = SITE_MAP_CONFIG.timeouts.meta;
   let fields = [];
   try{
-    const meta = await fetch(base + "?f=json", { cache:"no-store" }).then(r=>r.json());
-    fields = (meta.fields || []).map(f=> String(f.name));
-  }catch(e){ return null; }   // schema unreadable → caller withholds the layer
+    const { json, ms } = await timedFetchJson(base + "?f=json", "Cadastre schema (cadastre ?f=json)", T);
+    fields = (json.fields || []).map(f=> String(f.name));
+    setDiag("cadastre", { ms }, "Cadastre schema returned " + fields.length + " fields.");
+  }catch(e){
+    setDiag("cadastre", { status: e.isTimeout ? "timed out" : "failed", ms: e._ms||null, note: e.message||"error" },
+      "Cadastre schema lookup " + (e.isTimeout ? "timed out" : "failed") + ": " + (e.message||"error"));
+    return null;   // schema unreadable → caller withholds the layer
+  }
   const lower = fields.map(f=>f.toLowerCase());
   const candidates = SITE_MAP_CONFIG.roadFieldCandidates
     .filter(c => lower.includes(c.toLowerCase()))
@@ -3919,21 +4049,25 @@ async function resolveRoadWhere(){
     const where = "UPPER(" + field + ") LIKE '%ROAD%'";
     try{
       const q = base + "/query?where=" + encodeURIComponent(where) + "&returnCountOnly=true&f=json";
-      const res = await fetch(q, { cache:"no-store" }).then(r=>r.json());
-      if(res && typeof res.count === "number" && res.count > 0){
+      const { json } = await timedFetchJson(q, "Cadastre road query", T);
+      if(json && typeof json.count === "number" && json.count > 0){
+        setDiag("cadastre", { status:"resolved", resolved: field + " LIKE '%ROAD%' (" + json.count + " parcels)" },
+          "Road filter resolved: UPPER(" + field + ") LIKE '%ROAD%' matched " + json.count + " parcels.");
         return { field, where };
       }
-    }catch(e){ /* try the next candidate */ }
+    }catch(e){ diagLog("Road field candidate '" + field + "' query failed: " + (e.message||"error")); }
   }
+  setDiag("cadastre", { status:"failed", note:"schema read, but no candidate field returned road parcels" },
+    "Cadastre schema read, but no candidate field (" + SITE_MAP_CONFIG.roadFieldCandidates.join(", ") + ") returned road parcels.");
   return null;   // nothing resolved → withhold road layer, show banner (§5)
 }
 
-/* ---- probe contour sublayer IDs by name (1 m / 5 m / 10 m) ---- */
+/* ---- probe contour sublayer IDs by name (1 m / 5 m / 10 m), bounded (§4.3) ---- */
 async function resolveContourLayers(){
   const ids = { "1": SITE_MAP_CONFIG.contourSublayers["1"], "5": SITE_MAP_CONFIG.contourSublayers["5"], "10": SITE_MAP_CONFIG.contourSublayers["10"] };
   try{
-    const meta = await fetch(SITE_MAP_CONFIG.contours + "?f=json", { cache:"no-store" }).then(r=>r.json());
-    (meta.layers || []).forEach(l=>{
+    const { json } = await timedFetchJson(SITE_MAP_CONFIG.contours + "?f=json", "Contours schema (contours ?f=json)", SITE_MAP_CONFIG.timeouts.meta);
+    (json.layers || []).forEach(l=>{
       const n = String(l.name||"").toLowerCase();
       if(/lidar/.test(n) || /contour/.test(n)){
         if(/\b1\s*m\b/.test(n))  ids["1"]  = l.id;
@@ -3941,7 +4075,8 @@ async function resolveContourLayers(){
         if(/\b10\s*m\b/.test(n)) ids["10"] = l.id;
       }
     });
-  }catch(e){ /* keep defaults */ }
+    diagLog("Contours schema resolved sublayer IDs — 1 m:" + ids["1"] + " 5 m:" + ids["5"] + " 10 m:" + ids["10"] + ".");
+  }catch(e){ diagLog("Contours schema probe " + (e.isTimeout ? "timed out" : "failed") + " (" + (e.message||"error") + ") — using fallback IDs 1 m:" + ids["1"] + "."); }
   siteMap.contourIds = ids;
   return ids;
 }
@@ -3957,77 +4092,184 @@ function siteMapBanner(msg, kind){
 }
 function clearSiteMapBanners(){ if(siteMap.bannerHost) siteMap.bannerHost.innerHTML = ""; }
 
-/* ---- build the MapView + layers once, into a container ---- */
-async function buildView(container){
+/* ---- where to construct the view (§4.5) ---------------------------------- */
+// The initial extent is the anchor pin's coordinate — NOT a default state/CBD
+// extent that a post-load goTo then has to correct. If that goTo never runs
+// (blocked await upstream) the map must still be framed on the site, so the
+// framing cannot depend on any async step completing.
+function anchorCoord(){
+  const pins = activeSitePins();
+  const anchor = pins.find(p=>p.anchor) || pins[0];
+  if(anchor && anchor.ok) return { center: [anchor.lon, anchor.lat], zoom: SITE_MAP_CONFIG.anchorZoom, from:"anchor pin" };
+  return { center: [153.0234, -27.4710], zoom: 9, from:"default (no pins)" };
+}
+
+function hideSiteMapOverlay(){ if(siteMap.statusHost){ siteMap.statusHost.hidden = true; } }
+
+/* ---- scale hint (§4.6): tell the user why contours/road aren't showing ---- */
+function startScaleHintWatch(view){
+  const E = siteMap.esri;
+  if(siteMap.scaleWatchHandle){ try{ siteMap.scaleWatchHandle.remove(); }catch(_){} siteMap.scaleWatchHandle = null; }
+  const update = ()=> updateScaleHint(view);
+  update();
+  try{ siteMap.scaleWatchHandle = E.reactiveUtils.watch(()=> view.scale, update); }catch(_){}
+}
+function updateScaleHint(view){
+  const host = siteMap.scaleHintHost;
+  if(!host) return;
+  const s = view && view.scale;
+  if(s && s > SITE_MAP_CONFIG.dynamicMinScale){
+    host.hidden = false;
+    host.textContent = "Zoom in to see contours and road reserve — they are hidden at this scale.";
+  } else { host.hidden = true; host.textContent = ""; }
+}
+
+/* ---- individual layer loaders, each bounded + self-reporting (§4.3, §6) ----
+   `silent` suppresses banners/diagnostics for the throwaway off-screen copy view
+   (captureOffscreen) so it never disturbs the interactive modal's report. */
+async function loadImageryLayer(imagery, map, silent){
+  const start = smNow();
+  try{
+    // §3/§4.2: the ImageServer reports a Single Fused Map Cache, so it must be an
+    // ImageryTileLayer (pre-built /tile/{z}/{y}/{x}), not a dynamic ImageryLayer.
+    await withTimeout(imagery.load(), SITE_MAP_CONFIG.timeouts.layer, "Imagery service (ImageServer)");
+    if(!silent) setDiag("imagery", { status:"loaded", ms: Math.round(smNow()-start), layerClass:"ImageryTileLayer" }, "Imagery loaded as ImageryTileLayer (tiled).");
+  }catch(e){
+    // Last-resort fallback to a dynamic ImageryLayer. Per §4.2 this should not be
+    // needed; if it ever is, the diagnostics say so plainly.
+    try{
+      try{ map.remove(imagery); }catch(_){}
+      const dyn = new siteMap.esri.ImageryLayer({ url: SITE_MAP_CONFIG.imagery });
+      await withTimeout(dyn.load(), SITE_MAP_CONFIG.timeouts.layer, "Imagery service (ImageServer, dynamic)");
+      siteMap.layers.imagery = dyn; map.add(dyn, 0);
+      if(!silent){
+        setDiag("imagery", { status:"loaded", ms: Math.round(smNow()-start), layerClass:"ImageryLayer (dynamic fallback)" }, "Tiled imagery failed; loaded dynamic ImageryLayer fallback.");
+        siteMapBanner("Imagery loaded in slower dynamic mode (tiled imagery was unavailable).", "warn");
+      }
+    }catch(e2){
+      if(!silent){
+        setDiag("imagery", { status: e.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: e.message||"error", layerClass:"ImageryTileLayer" }, "Imagery service " + (e.isTimeout?"timed out":"failed") + ": " + (e.message||"error"));
+        siteMapBanner("Imagery did not load: " + (e.message||"error") + ". The rest of the map still works.", "error");
+      }
+    }
+  }
+}
+async function loadContourLayer(map, silent){
+  const start = smNow();
+  try{
+    await resolveContourLayers();   // sets siteMap.contourIds (bounded fetch inside)
+    const subs = [];
+    ["1","5","10"].forEach(k=>{ if(siteMap.contourIds[k] != null) subs.push({ id: siteMap.contourIds[k], visible: k === siteMap.contourInterval }); });
+    if(!subs.length){ if(!silent) setDiag("contours", { status:"failed", ms: Math.round(smNow()-start), note:"no contour sublayers resolved" }, "No contour sublayers could be resolved."); return; }
+    const contour = new siteMap.esri.MapImageLayer({ url: SITE_MAP_CONFIG.contours, opacity: 0.7, minScale: SITE_MAP_CONFIG.dynamicMinScale, sublayers: subs });
+    await withTimeout(contour.load(), SITE_MAP_CONFIG.timeouts.layer, "Contours service (MapServer)");
+    siteMap.layers.contour = contour; map.add(contour);
+    const shownId = siteMap.contourIds[siteMap.contourInterval];
+    if(!silent) setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + shownId + ")" }, "Contours loaded (showing " + siteMap.contourInterval + " m, sublayer id " + shownId + ").");
+  }catch(e){
+    if(!silent){
+      setDiag("contours", { status: e.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: e.message||"error" }, "Contours service " + (e.isTimeout?"timed out":"failed") + ": " + (e.message||"error"));
+      siteMapBanner("Contour layer did not load (" + (e.message||"error") + "). Imagery and pins are unaffected.", "error");
+    }
+  }
+}
+async function loadRoadLayer(map, silent){
+  const start = smNow();
+  try{
+    const road = await resolveRoadWhere();   // bounded + diag inside; off critical path (§4.1)
+    if(road){
+      const roadLayer = new siteMap.esri.MapImageLayer({
+        url: SITE_MAP_CONFIG.cadastre, opacity: 0.85, minScale: SITE_MAP_CONFIG.dynamicMinScale,
+        sublayers: [{ id: SITE_MAP_CONFIG.cadastreParcelsSublayer, visible:true, definitionExpression: road.where }]
+      });
+      await withTimeout(roadLayer.load(), SITE_MAP_CONFIG.timeouts.layer, "Road reserve (cadastre MapServer)");
+      siteMap.layers.road = roadLayer; map.add(roadLayer);
+      if(!silent) setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where }, "Road reserve layer applied (" + road.where + ").");
+    } else if(!silent){
+      setDiag("road", { status:"withheld", ms: Math.round(smNow()-start), note:"road filter could not be resolved from the live cadastre schema" }, "Road reserve withheld — filter not resolved.");
+      siteMapBanner("Road reserve hidden: could not resolve the road filter from the live cadastre schema. Showing imagery + contours only (never unfiltered cadastre).", "warn");
+    }
+  }catch(e){
+    if(!silent){
+      setDiag("road", { status: e.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: e.message||"error" }, "Road reserve " + (e.isTimeout?"timed out":"failed") + ": " + (e.message||"error"));
+      siteMapBanner("Road reserve layer did not load (" + (e.message||"error") + "). The rest of the map is unaffected.", "error");
+    }
+  }
+}
+async function loadLabelsLayer(map, silent){
+  const start = smNow();
+  try{
+    const labels = new siteMap.esri.MapImageLayer({ url: SITE_MAP_CONFIG.imageryLabels, opacity: 0.9 });
+    await withTimeout(labels.load(), SITE_MAP_CONFIG.timeouts.layer, "Imagery labels service");
+    siteMap.layers.labels = labels; map.add(labels);
+    if(!silent) setDiag("labels", { status:"loaded", ms: Math.round(smNow()-start) }, "Imagery labels loaded.");
+  }catch(e){
+    if(!silent) setDiag("labels", { status: e.isTimeout ? "timed out" : "not loaded", ms: Math.round(smNow()-start), note: e.message||"error" }, "Imagery labels not loaded (optional): " + (e.message||"error"));
+  }
+}
+
+/* ---- build the MapView + layers once, into a container ----
+   Critical restructure (§4.1, §4.4, §4.5): construct the view AT the anchor pin,
+   clear the "Loading map…" overlay on view.when() and nothing else, then stream
+   the operational layers in underneath — none of which may block the modal. Each
+   external step is bounded (§4.3). For the interactive modal the layer loads are
+   fire-and-forget; the off-screen copy view awaits them so the screenshot is
+   complete. */
+async function buildView(container, opts){
+  opts = opts || {};
+  const offscreen = !!opts.offscreen;
   const E = siteMap.esri;
   const map = new E.Map();
   siteMap.esriMap = map;
+  siteMap.layers = {};
 
-  // Imagery base (ImageServer → ImageryLayer; ImageryTileLayer if it is a cache).
-  try{
-    let imagery;
-    try{ imagery = new E.ImageryTileLayer({ url: SITE_MAP_CONFIG.imagery }); await imagery.load(); }
-    catch(_){ imagery = new E.ImageryLayer({ url: SITE_MAP_CONFIG.imagery }); await imagery.load(); }
-    siteMap.layers.imagery = imagery;
-    map.add(imagery);
-  }catch(e){ siteMapBanner("Imagery layer failed to load ("+ (e.message||"error") +").", "error"); }
+  // Imagery created + added up front so it is the bottom layer; loaded below.
+  const imagery = new E.ImageryTileLayer({ url: SITE_MAP_CONFIG.imagery });
+  siteMap.layers.imagery = imagery;
+  map.add(imagery);
+  if(!offscreen) setDiag("imagery", { layerClass: "ImageryTileLayer" });
 
-  // Road reserve — resolved + filtered from the live schema, or withheld (§5).
-  try{
-    const road = await resolveRoadWhere();
-    if(road){
-      const roadLayer = new E.MapImageLayer({
-        url: SITE_MAP_CONFIG.cadastre, opacity: 0.85,
-        sublayers: [{ id: SITE_MAP_CONFIG.cadastreParcelsSublayer, visible:true, definitionExpression: road.where }]
-      });
-      await roadLayer.load();
-      siteMap.layers.road = roadLayer;
-      map.add(roadLayer);
-    } else {
-      siteMapBanner("Road reserve hidden: could not resolve the road filter from the live cadastre schema. Showing imagery + contours only (never unfiltered cadastre).", "warn");
-    }
-  }catch(e){ siteMapBanner("Road reserve layer failed to load ("+ (e.message||"error") +").", "error"); }
-
-  // Contours (interval-selectable). All resolved sublayers added; visibility
-  // toggled by interval.
-  try{
-    await resolveContourLayers();
-    const subs = [];
-    ["1","5","10"].forEach(k=>{ if(siteMap.contourIds[k] != null) subs.push({ id: siteMap.contourIds[k], visible: k === siteMap.contourInterval }); });
-    if(subs.length){
-      const contour = new E.MapImageLayer({ url: SITE_MAP_CONFIG.contours, opacity: 0.7, sublayers: subs });
-      await contour.load();
-      siteMap.layers.contour = contour;
-      map.add(contour);
-    }
-  }catch(e){ siteMapBanner("Contour layer failed to load ("+ (e.message||"error") +").", "error"); }
-
-  // Optional imagery labels on top of the imagery.
-  try{
-    const labels = new E.MapImageLayer({ url: SITE_MAP_CONFIG.imageryLabels, opacity: 0.9 });
-    await labels.load();
-    siteMap.layers.labels = labels;
-    map.add(labels);
-  }catch(e){ /* labels are optional; ignore */ }
-
+  // Construct at the anchor pin (§4.5). No async step gates the initial framing.
+  const a = anchorCoord();
+  diagLog("Constructing map view at " + a.from + " " + formatCoord(a.center[1], a.center[0]) + " (zoom " + a.zoom + ").");
   const view = new E.MapView({
     container, map,
-    center: [153.0234, -27.4710], zoom: 6,
+    center: a.center, zoom: a.zoom,
     popup: { dockEnabled:false, collapseEnabled:false }
   });
   siteMap.view = view;
-  await view.when();
 
-  // First *manual* pan/zoom latches userHasAdjustedView and stops auto-refit;
-  // it also invalidates the cached screenshot (§6.1, §7.3). Watch `interacting`
-  // (true only on real user pointer/wheel/keyboard input) — NOT `navigating`,
-  // which is also set by our own programmatic goTo auto-fit and would latch it
-  // the moment the map first framed itself.
-  E.reactiveUtils.when(()=> view.interacting, ()=>{
-    if(!siteMap.userHasAdjustedView){ siteMap.userHasAdjustedView = true; renderSiteMapPanel(); }
-    invalidateScreenshot();
-  });
-  E.reactiveUtils.watch(()=> view.stationary, (stationary)=>{ if(stationary) invalidateScreenshot(); });
+  // Overlay clears on view.when() and NOTHING else (§4.4). view.when() is bounded
+  // (§4.3) so a wedged view cannot leave the spinner up forever.
+  await withTimeout(view.when(), SITE_MAP_CONFIG.timeouts.view, "Map view");
+
+  if(!offscreen){
+    hideSiteMapOverlay();
+
+    // First *manual* pan/zoom latches userHasAdjustedView and stops auto-refit;
+    // it also invalidates the cached screenshot (§6.1, §7.3). Watch `interacting`
+    // (true only on real user input) — NOT `navigating`, which our own goTo sets.
+    E.reactiveUtils.when(()=> view.interacting, ()=>{
+      if(!siteMap.userHasAdjustedView){ siteMap.userHasAdjustedView = true; renderSiteMapPanel(); }
+      invalidateScreenshot();
+    });
+    E.reactiveUtils.watch(()=> view.stationary, (stationary)=>{ if(stationary){ invalidateScreenshot(); renderDiagnostics(); } });
+    startScaleHintWatch(view);
+    renderDiagnostics();
+
+    // Stream the operational layers in WITHOUT blocking the already-open modal.
+    loadImageryLayer(imagery, map, false);
+    loadContourLayer(map, false);
+    loadRoadLayer(map, false);       // road resolution is OFF the critical path (§4.1)
+    loadLabelsLayer(map, false);
+  } else {
+    // Off-screen copy view — the screenshot needs the layers present, so await
+    // them (still bounded, so this path can't hang either).
+    await loadImageryLayer(imagery, map, true);
+    await loadContourLayer(map, true);
+    await loadRoadLayer(map, true);
+    await loadLabelsLayer(map, true);
+  }
 
   return view;
 }
@@ -4141,12 +4383,23 @@ function buildSiteMapModal(){
       </div>
       <div class="smap-banners"></div>
       <div class="modal-body smap-body">
-        <div class="smap-map"><div class="smap-status"></div></div>
+        <div class="smap-map">
+          <div class="smap-status"></div>
+          <div class="smap-scalehint" hidden></div>
+        </div>
         <aside class="smap-panel">
           <div class="smap-panel-head">Pins on the map</div>
           <div class="smap-pin-list"></div>
           <div class="smap-legend"></div>
           <div class="smap-credit"></div>
+          <details class="smap-diag">
+            <summary>Map diagnostics</summary>
+            <div class="smap-diag-body">
+              <p class="smap-diag-hint">If the map ever misbehaves, open this, press <strong>Copy</strong>, and paste it back to us — it says exactly which service worked and which didn't.</p>
+              <button type="button" class="btn btn-secondary smap-diag-copy" style="padding:5px 10px;">Copy diagnostics</button>
+              <pre class="smap-diag-text"></pre>
+            </div>
+          </details>
         </aside>
       </div>
     </div>`;
@@ -4156,6 +4409,19 @@ function buildSiteMapModal(){
   siteMap.statusHost= overlay.querySelector(".smap-status");
   siteMap.panelHost = overlay.querySelector(".smap-pin-list");
   siteMap.bannerHost= overlay.querySelector(".smap-banners");
+  siteMap.diagHost  = overlay.querySelector(".smap-diag");
+  siteMap.scaleHintHost = overlay.querySelector(".smap-scalehint");
+
+  const diagCopyBtn = overlay.querySelector(".smap-diag-copy");
+  if(diagCopyBtn) diagCopyBtn.addEventListener("click", async ()=>{
+    const text = diagnosticsText();
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(text); }
+      else{ const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+      diagCopyBtn.textContent = "Copied ✓";
+      setTimeout(()=>{ diagCopyBtn.textContent = "Copy diagnostics"; }, 2000);
+    }catch(_){ diagCopyBtn.textContent = "Copy failed — select the text below"; }
+  });
 
   overlay.querySelector(".smap-close").addEventListener("click", closeSiteMap);
   overlay.addEventListener("mousedown", (e)=>{ if(e.target === overlay) closeSiteMap(); });
@@ -4187,6 +4453,64 @@ function updateIntervalStamp(){
   const el = siteMap.overlay.querySelector(".smap-interval-stamp");
   if(el) el.textContent = siteMap.renderedInterval && siteMap.renderedInterval !== siteMap.contourInterval
     ? "(showing " + siteMap.renderedInterval + " m)" : "";
+}
+
+/* ---- diagnostics rendering (§6) ------------------------------------------
+   The user has no DevTools, so the modal reports on itself in plain language.
+   Everything the diagnostics panel shows is also what the Copy button copies. */
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371, toRad = x => x*Math.PI/180;
+  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  const s = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(s)));
+}
+function fmtDiagDur(d){ return (d && d.ms != null) ? " (" + (d.ms/1000).toFixed(1) + " s)" : ""; }
+function diagLine(label, d){
+  return "- " + label + ": " + ((d && d.status) || "pending") + fmtDiagDur(d) + (d && d.note ? " — " + d.note : "");
+}
+function diagnosticsText(){
+  const d = siteMap.diag || freshDiag();
+  const view = siteMap.view;
+  const pins = activeSitePins();
+  const a = anchorCoord();
+  const anchorStr = a.from === "anchor pin" ? formatCoord(a.center[1], a.center[0]) : "(none — using a default extent)";
+
+  let centreStr = "—", scaleStr = "—", mismatch = "";
+  if(view && view.center && typeof view.center.latitude === "number"){
+    centreStr = formatCoord(view.center.latitude, view.center.longitude);
+    scaleStr  = view.scale ? "1:" + Math.round(view.scale).toLocaleString() : "—";
+    if(a.from === "anchor pin"){
+      const km = haversineKm(view.center.latitude, view.center.longitude, a.center[1], a.center[0]);
+      if(km > 1) mismatch = "\n  ** WARNING: view centre is ~" + (km < 10 ? km.toFixed(1) : Math.round(km)) +
+        " km from the anchor pin — the map is NOT framed on the site. **";
+    }
+  }
+
+  const L = [];
+  L.push("SoRT — Site Map diagnostics");
+  L.push(new Date().toLocaleString());
+  L.push("");
+  L.push("Anchor pin:   " + anchorStr);
+  L.push("Active pins:  " + pins.length);
+  L.push("View centre:  " + centreStr + "     Scale: " + scaleStr + mismatch);
+  L.push("");
+  L.push("External dependencies:");
+  L.push(diagLine("Esri CDN (js.arcgis.com)", d.esri));
+  L.push(diagLine("Imagery ImageServer [" + (d.imagery.layerClass || "?") + "]", d.imagery));
+  L.push(diagLine("Contours MapServer [sublayer " + (d.contours.sublayer || "?") + "]", d.contours));
+  L.push("- Cadastre ?f=json lookup: " + (d.cadastre.status || "pending") + fmtDiagDur(d.cadastre) +
+    (d.cadastre.resolved ? " — resolved to " + d.cadastre.resolved : (d.cadastre.note ? " — " + d.cadastre.note : "")));
+  L.push("- Road-reserve layer: " + (d.road.status || "pending") + fmtDiagDur(d.road) + (d.road.note ? " — " + d.road.note : ""));
+  L.push(diagLine("Imagery labels (optional)", d.labels));
+  L.push("");
+  L.push("Activity log:");
+  (d.log.length ? d.log : ["(nothing logged yet)"]).forEach(l => L.push("  " + l));
+  return L.join("\n");
+}
+function renderDiagnostics(){
+  if(!siteMap.diagHost) return;
+  const pre = siteMap.diagHost.querySelector(".smap-diag-text");
+  if(pre) pre.textContent = diagnosticsText();
 }
 
 function renderSiteMapPanel(){
@@ -4247,9 +4571,15 @@ async function openSiteMap(triggerEl){
   siteMap.statusHost.hidden = false;
   siteMap.statusHost.textContent = "Loading map…";
 
+  // Fresh build → start a clean diagnostics record. Re-open of an existing view
+  // keeps the record from the build that actually loaded the layers.
+  if(!siteMap.view) resetDiag();
+  renderDiagnostics();
+
   try{
     await loadEsri();
     if(!siteMap.view){
+      // buildView clears the overlay on view.when() and streams layers in (§4.4).
       await buildView(siteMap.mapHost);
       drawPins();
       await fitView();
@@ -4258,11 +4588,16 @@ async function openSiteMap(triggerEl){
       drawPins();
       await fitView();
     }
-    siteMap.statusHost.hidden = true;
+    hideSiteMapOverlay();
     updateIntervalStamp();
+    renderDiagnostics();
   }catch(err){
+    // Only the CDN load or the view itself failing lands here (layer failures are
+    // handled inline and never reach this point). Surface it in words and keep
+    // the diagnostics available so the user can copy them to us.
     siteMap.statusHost.hidden = false;
-    siteMap.statusHost.innerHTML = `<div class="smap-offline">🗺️ The site map requires a network connection.<br><span>${escapeHtml(err.message||"Could not load the map.")}</span></div>`;
+    siteMap.statusHost.innerHTML = `<div class="smap-offline">🗺️ The site map could not start.<br><span>${escapeHtml(err.message||"Could not load the map.")}</span><br><span>Open “Map diagnostics” in the panel for details.</span></div>`;
+    renderDiagnostics();
   }
 }
 
@@ -4391,16 +4726,23 @@ async function captureOffscreen(table){
   document.body.appendChild(host);
   // Build a throwaway view sharing the module's layer setup.
   const savedView = siteMap.view, savedMap = siteMap.esriMap, savedLayers = siteMap.layers, savedIds = siteMap.contourIds, savedRendered = siteMap.renderedInterval;
+  const savedDiag = siteMap.diag;   // don't let the throwaway view rewrite the modal's report
   siteMap.view = null; siteMap.esriMap = null; siteMap.layers = {};
   try{
-    await buildView(host);
+    await buildView(host, { offscreen: true });
     drawPins();
     // Off-screen path has no manual view to honour → default auto-fit (§6.1).
     const savedAdjust = siteMap.userHasAdjustedView; siteMap.userHasAdjustedView = false;
     await fitView();
     siteMap.userHasAdjustedView = savedAdjust;
     const view = siteMap.view;
-    await new Promise(res=> E.reactiveUtils.whenOnce(()=> !view.updating).then(res));
+    // Wait for the render to settle, but never indefinitely: `view.updating` can
+    // stay true forever while a layer retries (§4.4), so cap the wait and shoot
+    // whatever is on screen rather than hang the copy.
+    await Promise.race([
+      new Promise(res=> E.reactiveUtils.whenOnce(()=> !view.updating).then(res)),
+      new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.layer))
+    ]);
     const pv = pinsInView(view);
     const shot = await view.takeScreenshot({ width: SITE_MAP_CONFIG.screenshotWidth });
     const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
@@ -4410,8 +4752,9 @@ async function captureOffscreen(table){
   } finally {
     try{ if(siteMap.view) siteMap.view.destroy(); }catch(_){}
     host.remove();
-    // Restore the interactive view state.
+    // Restore the interactive view state (and the modal's diagnostics record).
     siteMap.view = savedView; siteMap.esriMap = savedMap; siteMap.layers = savedLayers; siteMap.contourIds = savedIds; siteMap.renderedInterval = savedRendered;
+    siteMap.diag = savedDiag;
   }
 }
 
