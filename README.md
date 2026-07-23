@@ -274,7 +274,15 @@ controls what that key may do.
           "note": "Requires GM approval",         // optional amber note
           "fields": [                             // optional free-text inputs
             { "key": "detail", "label": "Detail", "type": "text" }  // or "textarea"
-          ]
+          ],
+          "mapPin": {                             // optional: this row carries a coordinate for the Site Map
+            "field": "detail",                    // which of the row's `fields` holds the lat/long
+            "label": "Current location",          // pin label
+            "colour": "red",                      // red|orange|blue|purple|green|teal (or a #rrggbb)
+            "defaultOn": true,                    // pin ticked by default on the map
+            "anchor": true,                       // this pin is the default map centre
+            "requires": { "row": "relocation", "not": "No" }  // optional gate (see below)
+          }
         },
         { "shared": "comms" }                     // reference to a sharedRows entry
       ]
@@ -287,3 +295,66 @@ A table row is therefore **either** an inline row (the object shape above)
 **or** a reference `{ "shared": "<id>" }` pointing at a `sharedRows` entry with
 that `id`. References are resolved at render time, so one shared definition can
 appear in any number of tables; each table still collects its own answers.
+
+### `mapPin` — declaring a coordinate row for the Site Map
+
+Any row that holds a coordinate can declare a **`mapPin`** so it becomes a pin on
+the **Site Map** (see below). This is what makes adding a new coordinate row a
+*definitions* edit rather than a code change — nothing in the app hardcodes which
+rows are coordinates. `mapPin` fields:
+
+| Key | Meaning |
+| --- | --- |
+| `field` | **Required.** The `fields` key that holds the lat/long (e.g. `existing`). |
+| `label` | The pin's label in the panel, popup and legend. |
+| `colour` | `red`, `orange`, `blue`, `purple`, `green`, `teal`, or a `#rrggbb`. |
+| `defaultOn` | Whether the pin is ticked by default (default `true`). |
+| `anchor` | `true` marks this pin as the default map centre. One row should be the anchor. |
+| `requires` | Optional gate — show the pin only when another row's answer meets a condition: `{ "row": "<rowId>", "not": "No" }` (show unless that row's answer is "No") or `{ "row": "<rowId>", "equals": "Yes" }`. Evaluated generically; no row id is special-cased in code. |
+
+Edit a row's pin in **Manage Tables** (the *Site Map pin* section of the row
+editor, available for both table rows and common rows). Documents that predate
+`mapPin` are handled gracefully: if a loaded definition set declares **no** pin
+at all, the app seeds the well-known coordinate rows (`coords`, `relocation`,
+`riverCoords`, `riverRelocation`) with sensible defaults so the map works out of
+the box — exactly as it seeds a default Property Services block. Publish once to
+bake those defaults (or your own) into the central store.
+
+## Site Map
+
+The **Site Map** button (next to *Copy table for Word*) opens a modal showing the
+current table's coordinates over Queensland Government aerial imagery, 1 m LiDAR
+contours, and the road reserve (cadastral parcels filtered to road). Pins come
+from every row with a `mapPin` (above): `coords` always, `relocation` when it is
+not "No", and — on the Water Level table — `riverCoords` / `riverRelocation`.
+
+- **Row-selection panel** — tick/untick which pins show; the view re-fits as you
+  do (until you pan or zoom, after which **Reset view** restores auto-fit).
+- **Contour interval** — 1 m / 5 m / 10 m, defaulting to 1 m. Outside LiDAR
+  coverage the map falls back to a coarser interval and says which one it is
+  showing (1 m LiDAR only exists over the eastern/SEQ coverage area).
+- **Include in the Word copy** — tick *"Include site map in copied output"* to
+  paste a screenshot of the map (with pins, legend, contour interval and the
+  QLD/Esri attribution) into Word alongside the tables. The **Copy map image**
+  button is a one-step fallback if Word strips the inline image. What you see —
+  including any manual panning — is what gets pasted.
+- **Offline / no network** — the Esri library and the QLD services are external.
+  With no connection the modal says so and the Word copy still produces the
+  tables (the map is an enhancement to the copy, never a dependency of it).
+
+The map *services* (imagery / contour / cadastre endpoints) live in a documented
+`SITE_MAP_CONFIG` constant near the top of the script in `index.html`, so an
+endpoint move is a one-line edit. The road-reserve filter is **resolved against
+the live cadastre schema at runtime** — the app reads the layer's fields, picks
+the one that denotes road, and filters to it; if it cannot resolve cleanly it
+hides the road layer and shows a banner rather than drawing unfiltered cadastre.
+
+> **Note for maintainers:** the QLD ArcGIS endpoints and the Esri CDN could not
+> be reached from the build sandbox (blocked by network egress policy), so the
+> live map render, the road-filter resolution, the `takeScreenshot` CORS
+> behaviour, and the paste into desktop Word were **not** verifiable there. They
+> need a quick confirmation in a real browser on a normal network. If an endpoint
+> has moved, update `SITE_MAP_CONFIG`. Everything that does not need those
+> services (coordinate parsing/validation, pin resolution and gating, the panel,
+> the offline degradation, and the byte-identical copy when the tickbox is off)
+> is covered by the `verify` skill's checks.
