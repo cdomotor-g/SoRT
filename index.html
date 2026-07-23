@@ -4304,13 +4304,26 @@ async function loadImageryLayer(imagery, map, silent){
 
 // Elevation-label rendering for the FeatureLayer contour path (A4 §1): keep the
 // metre labels the MapImageLayer used to draw server-side, but under our control.
-function contourLabelingInfo(){
+// The elevation field name isn't hardcoded — it's detected from the layer schema
+// (detectElevationField) so a wrong guess can't silently break the labels.
+function contourLabelingInfo(fieldName){
+  if(!fieldName) return [];
   return [{
-    labelExpressionInfo: { expression: "Round($feature.ELEVATION, 1) + ' m'" },
+    labelExpressionInfo: { expression: "Text(Round($feature." + fieldName + ", 1)) + ' m'" },
     symbol: { type:"text", color:[40,30,15], haloColor:[255,255,255,0.9], haloSize:1, font:{ size:9, weight:"bold" } },
     minScale: 8000, maxScale: 0,
     labelPlacement: "center-along"
   }];
+}
+// Pick the field that holds the contour's elevation value from the layer's schema.
+function detectElevationField(layer){
+  const fields = (layer && layer.fields) || [];
+  const numeric = f => /small-integer|integer|single|double|long/.test(String(f.type||""));
+  // Prefer an obvious elevation/contour/height field; fall back to any numeric one.
+  const byName = fields.find(f=> numeric(f) && /elev|contour|height|^alt$|_alt|value|^z$/i.test(f.name));
+  if(byName) return byName.name;
+  const anyNum = fields.find(f=> numeric(f) && !/objectid|shape|fid|id$/i.test(f.name));
+  return anyNum ? anyNum.name : "";
 }
 function contourRenderer(){
   return { type:"simple", symbol:{ type:"simple-line", color:[150,90,30,0.9], width:0.7 } };
@@ -4334,11 +4347,13 @@ async function loadContourLayer(map, silent){
         url: SITE_MAP_CONFIG.contours + "/" + id,
         outFields: ["*"], opacity: 0.9,
         minScale: 0, maxScale: 0,
-        renderer: contourRenderer(),
-        labelingInfo: contourLabelingInfo(), labelsVisible: true
+        renderer: contourRenderer()
       });
       await withTimeout(fl.load(), SITE_MAP_CONFIG.timeouts.layer, "Contours service (FeatureLayer)");
       if(fl.capabilities && fl.capabilities.query && fl.capabilities.query.supportsQuery === false) throw new Error("sublayer does not support query");
+      const elevField = detectElevationField(fl);
+      if(elevField){ fl.labelingInfo = contourLabelingInfo(elevField); fl.labelsVisible = true; }
+      siteMap.contourElevField = elevField;
       siteMap.layers.contour = fl; siteMap.contourMode = "feature"; insertLayerOrdered(map, fl, "contour");
       if(!silent) setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + id + ")", mode:"FeatureLayer (client-side WebGL)" }, "Contours loaded as FeatureLayer (client-side, no per-pan round-trip) — " + siteMap.contourInterval + " m, sublayer id " + id + ".");
       return;
@@ -4752,8 +4767,9 @@ async function applyContourInterval(interval){
       const fl = new siteMap.esri.FeatureLayer({
         url: SITE_MAP_CONFIG.contours + "/" + id,
         outFields: ["*"], opacity: 0.9, minScale: 0, maxScale: 0,
-        renderer: contourRenderer(), labelingInfo: contourLabelingInfo(), labelsVisible: true
+        renderer: contourRenderer()
       });
+      fl.load().then(()=>{ const ef = detectElevationField(fl); if(ef){ fl.labelingInfo = contourLabelingInfo(ef); fl.labelsVisible = true; } }).catch(()=>{});
       siteMap.layers.contour = fl; insertLayerOrdered(map, fl, "contour");
     } else {
       const layer = siteMap.layers.contour;
