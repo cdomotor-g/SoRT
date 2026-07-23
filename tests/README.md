@@ -56,3 +56,24 @@ PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
 PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/pin-writeback.test.mjs
 ```
+
+## `road-filter.test.mjs` — invisible-road-reserve regression
+
+Guards `resolveRoadWhere()`: a candidate DCDB field must be validated against
+road parcels **near the site** (a ~2 km envelope around the anchor pin), never
+by a state-wide count alone. The original defect: `UPPER(tenure) LIKE '%ROAD%'`
+matched 202 parcels across all of Queensland — none near the site — so the
+road layer "applied" cleanly and drew nothing. The test also pins the fallback:
+when nothing matches locally, the **largest** state-wide match wins (not the
+first non-zero) and the diagnostics flag that nothing matched at this location.
+
+Unlike the other two tests this one **does** stub the QLD cadastre endpoint (via
+Playwright network interception) — that service is exactly what is unreachable
+from CI, and the resolution logic is pure request/response. The page code runs
+unmodified. Same invocation as above:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/road-filter.test.mjs
+```

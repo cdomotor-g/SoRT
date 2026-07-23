@@ -3854,11 +3854,17 @@ const SITE_MAP_CONFIG = {
   // must be ordered by design, not by completion time. Lower index = bottom.
   // Pins live in view.graphics and are always on top of every layer here.
   layerOrder: { imagery: 0, road: 1, contour: 2, labels: 3 },
-  // Candidate DCDB fields that may denote "road". The map reads the live schema,
-  // picks the first field that exists, and filters UPPER(field) LIKE '%ROAD%'.
-  // If none resolve (or none return features) the road layer is WITHHELD and a
-  // banner is shown — never full unfiltered cadastre (§5).
-  roadFieldCandidates: ["tenure","parcel_typ","parcel_type","feat_name","segpar_typ","lot_area"],
+  // Candidate DCDB fields that may denote "road". The map reads the live schema
+  // and filters UPPER(field) LIKE '%ROAD%'. A candidate is only accepted if it
+  // matches parcels NEAR THE SITE (resolveRoadWhere) — a state-wide count is not
+  // proof: `tenure` returns ~202 stray matches across all of Queensland, none of
+  // them road reserves near any given site, which made the layer "apply" while
+  // drawing nothing. parcel_typ (the DCDB parcel-type code, where road casements
+  // actually live) is tried first. If nothing resolves the road layer is
+  // WITHHELD and a banner is shown — never full unfiltered cadastre (§5).
+  roadFieldCandidates: ["parcel_typ","parcel_type","tenure","feat_name","segpar_typ"],
+  // Half-width (km) of the site envelope used to validate road-filter candidates.
+  roadProbeKm: 2,
   attribution: "© State of Queensland (Department of Natural Resources and Mines) — CC BY 4.0",
   screenshotWidth: 1600,
   offscreenSize: { width: 1000, height: 720 },
@@ -3959,9 +3965,9 @@ function freshDiag(){
   return {
     esri:     { status:"pending", ms:null, note:"" },
     imagery:  { status:"pending", ms:null, note:"", layerClass:"" },
-    contours: { status:"pending", ms:null, note:"", sublayer:"", mode:"" },
+    contours: { status:"pending", ms:null, note:"", sublayer:"", mode:"", drawn:"" },
     cadastre: { status:"pending", ms:null, note:"", resolved:"", serviceScale:"" },
-    road:     { status:"pending", ms:null, note:"", mode:"" },
+    road:     { status:"pending", ms:null, note:"", mode:"", drawn:"" },
     labels:   { status:"pending", ms:null, note:"" },
     // Screenshot capture (A5): did takeScreenshot land a raster on the canvas?
     screenshot: { status:"idle", note:"", dims:"", decoded:null },
@@ -4150,7 +4156,39 @@ function loadEsri(){
 /* ---- resolve the road-reserve filter from the LIVE cadastre schema (§5) ----
    Bounded + timed (§4.3) and self-reporting (§6). Returns { field, where } on a
    confident match, or null (caller withholds the layer and banners it). This is
-   deliberately OFF the modal's critical path (§4.1): the map opens without it. */
+   deliberately OFF the modal's critical path (§4.1): the map opens without it.
+
+   A candidate field is validated by counting road parcels NEAR THE SITE (a
+   ±roadProbeKm envelope around the anchor pin), not state-wide. A state-wide
+   count > 0 proved to be a false positive: `tenure` matched 202 parcels across
+   all of Queensland — none of them near the site — so the layer applied cleanly
+   and drew nothing (the exact reported symptom). Only if no candidate matches
+   near the site do we fall back to state-wide counts, and then we take the
+   LARGEST count (a real road-parcel field matches in the hundreds of thousands;
+   202-out-of-millions noise must lose to it), flagging in the diagnostics that
+   nothing matched at this location. */
+
+// WGS84 envelope of ±km around the anchor pin, or null when there is no anchor.
+function siteEnvelope(km){
+  const a = anchorCoord();
+  if(a.from !== "anchor pin") return null;
+  const lat = a.center[1], lon = a.center[0];
+  const dLat = km / 111.32;
+  const dLon = km / (111.32 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+  return { xmin: lon - dLon, ymin: lat - dLat, xmax: lon + dLon, ymax: lat + dLat,
+           spatialReference: { wkid: 4326 } };
+}
+
+// Bounded count of parcels matching `where`, optionally restricted to an
+// envelope. Returns the count, or null when the query fails / is malformed.
+async function countRoadParcels(base, where, env, T){
+  let q = base + "/query?where=" + encodeURIComponent(where) + "&returnCountOnly=true&f=json";
+  if(env) q += "&geometry=" + encodeURIComponent(JSON.stringify(env)) +
+    "&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects";
+  const { json } = await timedFetchJson(q, "Cadastre road query", T);
+  return (json && typeof json.count === "number") ? json.count : null;
+}
+
 async function resolveRoadWhere(){
   const base = SITE_MAP_CONFIG.cadastre + "/" + SITE_MAP_CONFIG.cadastreParcelsSublayer;
   const T = SITE_MAP_CONFIG.timeouts.meta;
@@ -4176,17 +4214,38 @@ async function resolveRoadWhere(){
   const candidates = SITE_MAP_CONFIG.roadFieldCandidates
     .filter(c => lower.includes(c.toLowerCase()))
     .map(c => fields[lower.indexOf(c.toLowerCase())]);
-  for(const field of candidates){
+
+  // Count every candidate in parallel (each bounded); a failed candidate counts
+  // as null and drops out rather than aborting the resolution.
+  const countAll = env => Promise.all(candidates.map(async field=>{
     const where = "UPPER(" + field + ") LIKE '%ROAD%'";
-    try{
-      const q = base + "/query?where=" + encodeURIComponent(where) + "&returnCountOnly=true&f=json";
-      const { json } = await timedFetchJson(q, "Cadastre road query", T);
-      if(json && typeof json.count === "number" && json.count > 0){
-        setDiag("cadastre", { status:"resolved", resolved: field + " LIKE '%ROAD%' (" + json.count + " parcels)" },
-          "Road filter resolved: UPPER(" + field + ") LIKE '%ROAD%' matched " + json.count + " parcels.");
-        return { field, where };
-      }
-    }catch(e){ diagLog("Road field candidate '" + field + "' query failed: " + (e.message||"error")); }
+    try{ return { field, where, count: await countRoadParcels(base, where, env, T) }; }
+    catch(e){ diagLog("Road field candidate '" + field + "' query failed: " + (e.message||"error")); return { field, where, count:null }; }
+  }));
+
+  const km = SITE_MAP_CONFIG.roadProbeKm;
+  const env = siteEnvelope(km);
+  if(env){
+    const local = await countAll(env);
+    const hit = local.find(r=> r.count > 0);
+    if(hit){
+      setDiag("cadastre", { status:"resolved", resolved: hit.field + " LIKE '%ROAD%' (" + hit.count + " parcels within ~" + km + " km of the site)" },
+        "Road filter resolved: UPPER(" + hit.field + ") LIKE '%ROAD%' matched " + hit.count + " parcels within ~" + km + " km of the site.");
+      return hit;
+    }
+    diagLog("No candidate field matched road parcels within ~" + km + " km of the site — falling back to state-wide counts.");
+  } else {
+    diagLog("No anchor pin to probe around — resolving the road filter from state-wide counts.");
+  }
+
+  const wide = await countAll(null);
+  let best = null;
+  wide.forEach(r=>{ if(r.count > 0 && (!best || r.count > best.count)) best = r; });
+  if(best){
+    const localNote = env ? " (none within ~" + km + " km of the site — the outline may not be visible at this location)" : "";
+    setDiag("cadastre", { status:"resolved", resolved: best.field + " LIKE '%ROAD%' (" + best.count + " parcels state-wide" + localNote + ")" },
+      "Road filter resolved from state-wide counts: UPPER(" + best.field + ") LIKE '%ROAD%' matched " + best.count + " parcels" + localNote + ".");
+    return best;
   }
   setDiag("cadastre", { status:"failed", note:"schema read, but no candidate field returned road parcels" },
     "Cadastre schema read, but no candidate field (" + SITE_MAP_CONFIG.roadFieldCandidates.join(", ") + ") returned road parcels.");
@@ -4329,6 +4388,54 @@ function contourRenderer(){
   return { type:"simple", symbol:{ type:"simple-line", color:[150,90,30,0.9], width:0.7 } };
 }
 
+/* The one place a contour FeatureLayer is built (initial load AND interval
+   switch). Two deliberate omissions/settings, both for time-to-first-paint:
+   - NO outFields: the API then fetches only the fields the renderer and labels
+     actually need. outFields:["*"] shipped every DCDB attribute of every 1 m
+     polyline in the extent and was a large share of the "contours take forever
+     to appear" payload.
+   - minScale = dynamicMinScale: the scale hint already tells the user contours
+     are hidden above 1:20,000, but the layer was created with minScale 0, so
+     zoomed-out views still queued enormous whole-region 1 m fetches that
+     starved the close-in ones. Now the layer really does stop at the hint. */
+function makeContourFeatureLayer(id){
+  return new siteMap.esri.FeatureLayer({
+    url: SITE_MAP_CONFIG.contours + "/" + id,
+    opacity: 0.9,
+    minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0,
+    renderer: contourRenderer()
+  });
+}
+
+/* First-draw report (§6): "loaded"/"applied" only means the layer's metadata
+   resolved — the road reserve applied cleanly for weeks while drawing nothing
+   at the site. So for each operational layer, record when its layer view first
+   finishes drawing and how many features landed in the current extent, and
+   shout in the log when that number is zero. */
+function reportLayerFirstDraw(layer, key, label, start){
+  const view = siteMap.view;
+  const E = siteMap.esri;
+  if(!view || !view.whenLayerView || !E || !E.reactiveUtils) return;
+  view.whenLayerView(layer).then(lv=>{
+    E.reactiveUtils.whenOnce(()=> lv.updating === false).then(()=>{
+      const secs = ((smNow() - start) / 1000).toFixed(1);
+      let counted;
+      try{
+        const q = layer.createQuery ? layer.createQuery() : null;
+        if(q && lv.queryFeatureCount){ q.geometry = view.extent; counted = lv.queryFeatureCount(q); }
+      }catch(_){ /* fall through to time-only */ }
+      Promise.resolve(counted).then(n=>{
+        const drawn = "first drawn in " + secs + " s" +
+          ((typeof n === "number") ? " — " + n + " feature" + (n === 1 ? "" : "s") + " in view" : "");
+        setDiag(key, { drawn }, label + " " + drawn + ".");
+        if(n === 0) diagLog("** " + label + " drew 0 features in the current view — nothing is visible here despite the layer loading. **");
+      }).catch(()=>{
+        setDiag(key, { drawn: "first drawn in " + secs + " s" }, label + " first drawn in " + secs + " s.");
+      });
+    });
+  }).catch(()=>{ /* layer view never materialised — the load diag already covers it */ });
+}
+
 /* Contours (A4): draw the requested interval as a FeatureLayer so it renders
    client-side with WebGL and caches features locally instead of round-tripping a
    server-side exportImage on every pan/zoom — the actual cause of the slowness.
@@ -4343,19 +4450,22 @@ async function loadContourLayer(map, silent){
     if(id == null){ if(!silent) setDiag("contours", { status:"failed", ms: Math.round(smNow()-start), note:"no contour sublayer resolved for " + siteMap.contourInterval + " m" }, "No contour sublayer resolved for " + siteMap.contourInterval + " m."); return; }
     // Primary: FeatureLayer on the single requested-interval sublayer (A4 §1).
     try{
-      const fl = new siteMap.esri.FeatureLayer({
-        url: SITE_MAP_CONFIG.contours + "/" + id,
-        outFields: ["*"], opacity: 0.9,
-        minScale: 0, maxScale: 0,
-        renderer: contourRenderer()
-      });
+      const fl = makeContourFeatureLayer(id);
       await withTimeout(fl.load(), SITE_MAP_CONFIG.timeouts.layer, "Contours service (FeatureLayer)");
-      if(fl.capabilities && fl.capabilities.query && fl.capabilities.query.supportsQuery === false) throw new Error("sublayer does not support query");
+      const qcap = fl.capabilities && fl.capabilities.query;
+      if(qcap && qcap.supportsQuery === false) throw new Error("sublayer does not support query");
+      // Without server-side quantization every 1 m polyline arrives at full
+      // LiDAR resolution — a server-rendered png8 export is faster to first
+      // paint than that, so hand over to the fallback and say why.
+      if(qcap && qcap.supportsQuantization === false) throw new Error("server cannot quantize geometries (full-resolution 1 m polylines would be fetched)");
       const elevField = detectElevationField(fl);
       if(elevField){ fl.labelingInfo = contourLabelingInfo(elevField); fl.labelsVisible = true; }
       siteMap.contourElevField = elevField;
       siteMap.layers.contour = fl; siteMap.contourMode = "feature"; insertLayerOrdered(map, fl, "contour");
-      if(!silent) setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + id + ")", mode:"FeatureLayer (client-side WebGL)" }, "Contours loaded as FeatureLayer (client-side, no per-pan round-trip) — " + siteMap.contourInterval + " m, sublayer id " + id + ".");
+      if(!silent){
+        setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + id + ")", mode:"FeatureLayer (client-side WebGL, lean fetch)" }, "Contours loaded as FeatureLayer (client-side, label field only, no per-pan round-trip) — " + siteMap.contourInterval + " m, sublayer id " + id + ".");
+        reportLayerFirstDraw(fl, "contours", "Contours", start);
+      }
       return;
     }catch(eFeat){
       diagLog("Contours FeatureLayer path unavailable (" + (eFeat.message||"error") + ") — falling back to a lean png8 MapImageLayer.");
@@ -4368,7 +4478,10 @@ async function loadContourLayer(map, silent){
     await withTimeout(contour.load(), SITE_MAP_CONFIG.timeouts.layer, "Contours service (MapServer)");
     siteMap.layers.contour = contour; siteMap.contourMode = "mapimage"; insertLayerOrdered(map, contour, "contour");
     const shownId = siteMap.contourIds[siteMap.contourInterval];
-    if(!silent) setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + shownId + ")", mode:"MapImageLayer png8 (server render)" }, "Contours loaded (MapImageLayer png8/dpi96, showing " + siteMap.contourInterval + " m, sublayer id " + shownId + ").");
+    if(!silent){
+      setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + shownId + ")", mode:"MapImageLayer png8 (server render)" }, "Contours loaded (MapImageLayer png8/dpi96, showing " + siteMap.contourInterval + " m, sublayer id " + shownId + ").");
+      reportLayerFirstDraw(contour, "contours", "Contours", start);
+    }
   }catch(e){
     if(!silent){
       setDiag("contours", { status: e.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: e.message||"error" }, "Contours service " + (e.isTimeout?"timed out":"failed") + ": " + (e.message||"error"));
@@ -4395,19 +4508,24 @@ async function loadRoadLayer(map, silent){
     }
     const outline = SITE_MAP_CONFIG.roadOutline;
     const roadRenderer = { type:"simple", symbol:{ type:"simple-fill", color:[0,0,0,0], outline:{ color: outline.color, width: outline.width } } };
-    // Primary: FeatureLayer — client-side symbology we control, no server maxScale.
+    // Primary: FeatureLayer — client-side symbology we control, no server
+    // maxScale. No outFields: the outline renderer needs no attributes, so the
+    // feature tiles carry geometry only.
     try{
       const fl = new siteMap.esri.FeatureLayer({
         url: SITE_MAP_CONFIG.cadastre + "/" + SITE_MAP_CONFIG.cadastreParcelsSublayer,
         definitionExpression: road.where,
-        outFields: ["*"], opacity: 1,
+        opacity: 1,
         minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0,   // no zoomed-in ceiling
         renderer: roadRenderer
       });
       await withTimeout(fl.load(), SITE_MAP_CONFIG.timeouts.layer, "Road reserve (cadastre FeatureLayer)");
       if(fl.capabilities && fl.capabilities.query && fl.capabilities.query.supportsQuery === false) throw new Error("sublayer does not support query");
       siteMap.layers.road = fl; insertLayerOrdered(map, fl, "road");
-      if(!silent) setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where, mode:"FeatureLayer, magenta outline, maxScale 0" }, "Road reserve applied as FeatureLayer (" + road.where + ") — magenta 2 px outline, no zoomed-in scale ceiling.");
+      if(!silent){
+        setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where, mode:"FeatureLayer, magenta outline, maxScale 0" }, "Road reserve applied as FeatureLayer (" + road.where + ") — magenta 2 px outline, no zoomed-in scale ceiling.");
+        reportLayerFirstDraw(fl, "road", "Road reserve", start);
+      }
       return;
     }catch(eFeat){
       diagLog("Road reserve FeatureLayer path unavailable (" + (eFeat.message||"error") + ") — falling back to MapImageLayer with the same outline.");
@@ -4420,7 +4538,10 @@ async function loadRoadLayer(map, silent){
     });
     await withTimeout(roadLayer.load(), SITE_MAP_CONFIG.timeouts.layer, "Road reserve (cadastre MapServer)");
     siteMap.layers.road = roadLayer; insertLayerOrdered(map, roadLayer, "road");
-    if(!silent) setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where, mode:"MapImageLayer, outline renderer, maxScale 0" }, "Road reserve applied as MapImageLayer (" + road.where + ") — outline renderer, no zoomed-in scale ceiling.");
+    if(!silent){
+      setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where, mode:"MapImageLayer, outline renderer, maxScale 0" }, "Road reserve applied as MapImageLayer (" + road.where + ") — outline renderer, no zoomed-in scale ceiling.");
+      reportLayerFirstDraw(roadLayer, "road", "Road reserve", start);
+    }
   }catch(e){
     if(!silent){
       setDiag("road", { status: e.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: e.message||"error" }, "Road reserve " + (e.isTimeout?"timed out":"failed") + ": " + (e.message||"error"));
@@ -4761,16 +4882,14 @@ async function applyContourInterval(interval){
     const id = siteMap.contourIds[k];
     if(id == null) return;
     if(siteMap.contourMode === "feature"){
-      // Point the FeatureLayer at the k-interval sublayer by rebuilding it in place.
+      // Point the FeatureLayer at the k-interval sublayer by rebuilding it in
+      // place (same lean factory as the initial load).
       const map = siteMap.esriMap;
       try{ if(siteMap.layers.contour) map.remove(siteMap.layers.contour); }catch(_){}
-      const fl = new siteMap.esri.FeatureLayer({
-        url: SITE_MAP_CONFIG.contours + "/" + id,
-        outFields: ["*"], opacity: 0.9, minScale: 0, maxScale: 0,
-        renderer: contourRenderer()
-      });
+      const fl = makeContourFeatureLayer(id);
       fl.load().then(()=>{ const ef = detectElevationField(fl); if(ef){ fl.labelingInfo = contourLabelingInfo(ef); fl.labelsVisible = true; } }).catch(()=>{});
       siteMap.layers.contour = fl; insertLayerOrdered(map, fl, "contour");
+      reportLayerFirstDraw(fl, "contours", "Contours (" + k + " m)", smNow());
     } else {
       const layer = siteMap.layers.contour;
       ["1","5","10"].forEach(kk=>{
@@ -4932,7 +5051,8 @@ function haversineKm(lat1, lon1, lat2, lon2){
 }
 function fmtDiagDur(d){ return (d && d.ms != null) ? " (" + (d.ms/1000).toFixed(1) + " s)" : ""; }
 function diagLine(label, d){
-  return "- " + label + ": " + ((d && d.status) || "pending") + fmtDiagDur(d) + (d && d.note ? " — " + d.note : "");
+  return "- " + label + ": " + ((d && d.status) || "pending") + fmtDiagDur(d) + (d && d.note ? " — " + d.note : "") +
+    (d && d.drawn ? " — " + d.drawn : "");
 }
 // Read the live layer stack for diagnostics (A5): each layer's title/type,
 // visibility, effective min/max scale, and its index in map.layers. "min/max
@@ -4987,7 +5107,7 @@ function diagnosticsText(){
   L.push("- Cadastre ?f=json lookup: " + (d.cadastre.status || "pending") + fmtDiagDur(d.cadastre) +
     (d.cadastre.resolved ? " — resolved to " + d.cadastre.resolved : (d.cadastre.note ? " — " + d.cadastre.note : "")));
   if(d.cadastre.serviceScale) L.push("    " + d.cadastre.serviceScale);
-  L.push("- Road-reserve layer: " + (d.road.status || "pending") + fmtDiagDur(d.road) + (d.road.note ? " — " + d.road.note : "") + (d.road.mode ? " [" + d.road.mode + "]" : ""));
+  L.push("- Road-reserve layer: " + (d.road.status || "pending") + fmtDiagDur(d.road) + (d.road.note ? " — " + d.road.note : "") + (d.road.mode ? " [" + d.road.mode + "]" : "") + (d.road.drawn ? " — " + d.road.drawn : ""));
   L.push(diagLine("Imagery labels (optional)", d.labels));
   L.push("");
   // Per-layer stack snapshot (A5): visible, effective min/max scale (what we set
