@@ -378,19 +378,27 @@ endpoint move is a one-line edit. The imagery ImageServer reports a *Single Fuse
 Map Cache*, so it is loaded as an **`ImageryTileLayer`** (pre-built tiles), not a
 plain `ImageryLayer` (which would re-render a dynamic mosaic on every pan/zoom).
 The road-reserve filter is **resolved against the live cadastre schema at
-runtime** — the app reads the layer's fields, picks the one that denotes road,
-and filters to it; if it cannot resolve cleanly it hides the road layer and shows
-a banner rather than drawing unfiltered cadastre. This lookup runs **off the
-critical path**: the map opens and frames the pins while it is still outstanding.
+runtime**, and — critically — validated **against the site, not the state**: a
+candidate field is only accepted if `UPPER(field) LIKE '%ROAD%'` matches parcels
+inside a ~2 km envelope around the anchor pin. A state-wide count proved to be a
+false positive (`tenure` matched 202 stray parcels across all of Queensland,
+none near any given site, so the layer "applied" while drawing nothing). If no
+candidate matches near the site, the resolver falls back to state-wide counts
+and takes the **largest** match (a genuine road-parcel field matches in bulk;
+202-out-of-millions noise loses), flagging in the diagnostics that nothing
+matched at this location. If nothing resolves at all, the road layer is hidden
+with a banner — never unfiltered cadastre. This lookup runs **off the critical
+path**: the map opens and frames the pins while it is still outstanding.
 
-> **Confirmed against the live service** (from a working diagnostics session, so
-> these are now facts, not candidates):
+> **Confirmed against the live service** (from working diagnostics sessions):
 >
-> - **Cadastre road field — resolved.** The road filter is
->   **`UPPER(tenure) LIKE '%ROAD%'`**, matching **202 parcels** at a real site.
->   `tenure` is the confirmed DCDB field; the rest of
->   `SITE_MAP_CONFIG.roadFieldCandidates` remain only as fallbacks should the
->   schema ever change.
+> - **Cadastre road field.** `tenure` was once recorded here as "the confirmed
+>   DCDB field" off a 202-parcel state-wide count — a real diagnostics session at
+>   a site with road reserves in view then showed those 202 parcels are nowhere
+>   near any site, which is why candidates are now validated site-locally, with
+>   `parcel_typ` (the DCDB parcel-type code) first in
+>   `SITE_MAP_CONFIG.roadFieldCandidates`. The diagnostics *Cadastre* line states
+>   which field resolved and whether it matched near the site or only state-wide.
 > - **Contour sublayer IDs — resolved.** 1 m = **30**, 5 m = **20**, 10 m = **10**
 >   on the `Elevation/Contours` MapServer. (These are also probed by name at
 >   runtime; the values above are what the live service returns.)
@@ -404,8 +412,19 @@ critical path**: the map opens and frames the pins while it is still outstanding
 > zoom — the diagnostics panel prints the service's declared min/max scale for
 > sublayer 4 so that suppression is visible if it ever recurs. Contours are drawn
 > as a **`FeatureLayer`** for the selected interval (client-side WebGL, no
-> per-pan `exportImage` round-trip), with a lean `png8`/dpi-96 `MapImageLayer`
-> fallback and an on/off toggle.
+> per-pan `exportImage` round-trip) with a deliberately **lean fetch** — no
+> `outFields`, so feature tiles carry only geometry plus the label field, and a
+> `minScale` matching the zoom hint so zoomed-out views never queue whole-region
+> 1 m fetches — falling back to a `png8`/dpi-96 `MapImageLayer` when the
+> FeatureLayer path is unavailable *or the server cannot quantize geometries*
+> (full-resolution 1 m LiDAR polylines are slower than a server render). There is
+> an on/off toggle for a fast imagery-and-pins map.
+>
+> Because "applied/loaded" only proves a layer's *metadata* resolved, the
+> diagnostics also report each operational layer's **first draw**: how long until
+> the layer view actually finished drawing and how many features landed in the
+> current extent — with a loud log warning when that count is zero (the exact
+> signature of the invisible-road-reserve defect).
 
 > **Note for maintainers:** the live map now renders correctly at real sites
 > (imagery, 1 m contours, pins, framing and diagnostics all confirmed). The QLD
