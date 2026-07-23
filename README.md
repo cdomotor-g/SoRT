@@ -328,6 +328,19 @@ contours, and the road reserve (cadastral parcels filtered to road). Pins come
 from every row with a `mapPin` (above): `coords` always, `relocation` when it is
 not "No", and — on the Water Level table — `riverCoords` / `riverRelocation`.
 
+- **Framing** — the view is *constructed at the anchor pin's coordinate* (not a
+  default state/CBD extent that a later `goTo` corrects), so it opens on the site
+  even if a slow service delays everything else. The "Loading map…" overlay clears
+  the instant the view is ready (`view.when()`), and the imagery / contour / road
+  layers stream in underneath — a map missing one layer is still usable.
+- **Map diagnostics** — a collapsed *Map diagnostics* disclosure in the side panel
+  reports, per external dependency (Esri CDN, imagery, contours, cadastre lookup,
+  road layer), whether it **loaded / failed / timed out** and how long it took,
+  plus the view centre vs. the anchor pin, the scale, and the active-pin count.
+  Press **Copy diagnostics** to copy it as plain text. This is the primary channel
+  for debugging the map on a locked-down PC with no browser DevTools — if the map
+  misbehaves, open it, copy, and paste it back. Every external call is bounded by
+  a timeout (see `SITE_MAP_CONFIG.timeouts`), so no service can ever hang the modal.
 - **Row-selection panel** — tick/untick which pins show; the view re-fits as you
   do (until you pan or zoom, after which **Reset view** restores auto-fit).
 - **Contour interval** — 1 m / 5 m / 10 m, defaulting to 1 m. Outside LiDAR
@@ -344,17 +357,38 @@ not "No", and — on the Water Level table — `riverCoords` / `riverRelocation`
 
 The map *services* (imagery / contour / cadastre endpoints) live in a documented
 `SITE_MAP_CONFIG` constant near the top of the script in `index.html`, so an
-endpoint move is a one-line edit. The road-reserve filter is **resolved against
-the live cadastre schema at runtime** — the app reads the layer's fields, picks
-the one that denotes road, and filters to it; if it cannot resolve cleanly it
-hides the road layer and shows a banner rather than drawing unfiltered cadastre.
+endpoint move is a one-line edit. The imagery ImageServer reports a *Single Fused
+Map Cache*, so it is loaded as an **`ImageryTileLayer`** (pre-built tiles), not a
+plain `ImageryLayer` (which would re-render a dynamic mosaic on every pan/zoom).
+The road-reserve filter is **resolved against the live cadastre schema at
+runtime** — the app reads the layer's fields, picks the one that denotes road,
+and filters to it; if it cannot resolve cleanly it hides the road layer and shows
+a banner rather than drawing unfiltered cadastre. This lookup runs **off the
+critical path**: the map opens and frames the pins while it is still outstanding.
+
+> **Outstanding unknown — cadastre road field.** Which DCDB field/value the road
+> filter resolves to is still not confirmed against the live service (egress to
+> the QLD hosts is blocked in the build sandbox). The candidate list is
+> `SITE_MAP_CONFIG.roadFieldCandidates` (currently `tenure`, `parcel_typ`,
+> `parcel_type`, `feat_name`, `segpar_typ`, `lot_area`). The **Map diagnostics**
+> panel now prints the field and value it actually resolved to (e.g. `tenure LIKE
+> '%ROAD%'`) — read it once on a real network and record the confirmed field here,
+> then the candidate list can be trimmed. The 1 m / 5 m / 10 m contour sublayer IDs
+> are likewise probed by name at runtime and reported in the same panel; confirm
+> them there too (the fallback for 1 m is sublayer `30`).
 
 > **Note for maintainers:** the QLD ArcGIS endpoints and the Esri CDN could not
 > be reached from the build sandbox (blocked by network egress policy), so the
 > live map render, the road-filter resolution, the `takeScreenshot` CORS
-> behaviour, and the paste into desktop Word were **not** verifiable there. They
-> need a quick confirmation in a real browser on a normal network. If an endpoint
-> has moved, update `SITE_MAP_CONFIG`. Everything that does not need those
-> services (coordinate parsing/validation, pin resolution and gating, the panel,
-> the offline degradation, and the byte-identical copy when the tickbox is off)
-> is covered by the `verify` skill's checks.
+> behaviour, and the paste into desktop Word were **not** verifiable there. What
+> *was* verified offline, against the real app code, with a mocked Esri CDN and
+> forced-failing QLD hosts (a Playwright harness): the modal opens centred on the
+> anchor pin, the overlay clears on `view.when()` before layers finish, every
+> external call is bounded by a timeout, and each host failing individually (and
+> all together, and a *hanging* cadastre/contours host) still opens the map with
+> an accurate banner — no code path leaves the overlay up. The live render still
+> needs a quick confirmation in a real browser. If an endpoint has moved, update
+> `SITE_MAP_CONFIG`. Everything that does not need those services (coordinate
+> parsing/validation, pin resolution and gating, the panel, the offline
+> degradation, and the byte-identical copy when the tickbox is off) is covered by
+> the `verify` skill's checks.
