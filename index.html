@@ -675,6 +675,54 @@
     font-family:"Cascadia Code",Consolas,"Courier New",monospace;
   }
 
+  /* Active state for the toolbar toggles (Move pins / Measure), §B1/§B2. */
+  .smap-move--on, .smap-measure--on{
+    border-color:var(--accent) !important; color:var(--accent-dark) !important;
+    background:var(--accent-soft) !important; font-weight:700;
+  }
+  /* Grab cursor while Move-pins mode is armed and the pointer is over a pin (§B1). */
+  .smap-map.smap-move-armed .esri-view-surface,
+  .smap-map.smap-move-armed canvas{ cursor:grab !important; }
+  .smap-map.smap-grabbing .esri-view-surface,
+  .smap-map.smap-grabbing canvas{ cursor:grabbing !important; }
+
+  /* Undo toast after a pin drag (§B1) — over the map, bottom-centre. */
+  .smap-toast-host{
+    position:absolute; left:50%; bottom:54px; transform:translateX(-50%); z-index:7;
+    display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none;
+  }
+  .smap-toast{
+    display:flex; align-items:center; gap:12px; padding:9px 14px; border-radius:10px;
+    background:rgba(21,37,49,.94); color:#fff; font-size:.8rem; line-height:1.35;
+    box-shadow:0 4px 14px rgba(0,0,0,.3); pointer-events:auto; max-width:520px;
+  }
+  .smap-toast-msg{ flex:1; }
+  .smap-toast-undo{
+    appearance:none; border:1px solid rgba(255,255,255,.5); background:transparent; color:#fff;
+    border-radius:7px; padding:4px 12px; font-size:.78rem; font-weight:700; cursor:pointer; white-space:nowrap;
+  }
+  .smap-toast-undo:hover{ background:rgba(255,255,255,.15); }
+
+  /* Legend coordinate on screen (§B3). */
+  .smap-legend-row{ align-items:flex-start; }
+  .smap-legend-text{ display:flex; flex-direction:column; gap:0; min-width:0; }
+  .smap-legend-label{ font-weight:600; }
+  .smap-legend-coord{ font-size:.72rem; color:var(--ink-soft); word-break:break-word; }
+
+  /* Auto-calculated relocation distance suggestion in the pin panel (§B4). */
+  .smap-distsuggest{
+    margin-top:6px; border-top:1px solid var(--line); padding-top:8px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .smap-distsuggest-row{ display:flex; align-items:center; gap:8px; font-size:.8rem; flex-wrap:wrap; }
+  .smap-distsuggest-val{ font-weight:700; }
+  .smap-distsuggest-use{
+    appearance:none; border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent-dark);
+    border-radius:7px; padding:3px 10px; font-size:.74rem; font-weight:700; cursor:pointer; white-space:nowrap;
+  }
+  .smap-distsuggest-use:hover{ background:var(--accent); color:#fff; }
+  .smap-distsuggest-note{ font-size:.72rem; color:var(--ink-soft); line-height:1.4; }
+
   @media (max-width: 720px){
     .smap-body{ flex-direction:column; }
     .smap-panel{ width:auto; border-left:none; border-top:1px solid var(--line); max-height:38%; }
@@ -4427,6 +4475,7 @@ async function buildView(container, opts){
     });
     E.reactiveUtils.watch(()=> view.stationary, (stationary)=>{ if(stationary){ invalidateScreenshot(); renderDiagnostics(); } });
     startScaleHintWatch(view);
+    attachPinDragHandlers(view);      // draggable pins in Move-pins mode (§B1)
     renderDiagnostics();
 
     // Stream the operational layers in WITHOUT blocking the already-open modal.
@@ -4453,12 +4502,14 @@ function drawPins(){
   const E = siteMap.esri;
   view.graphics.removeAll();
   activeSitePins().forEach(p=>{
-    view.graphics.add(new E.Graphic({
+    const g = new E.Graphic({
       geometry: { type:"point", longitude:p.lon, latitude:p.lat },
       symbol: { type:"simple-marker", color: pinRgb(p.colour), size:15, outline:{ color:[255,255,255], width:2 } },
       attributes: { label:p.label, coord: formatCoord(p.lat, p.lon) },
       popupTemplate: { title:"{label}", content:"{coord}" }
-    }));
+    });
+    g.__pin = p;                     // link the graphic back to its pin (§B1 drag)
+    view.graphics.add(g);
   });
 }
 
@@ -4485,6 +4536,184 @@ async function fitView(){
     }
   }catch(e){ /* goTo can reject if interrupted; ignore */ }
   invalidateScreenshot();
+}
+
+/* ============================================================================
+   PART B — draggable pins, distance measurement, legend coordinates, auto
+   relocation distance. Everything here edits or reads the USER'S coordinates,
+   so it is deliberately opt-in and reversible.
+   ========================================================================== */
+
+/* ---- Move-pins mode toggle (§B1) — off by default, unambiguous, cheap ---- */
+function setMoveMode(on){
+  siteMap.moveMode = (on == null) ? !siteMap.moveMode : !!on;
+  if(siteMap.moveMode && siteMap.measureWidget) setMeasureOn(false);   // mutually exclusive
+  const btn = siteMap.overlay && siteMap.overlay.querySelector(".smap-move");
+  if(btn){ btn.textContent = "Move pins: " + (siteMap.moveMode ? "on" : "off"); btn.setAttribute("aria-pressed", String(siteMap.moveMode)); btn.classList.toggle("smap-move--on", siteMap.moveMode); }
+  if(!siteMap.moveMode){
+    siteMap.hoverGraphic = null; siteMap.dragGraphic = null;
+    if(siteMap.mapHost) siteMap.mapHost.classList.remove("smap-move-armed","smap-grabbing");
+  }
+  if(siteMap.moveMode) siteMapBanner("Move-pins mode is on — drag a pin to reposition it; the new coordinate is written back to the table (with undo).", "warn");
+}
+
+// Find a pin graphic in a hitTest result (only our pins carry __pin).
+function findPinGraphic(hit){
+  if(!hit || !hit.results) return null;
+  for(const r of hit.results){
+    const g = r.graphic;
+    if(g && g.__pin && g.__pin.field) return g;
+  }
+  return null;
+}
+
+/* Attach the drag recipe (§B1). Hover sets a grab cursor over a draggable pin;
+   a drag that starts on a hovered pin repositions THAT pin (and stops the map
+   from panning), updates the readout live, and on release writes the rounded
+   coordinate back to the table with a toast + undo. */
+function attachPinDragHandlers(view){
+  view.on("pointer-move", (event)=>{
+    if(!siteMap.moveMode || siteMap.dragGraphic) return;
+    view.hitTest(event).then(hit=>{
+      const g = findPinGraphic(hit);
+      siteMap.hoverGraphic = g || null;
+      if(siteMap.mapHost) siteMap.mapHost.classList.toggle("smap-move-armed", !!g);
+    }).catch(()=>{});
+  });
+  view.on("drag", (event)=>{
+    if(!siteMap.moveMode) return;
+    if(event.action === "start"){
+      if(siteMap.hoverGraphic){
+        siteMap.dragGraphic = siteMap.hoverGraphic;
+        const geom = siteMap.dragGraphic.geometry;
+        siteMap.dragStart = geom ? { lat: geom.latitude, lon: geom.longitude } : null;
+        if(siteMap.mapHost) siteMap.mapHost.classList.add("smap-grabbing");
+        event.stopPropagation();              // don't pan the map while dragging a pin
+      }
+    } else if(event.action === "update" && siteMap.dragGraphic){
+      const pt = view.toMap({ x: event.x, y: event.y });
+      if(pt){
+        siteMap.dragGraphic.geometry = { type:"point", longitude: pt.longitude, latitude: pt.latitude };
+        updateDragReadout(siteMap.dragGraphic, pt.latitude, pt.longitude);
+      }
+      event.stopPropagation();
+    } else if(event.action === "end" && siteMap.dragGraphic){
+      const g = siteMap.dragGraphic;
+      siteMap.dragGraphic = null;
+      if(siteMap.mapHost) siteMap.mapHost.classList.remove("smap-grabbing");
+      finalizePinDrag(g);
+      event.stopPropagation();
+    }
+  });
+}
+
+// Live coordinate readout in the pin panel while dragging (§B1).
+function updateDragReadout(graphic, lat, lon){
+  const p = graphic.__pin; if(!p) return;
+  p.lat = lat; p.lon = lon;
+  const host = siteMap.panelHost;
+  if(host){
+    const row = host.querySelector('[data-pin-key="' + cssEscape(p.key) + '"] .smap-pin-coord');
+    if(row) row.textContent = formatCoord(lat, lon);
+  }
+  renderDistanceSuggestion();      // keep any relocation-distance suggestion live (§B4)
+}
+
+/* On release: round to 6 dp (~0.1 m), re-parse through the shared path, write it
+   back to the originating row's field in app state, and offer undo (§B1). */
+function finalizePinDrag(graphic){
+  const p = graphic.__pin; if(!p) return;
+  const table = activeTable(); if(!table){ return; }
+  const geom = graphic.geometry; if(!geom) return;
+  const lat = Math.round(geom.latitude*1e6)/1e6;
+  const lon = Math.round(geom.longitude*1e6)/1e6;
+  const newStr = formatCoord(lat, lon);              // decimal degrees — the app's canonical field format
+  const parsed = parseCoord(newStr);
+  if(!parsed.ok){ siteMapBanner("Could not apply the dragged coordinate.", "error"); return; }
+
+  const rs = state[table.id] && state[table.id][p.rowId];
+  if(!rs){ return; }
+  const prevValue = (rs.fields && rs.fields[p.field] != null) ? String(rs.fields[p.field]) : "";
+  if(!rs.fields) rs.fields = {};
+  rs.fields[p.field] = newStr;
+
+  // Distance moved, for the toast (geodesic-ish via Haversine — no new dependency).
+  const from = siteMap.dragStart;
+  const movedM = from ? Math.round(haversineKm(from.lat, from.lon, lat, lon) * 1000) : null;
+  siteMap.dragStart = null;
+
+  // Update descriptor, re-resolve pins from state, redraw, refresh dependents.
+  refreshPins(table);
+  drawPins();
+  invalidateScreenshot();
+  reflectTableEdit(table);           // builder field shows the new value on close
+  renderSiteMapPanel();              // panel readout + B4 suggestion follow along
+
+  siteMap.lastPinEdit = { tableId: table.id, rowId: p.rowId, field: p.field, prevValue };
+  const movedStr = (movedM == null) ? "" : (movedM >= 1000 ? (movedM/1000).toFixed(2) + " km" : movedM + " m");
+  showPinMoveToast((p.label || "Pin") + " moved" + (movedStr ? " " + movedStr : "") + " → " + newStr);
+}
+
+// Push a table edit made from the map back into the builder so the field shows
+// the new value without a manual refresh (§B1). Cheap; no persistence layer for
+// answers, so re-rendering the visible builder is all that's needed.
+function reflectTableEdit(table){
+  try{
+    if(typeof mode !== "undefined" && mode === "builder" && activeTableId === table.id && typeof renderRows === "function"){
+      renderRows();
+    } else if(typeof invalidateScreenshot === "function"){ /* nothing else to do */ }
+  }catch(_){ /* builder not present — ignore */ }
+}
+
+/* Undo toast after a drag (§B1). One at a time; auto-dismisses. */
+function showPinMoveToast(msg){
+  const host = siteMap.overlay && siteMap.overlay.querySelector(".smap-toast-host");
+  if(!host) return;
+  host.innerHTML = "";
+  const toast = document.createElement("div");
+  toast.className = "smap-toast";
+  const span = document.createElement("span");
+  span.className = "smap-toast-msg"; span.textContent = msg;
+  const undo = document.createElement("button");
+  undo.type = "button"; undo.className = "smap-toast-undo"; undo.textContent = "Undo";
+  let timer = setTimeout(()=>{ toast.remove(); }, 9000);
+  undo.addEventListener("click", ()=>{ clearTimeout(timer); undoPinMove(); toast.remove(); });
+  toast.appendChild(span); toast.appendChild(undo);
+  host.appendChild(toast);
+}
+function undoPinMove(){
+  const e = siteMap.lastPinEdit; if(!e) return;
+  const rs = state[e.tableId] && state[e.tableId][e.rowId];
+  if(rs){ if(!rs.fields) rs.fields = {}; rs.fields[e.field] = e.prevValue; }
+  siteMap.lastPinEdit = null;
+  const table = activeTable();
+  refreshPins(table); drawPins(); invalidateScreenshot();
+  reflectTableEdit(table); renderSiteMapPanel();
+  siteMapBanner("Reverted the pin move.", "warn");
+}
+
+/* ---- distance measurement widget (§B2) — geodesic, transient ---- */
+function setMeasureOn(on){
+  const view = siteMap.view;
+  const btn = siteMap.overlay && siteMap.overlay.querySelector(".smap-measure");
+  const want = (on == null) ? !siteMap.measureWidget : !!on;
+  if(want){
+    if(siteMap.moveMode) setMoveMode(false);        // mutually exclusive
+    if(!view || !siteMap.esri.DistanceMeasurement2D) return;
+    if(!siteMap.measureWidget){
+      // "metric" auto-switches m → km above 1 km; DistanceMeasurement2D is geodesic
+      // in a Web Mercator/geographic view. The widget carries its own New/Clear UI.
+      siteMap.measureWidget = new siteMap.esri.DistanceMeasurement2D({ view, unit: "metric" });
+      view.ui.add(siteMap.measureWidget, "top-right");
+      try{ siteMap.measureWidget.viewModel.start(); }catch(_){}
+    }
+  } else if(siteMap.measureWidget){
+    try{ siteMap.measureWidget.viewModel.clear(); }catch(_){}
+    try{ view && view.ui.remove(siteMap.measureWidget); }catch(_){}
+    try{ siteMap.measureWidget.destroy(); }catch(_){}
+    siteMap.measureWidget = null;
+  }
+  if(btn){ const active = !!siteMap.measureWidget; btn.setAttribute("aria-pressed", String(active)); btn.classList.toggle("smap-measure--on", active); btn.textContent = active ? "Measure: on" : "Measure"; }
 }
 
 /* ---- contours on/off toggle (A4 §4) ---- */
@@ -4585,6 +4814,8 @@ function buildSiteMapModal(){
         </div>
         <button type="button" class="btn btn-secondary smap-fitall" style="padding:6px 12px;">Fit all pins</button>
         <button type="button" class="btn btn-secondary smap-reset" style="padding:6px 12px;">Reset view</button>
+        <button type="button" class="btn btn-secondary smap-move" title="Turn on to drag pins to a new location — the coordinate is written back to the table" aria-pressed="false" style="padding:6px 12px;">Move pins: off</button>
+        <button type="button" class="btn btn-secondary smap-measure" title="Measure geodesic distance between points on the map" aria-pressed="false" style="padding:6px 12px;">Measure</button>
         <button type="button" class="icon-btn smap-close" title="Close" aria-label="Close">✕</button>
       </div>
       <div class="smap-banners"></div>
@@ -4592,6 +4823,7 @@ function buildSiteMapModal(){
         <div class="smap-map">
           <div class="smap-status"></div>
           <div class="smap-scalehint" hidden></div>
+          <div class="smap-toast-host"></div>
         </div>
         <aside class="smap-panel">
           <div class="smap-panel-head">Pins on the map</div>
@@ -4648,6 +4880,11 @@ function buildSiteMapModal(){
   overlay.querySelectorAll('input[name="smapInterval"]').forEach(r=>{
     r.addEventListener("change", ()=>{ if(r.checked){ clearSiteMapBanners(); applyContourInterval(r.value); } });
   });
+  // Move pins (§B1) + Measure (§B2) toggles.
+  const moveBtn = overlay.querySelector(".smap-move");
+  if(moveBtn) moveBtn.addEventListener("click", ()=>{ clearSiteMapBanners(); setMoveMode(); });
+  const measureBtn = overlay.querySelector(".smap-measure");
+  if(measureBtn) measureBtn.addEventListener("click", ()=> setMeasureOn());
   // Contours on/off (A4 §4): a fast imagery+pins map when contours aren't needed.
   const contoursChk = overlay.querySelector(".smap-contours-chk");
   if(contoursChk) contoursChk.addEventListener("change", ()=>{
@@ -4771,6 +5008,7 @@ function renderSiteMapPanel(){
   siteMap.pins.forEach(p=>{
     const row = document.createElement("label");
     row.className = "smap-pin" + (p.ok ? "" : " smap-pin--invalid");
+    row.dataset.pinKey = p.key;      // for the live drag readout (§B1)
     const cb = document.createElement("input");
     cb.type = "checkbox"; cb.checked = !!p.on; cb.disabled = !p.ok;
     cb.addEventListener("change", ()=>{
@@ -4778,6 +5016,7 @@ function renderSiteMapPanel(){
       drawPins();
       fitView();           // re-fit on selection change (unless user-adjusted)
       invalidateScreenshot();
+      renderDistanceSuggestion();
     });
     const dot = document.createElement("span");
     dot.className = "smap-dot"; dot.style.background = "rgb(" + pinRgb(p.colour).join(",") + ")";
@@ -4790,18 +5029,89 @@ function renderSiteMapPanel(){
     host.appendChild(row);
   });
 
-  // Legend + credit.
+  // Legend + credit. B3: show each pin's coordinate alongside its label on screen
+  // (the exported image carries them too, see compositeScreenshot). Iterate active
+  // pins directly so every pin's coordinate shows, not one per colour.
   const legend = siteMap.overlay.querySelector(".smap-legend");
-  const used = {};
-  siteMap.pins.filter(p=>p.ok).forEach(p=>{ used[p.colour] = p.label; });
-  legend.innerHTML = `<div class="smap-legend-head">Legend</div>` + Object.keys(used).map(c=>
-    `<div class="smap-legend-row"><span class="smap-dot" style="background:rgb(${pinRgb(c).join(",")})"></span>${escapeHtml(used[c])}</div>`
+  const active = activeSitePins();
+  legend.innerHTML = `<div class="smap-legend-head">Legend</div>` + active.map(p=>
+    `<div class="smap-legend-row"><span class="smap-dot" style="background:rgb(${pinRgb(p.colour).join(",")})"></span>` +
+    `<span class="smap-legend-text"><span class="smap-legend-label">${escapeHtml(p.label)}</span>` +
+    `<span class="smap-legend-coord">${escapeHtml(formatCoord(p.lat, p.lon))}</span></span></div>`
   ).join("");
   const credit = siteMap.overlay.querySelector(".smap-credit");
   credit.textContent = SITE_MAP_CONFIG.attribution;
 
+  renderDistanceSuggestion();        // §B4 relocation-distance suggestion
+
   const resetBtn = siteMap.overlay.querySelector(".smap-reset");
   if(resetBtn) resetBtn.classList.toggle("smap-reset--active", siteMap.userHasAdjustedView);
+}
+
+/* ---- B4: auto-calculated relocation distance (STRETCH, non-destructive) -----
+   Only the `relocation` row's `distance` field resolves cleanly from
+   definitions.json (row `relocation`, field `distance`, semantics current
+   location → relocation site). It carries NO declared unit, and there is NO
+   `newRiverDistance` field in the definitions at all — so, per the brief, the
+   river-relocation distance is deliberately skipped and reported rather than
+   guessed. The relocation distance is offered as a one-click suggestion (never
+   silently overwriting a typed value) and recomputed on pin drag (§B1). */
+const B4_DISTANCE = { row: "relocation", field: "distance", fromRow: "coords", toRow: "relocation", toField: "newLocation" };
+function findPinByRow(rowId){ return siteMap.pins.find(p=>p.rowId === rowId && p.ok); }
+function renderDistanceSuggestion(){
+  if(!siteMap.overlay) return;
+  const legend = siteMap.overlay.querySelector(".smap-legend");
+  if(!legend) return;
+  let box = siteMap.overlay.querySelector(".smap-distsuggest");
+  if(box) box.remove();
+
+  const table = activeTable();
+  if(!table) return;
+  // Does this table actually have the relocation distance field?
+  const hasDistanceField = effectiveRows(table).some(r=> r.id === B4_DISTANCE.row && (r.fields||[]).some(f=> f.key === B4_DISTANCE.field));
+  if(!hasDistanceField) return;
+
+  const from = findPinByRow(B4_DISTANCE.fromRow);       // current location (anchor)
+  const to   = findPinByRow(B4_DISTANCE.toRow);         // relocation site
+  if(!from || !to) return;                              // need both endpoints parsed
+
+  const metres = Math.round(haversineKm(from.lat, from.lon, to.lat, to.lon) * 1000);
+  const valStr = metres >= 1000 ? (metres/1000).toFixed(2) + " km" : metres + " m";
+
+  const rs = state[table.id] && state[table.id][B4_DISTANCE.row];
+  const current = (rs && rs.fields && rs.fields[B4_DISTANCE.field] != null) ? String(rs.fields[B4_DISTANCE.field]).trim() : "";
+
+  box = document.createElement("div");
+  box.className = "smap-distsuggest";
+  const head = document.createElement("div");
+  head.className = "smap-legend-head"; head.textContent = "Relocation distance";
+  box.appendChild(head);
+  const rowEl = document.createElement("div");
+  rowEl.className = "smap-distsuggest-row";
+  rowEl.innerHTML = `<span>Current → relocation site:</span> <span class="smap-distsuggest-val">${escapeHtml(valStr)}</span> <span style="color:var(--ink-soft);font-size:.72rem;">(geodesic)</span>`;
+  const useBtn = document.createElement("button");
+  useBtn.type = "button"; useBtn.className = "smap-distsuggest-use";
+  useBtn.textContent = current ? "Replace “" + current + "”" : "Use this";
+  useBtn.addEventListener("click", ()=>{
+    const prevValue = current;
+    if(!rs.fields) rs.fields = {};
+    rs.fields[B4_DISTANCE.field] = valStr;
+    reflectTableEdit(table);
+    invalidateScreenshot();
+    siteMap.lastPinEdit = { tableId: table.id, rowId: B4_DISTANCE.row, field: B4_DISTANCE.field, prevValue };
+    showPinMoveToast("Relocation distance set to " + valStr);
+    renderDistanceSuggestion();
+  });
+  rowEl.appendChild(useBtn);
+  box.appendChild(rowEl);
+  const note = document.createElement("div");
+  note.className = "smap-distsuggest-note";
+  note.textContent = current
+    ? "The Distance field already reads “" + current + "” — this only changes it if you click, and you can undo."
+    : "Fills the empty Distance field on the Relocation row. Won't overwrite anything you type.";
+  box.appendChild(note);
+
+  legend.parentNode.insertBefore(box, legend.nextSibling);
 }
 
 async function openSiteMap(triggerEl){
@@ -4855,6 +5165,9 @@ async function openSiteMap(triggerEl){
 
 function closeSiteMap(){
   if(!siteMap.overlay) return;
+  // Leave Move-pins and Measure off so the next open starts in a neutral state.
+  if(siteMap.moveMode) setMoveMode(false);
+  if(siteMap.measureWidget) setMeasureOn(false);
   siteMap.overlay.classList.add("hidden");
   if(siteMap.triggerEl && siteMap.triggerEl.focus){ try{ siteMap.triggerEl.focus(); }catch(_){} }
 }
@@ -4933,26 +5246,44 @@ async function compositeScreenshot(shot, interval){
   setDiag("screenshot", { status:"ok", note:"raster captured", dims: W + "×" + H, decoded:true }, "Screenshot raster captured (" + W + "×" + H + ").");
 
   const pad = Math.round(W*0.012), fs = Math.max(13, Math.round(W*0.013));
-  ctx.font = fs + "px Segoe UI, Arial, sans-serif";
   ctx.textBaseline = "top";
 
-  // Legend (top-left) over a translucent panel.
+  // Legend (top-left) over a translucent panel — B3: each pin's label AND its
+  // coordinate travel into the exported image, since the scope document may be the
+  // only record of where the site is. Label on line 1, coordinate on line 2, and
+  // the box grows to fit rather than the type shrinking.
   const pins = activeSitePins();
-  const used = {}; pins.forEach(p=>{ used[p.colour] = p.label; });
-  const entries = Object.keys(used);
-  if(entries.length){
-    const lh = fs + 8, boxW = Math.round(W*0.28), boxH = lh*entries.length + pad;
+  const legend = pins.map(p=>({ colour:p.colour, label:p.label, coord: formatCoord(p.lat, p.lon) }));
+  if(legend.length){
+    const labelFs = fs, coordFs = Math.max(11, Math.round(fs*0.85));
+    const lineGap = 4, rowGap = 8;
+    const rowH = labelFs + lineGap + coordFs + rowGap;
+    let maxTextW = 0;
+    legend.forEach(e=>{
+      ctx.font = "bold " + labelFs + "px Segoe UI, Arial, sans-serif";
+      maxTextW = Math.max(maxTextW, ctx.measureText(e.label).width);
+      ctx.font = coordFs + "px Segoe UI, Arial, sans-serif";
+      maxTextW = Math.max(maxTextW, ctx.measureText(e.coord).width);
+    });
+    const textX = pad*2.6;
+    const boxW = Math.min(Math.round(W*0.55), Math.round(textX + maxTextW + pad*1.2));
+    const boxH = rowH*legend.length + pad;
     ctx.fillStyle = "rgba(255,255,255,0.86)";
     roundRect(ctx, pad, pad, boxW, boxH, 6); ctx.fill();
-    entries.forEach((c,i)=>{
-      const y = pad + Math.round(pad/2) + i*lh;
-      ctx.fillStyle = "rgb(" + pinRgb(c).join(",") + ")";
-      ctx.beginPath(); ctx.arc(pad*1.6, y + fs/2, fs*0.45, 0, Math.PI*2); ctx.fill();
+    legend.forEach((e,i)=>{
+      const y = pad + Math.round(pad/2) + i*rowH;
+      ctx.fillStyle = "rgb(" + pinRgb(e.colour).join(",") + ")";
+      ctx.beginPath(); ctx.arc(pad*1.7, y + labelFs*0.6, labelFs*0.45, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = "#152531";
-      ctx.fillText(used[c], pad*2.4, y);
+      ctx.font = "bold " + labelFs + "px Segoe UI, Arial, sans-serif";
+      ctx.fillText(e.label, textX, y);
+      ctx.fillStyle = "#3a4a56";
+      ctx.font = coordFs + "px Segoe UI, Arial, sans-serif";
+      ctx.fillText(e.coord, textX, y + labelFs + lineGap);
     });
   }
   // Interval stamp (top-right).
+  ctx.font = fs + "px Segoe UI, Arial, sans-serif";
   const stamp = "Contours: " + interval + " m LiDAR";
   const sw = ctx.measureText(stamp).width;
   ctx.fillStyle = "rgba(255,255,255,0.86)";

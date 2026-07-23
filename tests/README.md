@@ -35,3 +35,24 @@ PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   Playwright wants a different browser revision than the one on disk).
 
 Exit code `0` and `A3 regression test: OK` means all checks passed.
+
+## `pin-writeback.test.mjs` — B1/B4 regression
+
+Guards the data-editing features, which write to the user's coordinates:
+
+- **B1** — dropping a dragged pin writes the rounded coordinate back to the
+  originating scope row's field, shows an undo toast, and undo restores the
+  previous value.
+- **B4** — the relocation-distance suggestion appears when both endpoints parse
+  and, on *use this*, writes a geodesic distance into the empty Distance field
+  (never silently overwriting a typed value), also undoable.
+
+It drives the real `finalizePinDrag` / `undoPinMove` / `renderDistanceSuggestion`
+code by simulating the drop with a stand-in graphic — no WebGL view and nothing
+stubbed on the QLD side. Same invocation as above:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/pin-writeback.test.mjs
+```

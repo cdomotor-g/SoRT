@@ -342,10 +342,27 @@ not "No", and — on the Water Level table — `riverCoords` / `riverRelocation`
   misbehaves, open it, copy, and paste it back. Every external call is bounded by
   a timeout (see `SITE_MAP_CONFIG.timeouts`), so no service can ever hang the modal.
 - **Row-selection panel** — tick/untick which pins show; the view re-fits as you
-  do (until you pan or zoom, after which **Reset view** restores auto-fit).
-- **Contour interval** — 1 m / 5 m / 10 m, defaulting to 1 m. Outside LiDAR
-  coverage the map falls back to a coarser interval and says which one it is
-  showing (1 m LiDAR only exists over the eastern/SEQ coverage area).
+  do (until you pan or zoom, after which **Reset view** restores auto-fit). Each
+  pin's coordinate is shown next to its label, and travels into the exported image.
+- **Contour interval** — 1 m / 5 m / 10 m, defaulting to 1 m, with an on/off
+  toggle for a fast imagery-and-pins map. Outside LiDAR coverage the map falls
+  back to a coarser interval and says which one it is showing (1 m LiDAR only
+  exists over the eastern/SEQ coverage area).
+- **Move pins** — a toolbar toggle (off by default). While on, drag a pin to a
+  new location: the coordinate is rounded to 6 dp, written back to the scope
+  row's field, and a toast shows how far it moved with a one-click **Undo**. The
+  scope field shows the new value on close — no silent rewrites, no accidental
+  nudges (the mode is explicit).
+- **Measure** — Esri's `DistanceMeasurement2D`, geodesic, metres switching to km
+  above 1 km, with the widget's own clear/reset. Measurements are transient and
+  do not appear in the exported image.
+- **Relocation distance** — when both the current-location and relocation-site
+  pins parse, the panel offers the geodesic distance between them as a one-click
+  suggestion for the Relocation *Distance* field (it never overwrites a typed
+  value silently, and it is undoable). Recomputed when a pin is dragged. The
+  river-line relocation distance is intentionally **not** auto-calculated: there
+  is no matching field in `definitions.json`, so it is left alone rather than
+  guessed at.
 - **Include in the Word copy** — tick *"Include site map in copied output"* to
   paste a screenshot of the map (with pins, legend, contour interval and the
   QLD/Esri attribution) into Word alongside the tables. The **Copy map image**
