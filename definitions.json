@@ -1,0 +1,832 @@
+{
+  "version": 1,
+  "meta": {
+    "updated": "2026-07-23",
+    "appTitle": "SORT Forum Scope Builder"
+  },
+  "optionSets": {},
+  "propertyServices": {
+    "title": "Property Services Instruction",
+    "note": "Property Services conducts its due diligence and secures tenure agreements based on the information provided in this Site Assessment. If there have been any changes to the coordinates since the completion date of this site assessment, you must inform Property Services (FWINLeasing@bom.gov.au) to ensure that the due diligence performed remains valid.",
+    "rows": [
+      {
+        "id": "currentCoords",
+        "kind": "coordGroup",
+        "label": "Current Co-Ordinates",
+        "coords": [
+          {
+            "key": "primary",
+            "label": "Primary (main equipment)",
+            "source": {
+              "row": "coords",
+              "field": "existing"
+            }
+          },
+          {
+            "key": "subsidiary",
+            "label": "Subsidiary (orifice line)",
+            "source": {
+              "row": "riverCoords",
+              "field": "detail"
+            }
+          }
+        ]
+      },
+      {
+        "id": "relocating",
+        "kind": "question",
+        "label": "Is the equipment being relocated?",
+        "linkedNote": "Preselected from the Relocation answer in the table above — change it here if this differs.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "source": {
+          "row": "relocation",
+          "field": null
+        }
+      },
+      {
+        "id": "relocationCoords",
+        "kind": "coordGroup",
+        "label": "Relocation Co-Ordinates",
+        "coords": [
+          {
+            "key": "primary",
+            "label": "Primary (main equipment)",
+            "source": {
+              "row": "relocation",
+              "field": "newLocation"
+            },
+            "default": "na"
+          },
+          {
+            "key": "orifice",
+            "label": "Orifice line termination or GCO",
+            "source": {
+              "row": "riverCoords",
+              "field": null
+            },
+            "default": "na"
+          },
+          {
+            "key": "raingauge",
+            "label": "Rain gauge (if not located at primary)",
+            "default": "na"
+          }
+        ]
+      },
+      {
+        "id": "turnSoil",
+        "kind": "question",
+        "label": "Does the work require the turning of soil?",
+        "required": true,
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      {
+        "id": "wlHeader",
+        "kind": "sectionHeader",
+        "label": "Water Level site details only",
+        "wlOnly": true
+      },
+      {
+        "id": "orificeReplace",
+        "kind": "question",
+        "label": "Will the orifice line be replaced?",
+        "wlOnly": true,
+        "required": true,
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      {
+        "id": "orificeDirection",
+        "kind": "text",
+        "label": "What direction does the orifice line run from the primary equipment?",
+        "wlOnly": true,
+        "placeholder": "e.g. East-South-East"
+      },
+      {
+        "id": "date",
+        "kind": "date",
+        "label": "Date"
+      }
+    ]
+  },
+  "sharedRows": [
+    {
+      "id": "fadeMargin",
+      "item": "Fade Margin >20db",
+      "instruction": "(If station is ERRTS)",
+      "type": "single",
+      "icon": "📶",
+      "options": [
+        "Yes",
+        "No",
+        "NA"
+      ]
+    },
+    {
+      "id": "reasonComms",
+      "item": "Reason for Changing Comms Type",
+      "instruction": "",
+      "type": "single",
+      "icon": "☎️",
+      "note": "Changing comms type requires GM Approval — ERRTS to SAT",
+      "options": [
+        "Yes",
+        "NA"
+      ],
+      "fields": [
+        {
+          "key": "reasonDetail",
+          "label": "Reason (if Yes)",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "comms",
+      "item": "Comms Option",
+      "instruction": "(Choose 1 option)",
+      "type": "single",
+      "icon": "📞",
+      "options": [
+        "IP Logger - Cellular Communications",
+        "IP Logger - Satellite Communications",
+        "IP Logger - Campbell Scientific - ERRTS VHF Communications",
+        "Local Processing Unit - Elpro ERRTS VHF Communications",
+        "AL200X Campbell Scientific - ERRTS VHF Communications"
+      ]
+    },
+    {
+      "id": "txpower",
+      "item": "TX power",
+      "instruction": "",
+      "type": "single",
+      "icon": "☀️",
+      "options": [
+        "NA",
+        "1W",
+        "5W",
+        "25W",
+        "Other (Specify)"
+      ]
+    },
+    {
+      "id": "frequency",
+      "item": "ERRTS/ALERT Frequency",
+      "instruction": "",
+      "type": "single",
+      "icon": "🐝",
+      "options": [
+        "NA",
+        "151.500 MHz",
+        "152.400 MHz",
+        "151.950 MHz",
+        "Other or multiple:"
+      ]
+    },
+    {
+      "id": "stockFence",
+      "item": "Stock Fence",
+      "instruction": "(Yes/No, details)",
+      "type": "single",
+      "icon": "🐄",
+      "options": [
+        "Yes (standard dimensions and configuration)",
+        "No",
+        "Other"
+      ],
+      "fields": [
+        {
+          "key": "Comments",
+          "label": "Comments (eg: Sprcify non standard size)",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "demolition",
+      "item": "Demolition / Disposal",
+      "instruction": "(Select one, optional details)",
+      "type": "single",
+      "icon": "♻️",
+      "options": [
+        "### Standard: ",
+        "Complete demolition and/or disposal (nothing returned to HUB)",
+        "### Complex",
+        "ALL Parts to be returned to HUB",
+        "LPU to be returned to HUB",
+        "TBRG to be returned to the HUB",
+        "Other:"
+      ]
+    },
+    {
+      "id": "coords",
+      "item": "Instrumentation Coordinates",
+      "instruction": "(Existing)",
+      "type": "none",
+      "icon": "🗺",
+      "note": "Coming soon... A MAP!",
+      "fields": [
+        {
+          "key": "existing",
+          "label": "Existing",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "relocation",
+      "item": "Relocation",
+      "instruction": "",
+      "type": "single",
+      "icon": "🚩",
+      "note": "WL Relocation requires EPS & GM Approval",
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "fields": [
+        {
+          "key": "distance",
+          "label": "Distance",
+          "type": "text"
+        },
+        {
+          "key": "newLocation",
+          "label": "New Location (coordinates)",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "accessibility",
+      "item": "Accessibility",
+      "instruction": "(Delete irrelevant options)",
+      "type": "multi",
+      "icon": "🚚",
+      "options": [
+        "All weather access",
+        "Dry weather access only",
+        "Concrete truck",
+        "Flatbed truck",
+        "4WD with tandem trailer",
+        "4WD only"
+      ]
+    },
+    {
+      "id": "installNotes",
+      "item": "Installation Notes",
+      "instruction": "(Freeform section)",
+      "type": "none",
+      "icon": "📝",
+      "fields": [
+        {
+          "key": "notes",
+          "label": "Notes",
+          "type": "textarea"
+        }
+      ]
+    },
+    {
+      "id": "remediation",
+      "item": "Remediation / Additional Works",
+      "instruction": "(Delete irrelevant options)",
+      "type": "multi",
+      "icon": "👷",
+      "options": [
+        "Vendor/Contractor site visit required prior to complex installation",
+        "Vegetation management",
+        "Bollards for site protection",
+        "Data access to be provided to Council via satellite modem",
+        "Track / stairs required to access orifice / gauge boards"
+      ],
+      "fields": [
+        {
+          "key": "other",
+          "label": "Other",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "nonStandard",
+      "item": "Non-Standard options",
+      "instruction": "(Please avoid if possible)",
+      "type": "single",
+      "icon": "⭐",
+      "options": [
+        "Yes",
+        "NA"
+      ],
+      "fields": [
+        {
+          "key": "detail",
+          "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
+          "type": "textarea"
+        }
+      ]
+    },
+    {
+      "id": "rainfallLocation",
+      "item": "Rainfall Mounted Location",
+      "instruction": "(Details / NA)",
+      "type": "none",
+      "icon": "☔",
+      "fields": [
+        {
+          "key": "detail",
+          "label": "Details",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "Benchmark",
+      "item": "Benchmark",
+      "instruction": "",
+      "type": "single",
+      "icon": "🔩",
+      "options": [
+        "Install new BM, surveyed in AHD & LGH (specify location)",
+        "Not required"
+      ]
+    },
+    {
+      "id": "photos",
+      "item": "Site Assessment Photos",
+      "instruction": "",
+      "type": "none",
+      "icon": "📷",
+      "fields": [
+        {
+          "key": "link",
+          "label": "Insert link & confirm access",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "tables": [
+    {
+      "id": "rainfall",
+      "label": "Rainfall Table",
+      "title": "Rainfall Table",
+      "rows": [
+        {
+          "id": "stationType",
+          "item": "Station Type",
+          "instruction": "(Choose relevant option)",
+          "type": "single",
+          "icon": "🌧",
+          "options": [
+            "Rain Gauge"
+          ]
+        },
+        {
+          "id": "complexity",
+          "item": "Complexity, Scope & Type",
+          "instruction": "(Choose 1 option)",
+          "type": "single",
+          "icon": "❓",
+          "options": [
+            "### High Complexity",
+            "High Complexity Total Rebuild – Type 1",
+            "High Complexity Total Rebuild – Type 2",
+            "High Complexity Total Rebuild – Type 3",
+            "High Complexity Bespoke Rebuild",
+            "### Moderate Complexity",
+            "Moderate Complexity Total Rebuild – Type 1",
+            "Moderate Complexity Total Rebuild – Type 2",
+            "Moderate Complexity Total Rebuild – Type 3",
+            "Moderate Complexity Bespoke Upgrade",
+            "Moderate Complexity – Cabinet & Equipment Replacement",
+            "Moderate Complexity Platform Replacement",
+            "### Low Complexity",
+            "Low Complexity Remediation – Instrumentation Only",
+            "Low Complexity Remediation – Raintree Retrofit",
+            "Low Complexity Remediation – Raintree Retrofit – Vegetation Management",
+            "Low Complexity Remediation - Co-Located Equipment Upgrade",
+            "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
+            "### Other",
+            "Vegetation Management",
+            "Acquire & Decommission",
+            "Acquire & Relocate",
+            "Acquired – No Remediation Required",
+            "Do Not Acquire"
+          ]
+        },
+        {
+          "shared": "coords"
+        },
+        {
+          "shared": "relocation"
+        },
+        {
+          "shared": "reasonComms"
+        },
+        {
+          "shared": "comms"
+        },
+        {
+          "shared": "fadeMargin"
+        },
+        {
+          "shared": "txpower"
+        },
+        {
+          "shared": "frequency"
+        },
+        {
+          "shared": "stockFence"
+        },
+        {
+          "shared": "demolition"
+        },
+        {
+          "shared": "accessibility"
+        },
+        {
+          "shared": "nonStandard"
+        },
+        {
+          "shared": "remediation"
+        },
+        {
+          "shared": "installNotes"
+        },
+        {
+          "shared": "photos"
+        }
+      ]
+    },
+    {
+      "id": "waterlevel",
+      "label": "Water Level Table",
+      "title": "Water Level (+/- Rainfall) Table",
+      "rows": [
+        {
+          "id": "stationType",
+          "item": "Station Type",
+          "instruction": "(Choose relevant option)",
+          "type": "single",
+          "icon": "🌊",
+          "options": [
+            "Rain Gauge / Water Level",
+            "Rain Gauge / Water Level / Repeater",
+            "Rain Gauge / Water Level / Reservoir",
+            "Rain Gauge / Water Level / Tide",
+            "Water Level",
+            "Water Level / Reservoir",
+            "Water Level / Tide Gauge",
+            "Base Station"
+          ]
+        },
+        {
+          "id": "complexity",
+          "item": "Complexity, Scope & Type",
+          "instruction": "(Choose 1 option)",
+          "type": "single",
+          "icon": "❓",
+          "options": [
+            "### High Complexity",
+            "High Complexity Total Rebuild – Type 1",
+            "High Complexity Total Rebuild – Type 2",
+            "High Complexity Total Rebuild – Type 3",
+            "High Complexity Total Rebuild – Type 4",
+            "High Complexity Total Rebuild – Type 5A (Integrated)",
+            "High Complexity Total Rebuild – Type 5B (Remote)",
+            "High Complexity Bespoke Rebuild",
+            "### Moderate Complexity",
+            "Moderate Complexity Total Rebuild – Type 1",
+            "Moderate Complexity Total Rebuild – Type 2",
+            "Moderate Complexity Total Rebuild – Type 3",
+            "Moderate Complexity Bespoke Upgrade",
+            "Moderate Complexity – Cabinet & Equipment Replacement",
+            "Moderate Complexity Platform Replacement",
+            "### Low Complexity",
+            "Low Complexity Remediation – Instrumentation Only",
+            "Low Complexity Remediation - Co-Located Equipment Upgrade",
+            "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
+            "Low Complexity – Type 4",
+            "### Other",
+            "Vegetation Management",
+            "Acquire & Decommission",
+            "Acquire & Relocate",
+            "Acquired – No Remediation Required",
+            "Do Not Acquire"
+          ]
+        },
+        {
+          "id": "sensorOption",
+          "item": "Sensor Option",
+          "instruction": "(Choose 1 option, details)",
+          "type": "single",
+          "icon": "💧",
+          "options": [
+            "HS40 (define range)",
+            "Amazon Bubbler (define psi pressure)",
+            "Vega C23"
+          ]
+        },
+        {
+          "id": "SensorRange",
+          "item": "Range",
+          "instruction": "",
+          "type": "single",
+          "icon": "📈",
+          "options": [
+            "NA (radar)",
+            "0-20m",
+            "0-30psi (20m)",
+            "Other (specify)"
+          ]
+        },
+        {
+          "id": "terminationType",
+          "item": "River line termination type",
+          "instruction": "",
+          "type": "single",
+          "options": [
+            "GCO ",
+            "BU07"
+          ]
+        },
+        {
+          "id": "riverCoords",
+          "item": "River Line Termination Coordinates",
+          "instruction": "",
+          "type": "none",
+          "icon": "📍",
+          "fields": [
+            {
+              "key": "detail",
+              "label": "Coordinates",
+              "type": "text"
+            }
+          ]
+        },
+        {
+          "shared": "coords"
+        },
+        {
+          "shared": "relocation"
+        },
+        {
+          "id": "riverRelocation",
+          "item": "River Line Termination relocation",
+          "instruction": "",
+          "type": "none",
+          "icon": "📍📍",
+          "fields": [
+            {
+              "key": "newRiver",
+              "label": "New Coordinates",
+              "type": "text"
+            }
+          ]
+        },
+        {
+          "id": "gaugeBoards",
+          "item": "Gauge Boards",
+          "instruction": "(Yes/No, add details)",
+          "type": "single",
+          "icon": "📏",
+          "options": [
+            "Yes",
+            "No",
+            "TBA"
+          ],
+          "fields": [
+            {
+              "key": "quantity",
+              "label": "Quantity",
+              "type": "text"
+            },
+            {
+              "key": "comment",
+              "label": "Comment",
+              "type": "text"
+            }
+          ]
+        },
+        {
+          "id": "DipPoint",
+          "item": "Dip point",
+          "instruction": "(eg. radars)",
+          "type": "single",
+          "icon": "📐",
+          "options": [
+            "Yes",
+            "No"
+          ],
+          "fields": [
+            {
+              "key": "comment",
+              "label": "Comments",
+              "type": "textarea"
+            }
+          ]
+        },
+        {
+          "shared": "Benchmark"
+        },
+        {
+          "shared": "comms"
+        },
+        {
+          "shared": "reasonComms"
+        },
+        {
+          "shared": "fadeMargin"
+        },
+        {
+          "shared": "txpower"
+        },
+        {
+          "shared": "frequency"
+        },
+        {
+          "shared": "stockFence"
+        },
+        {
+          "shared": "demolition"
+        },
+        {
+          "shared": "accessibility"
+        },
+        {
+          "shared": "installNotes"
+        },
+        {
+          "shared": "remediation"
+        },
+        {
+          "shared": "nonStandard"
+        },
+        {
+          "shared": "photos"
+        }
+      ]
+    },
+    {
+      "id": "repeater",
+      "label": "Repeater / Gateway Table",
+      "title": "Repeater / Gateway Table",
+      "rows": [
+        {
+          "id": "stationType",
+          "item": "Station Type",
+          "instruction": "(Delete irrelevant options)",
+          "type": "single",
+          "icon": "🗼",
+          "options": [
+            "Rain Gauge / Repeater",
+            "Rain Gauge / Water Level / Repeater",
+            "Rain Gauge / Water Level / Reservoir",
+            "Rain Gauge / Water Level / Tide",
+            "Water Level / Reservoir",
+            "Water Level / Tide Gauge",
+            "Repeater",
+            "Gateway",
+            "Base Station"
+          ]
+        },
+        {
+          "id": "complexity",
+          "item": "Complexity & Scope",
+          "instruction": "(Choose 1 option)",
+          "type": "single",
+          "icon": "❓",
+          "options": [
+            "### High Complexity",
+            "High Complexity Total Rebuild – Type 5A",
+            "High Complexity Total Rebuild – Type 5B",
+            "High Complexity Bespoke Rebuild",
+            "High Complexity Total Rebuild – Repeater",
+            "### Moderate Complexity",
+            "Moderate Complexity Bespoke Upgrade",
+            "Moderate Complexity – Cabinet & Equipment Replacement",
+            "Moderate Complexity Platform Replacement",
+            "### Low Complexity",
+            "Low Complexity Remediation – Instrumentation Only",
+            "Low Complexity Remediation - Co-Located Equipment Upgrade",
+            "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
+            "### Other",
+            "Vegetation Management",
+            "Acquire & Decommission",
+            "Acquire & Relocate",
+            "Acquired – No Remediation Required",
+            "Do Not Acquire"
+          ]
+        },
+        {
+          "id": "infraType",
+          "item": "Infra Type",
+          "instruction": "(Choose 1 option)",
+          "type": "single",
+          "icon": "🚪",
+          "options": [
+            "Rack Mount",
+            "Outdoor Cabinet"
+          ]
+        },
+        {
+          "id": "mast",
+          "item": "Mast",
+          "instruction": "(Choose relevant option)",
+          "type": "single",
+          "icon": "🏗",
+          "options": [
+            "8m",
+            "4m",
+            "Cabinet mount"
+          ]
+        },
+        {
+          "id": "backhaul",
+          "item": "Backhaul Options",
+          "instruction": "(Choose 1 option)",
+          "type": "single",
+          "icon": "🛰",
+          "options": [
+            "Bureau WAN",
+            "Cellular Modem"
+          ]
+        },
+        {
+          "id": "bgan",
+          "item": "Optional BGAN Backup",
+          "instruction": "(Yes / No)",
+          "type": "single",
+          "icon": "🌐",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "id": "cavityFilters",
+          "item": "Cavity Filters",
+          "instruction": "(Add relevant detail)",
+          "type": "none",
+          "icon": "🖥",
+          "fields": [
+            {
+              "key": "bandpass",
+              "label": "Bandpass",
+              "type": "text"
+            },
+            {
+              "key": "frequency",
+              "label": "Frequency",
+              "type": "text"
+            }
+          ]
+        },
+        {
+          "shared": "coords"
+        },
+        {
+          "shared": "relocation"
+        },
+        {
+          "shared": "fadeMargin"
+        },
+        {
+          "shared": "txpower"
+        },
+        {
+          "shared": "frequency"
+        },
+        {
+          "shared": "remediation"
+        },
+        {
+          "shared": "nonStandard"
+        },
+        {
+          "shared": "accessibility"
+        },
+        {
+          "shared": "installNotes"
+        },
+        {
+          "shared": "demolition"
+        },
+        {
+          "shared": "stockFence"
+        },
+        {
+          "shared": "photos"
+        }
+      ]
+    }
+  ]
+}
