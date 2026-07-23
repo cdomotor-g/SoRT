@@ -554,6 +554,103 @@
     .ed-grid{ grid-template-columns:1fr; }
     .field-editor .fe-row{ grid-template-columns:1fr 1fr; }
   }
+
+  /* ===================== COORDINATE VALIDATION HINTS (§3) ===================== */
+  .coord-hint{
+    font-size:.76rem; line-height:1.4; margin-top:5px; padding:6px 9px;
+    border-radius:6px; border:1px solid transparent;
+  }
+  .coord-hint--warn,  .coord-hint--info{ color:var(--amber); background:var(--amber-soft); border-color:#efdcb3; }
+  .coord-hint--error{ color:var(--danger); background:var(--danger-soft); border-color:#e9c4c0; }
+  .coord-hint--info{ color:var(--accent-dark); background:var(--accent-soft); border-color:var(--line); }
+  .coord-fix, .coord-undo{
+    appearance:none; border:1px solid currentColor; background:transparent; color:inherit;
+    border-radius:5px; padding:1px 8px; margin-left:6px; font:inherit; font-size:.72rem;
+    font-weight:600; cursor:pointer;
+  }
+  .coord-fix:hover, .coord-undo:hover{ background:rgba(0,0,0,.06); }
+  :root[data-theme="dark"] .coord-hint--warn, :root[data-theme="dark"] .coord-hint--info{ border-color:#5a4a1f; }
+  :root[data-theme="dark"] .coord-hint--error{ border-color:#5a2b26; }
+
+  /* ===================== mapPin ROW EDITOR (§4) ===================== */
+  .mappin-editor .mappin-enable{ display:flex; align-items:center; gap:8px; font-size:.85rem; font-weight:600; cursor:pointer; }
+  .mappin-editor .mappin-enable input{ width:16px; height:16px; }
+  .mappin-detail{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
+  .mappin-detail.hidden{ display:none; }
+  .mappin-flags{ display:flex; gap:18px; flex-wrap:wrap; font-size:.82rem; }
+  .mappin-flags label{ display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .mappin-gate{ border-top:1px dashed var(--line); padding-top:10px; display:flex; flex-direction:column; gap:8px; font-size:.82rem; }
+  .mappin-gate > label{ display:flex; align-items:center; gap:6px; cursor:pointer; }
+
+  /* ===================== SITE MAP MODAL (§5,§6,§7) ===================== */
+  .map-copy-toggle{
+    display:flex; align-items:center; gap:7px; font-size:.82rem; font-weight:600;
+    color:var(--ink); cursor:pointer; white-space:nowrap;
+  }
+  .map-copy-toggle input{ width:15px; height:15px; cursor:pointer; }
+
+  .modal.modal--map{
+    max-width:1120px; width:100%; height:90vh; max-height:90vh; display:flex; flex-direction:column;
+  }
+  .modal--map .modal-head{ flex-wrap:wrap; gap:10px 14px; }
+  .smap-interval{ display:flex; align-items:center; gap:8px; font-size:.8rem; color:var(--ink-soft); }
+  .smap-interval label{ display:flex; align-items:center; gap:4px; cursor:pointer; color:var(--ink); }
+  .smap-interval-stamp{ color:var(--amber); font-weight:600; }
+  .smap-reset--active{ border-color:var(--accent) !important; color:var(--accent-dark) !important; }
+
+  .smap-banners{ display:flex; flex-direction:column; }
+  .smap-banner{
+    display:flex; align-items:center; gap:10px; padding:8px 14px; font-size:.8rem; line-height:1.4;
+    border-bottom:1px solid var(--line);
+  }
+  .smap-banner span{ flex:1; }
+  .smap-banner--warn{ color:var(--amber); background:var(--amber-soft); }
+  .smap-banner--error{ color:var(--danger); background:var(--danger-soft); }
+  .smap-banner-x{ appearance:none; border:none; background:transparent; color:inherit; cursor:pointer; font-size:.9rem; }
+
+  .smap-body{ flex:1; display:flex; padding:0; min-height:0; overflow:hidden; }
+  .smap-map{ flex:1; position:relative; min-height:360px; background:#e9eef0; }
+  .smap-map .esri-view{ height:100%; width:100%; }
+  .smap-status{
+    position:absolute; inset:0; z-index:5; display:flex; align-items:center; justify-content:center;
+    background:rgba(245,247,246,.9); color:var(--ink-soft); font-size:.9rem; text-align:center; padding:20px;
+  }
+  .smap-offline{ line-height:1.6; }
+  .smap-offline span{ font-size:.8rem; color:var(--ink-soft); }
+  .smap-panel{
+    width:290px; flex:none; overflow-y:auto; border-left:1px solid var(--line);
+    padding:12px 14px; background:var(--card); display:flex; flex-direction:column; gap:8px;
+  }
+  .smap-panel-head, .smap-legend-head{
+    font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); font-weight:700;
+  }
+  .smap-pin-list{ display:flex; flex-direction:column; gap:6px; }
+  .smap-empty{ font-size:.8rem; color:var(--ink-soft); line-height:1.4; }
+  .smap-pin{
+    display:flex; align-items:flex-start; gap:8px; padding:7px 8px; border:1px solid var(--line);
+    border-radius:7px; cursor:pointer; font-size:.82rem;
+  }
+  .smap-pin:hover{ border-color:var(--accent); }
+  .smap-pin--invalid{ opacity:.7; cursor:default; background:var(--danger-soft); border-color:#e9c4c0; }
+  .smap-pin input{ margin-top:2px; }
+  .smap-dot{ width:12px; height:12px; border-radius:50%; margin-top:3px; flex:none; box-shadow:0 0 0 1px rgba(0,0,0,.15); }
+  .smap-pin-text{ display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .smap-pin-label{ font-weight:600; }
+  .smap-anchor{
+    font-size:.6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--accent-dark);
+    background:var(--accent-soft); border-radius:8px; padding:1px 5px; margin-left:4px; font-weight:700;
+  }
+  .smap-pin-coord{ color:var(--ink-soft); font-size:.76rem; word-break:break-word; }
+  .smap-pin-err{ color:var(--danger); }
+  .smap-legend{ margin-top:6px; border-top:1px solid var(--line); padding-top:8px; display:flex; flex-direction:column; gap:4px; }
+  .smap-legend-row{ display:flex; align-items:center; gap:7px; font-size:.8rem; }
+  .smap-credit{ margin-top:auto; padding-top:10px; font-size:.68rem; color:var(--ink-soft); line-height:1.4; }
+
+  @media (max-width: 720px){
+    .smap-body{ flex-direction:column; }
+    .smap-panel{ width:auto; border-left:none; border-top:1px solid var(--line); max-height:38%; }
+    .modal.modal--map{ height:94vh; max-height:94vh; }
+  }
 </style>
 <script>
   /* Apply the saved (or system-preferred) theme before first paint to avoid a flash. */
@@ -635,6 +732,11 @@
 <div class="toolbar" id="builderToolbar">
   <div class="toolbar-inner">
     <button class="btn btn-primary" id="copyBtn">Copy table for Word</button>
+    <button class="btn btn-secondary" id="siteMapBtn" title="Open the site map for this table's coordinates">🗺 Site Map</button>
+    <label class="map-copy-toggle" title="Include a screenshot of the site map (with pins) in the copied Word output">
+      <input type="checkbox" id="includeMapChk"> Include site map in copied output
+    </label>
+    <button class="btn btn-secondary hidden" id="copyMapImgBtn" title="Copy just the map image to the clipboard (paste it into Word in one extra step)">Copy map image</button>
     <span class="status-msg" id="statusMsg"></span>
     <span class="toolbar-spacer"></span>
     <button class="btn btn-secondary" id="undoResetBtn">Undo Clear Table</button>
@@ -679,6 +781,19 @@
 const LS_DEFS = "sort.definitions.v1";   // saved (edited) definitions / unpublished draft
 const LS_URL  = "sort.definitionsUrl";   // remembered "load from URL" source
 const DEFINITIONS_FILE = "definitions.json";
+
+/* Migration fallback for the Site Map pins (§4). The durable mechanism is the
+   row-level `mapPin` declaration (see normalizeMapPin) — this map is ONLY used
+   to seed the well-known coordinate rows when a loaded document predates the
+   schema and declares no pin at all, exactly as DEFAULT_PROPERTY_SERVICES does
+   for the Property Services block. A document that authors its own mapPin(s)
+   overrides these entirely, so this is a bridge, not the source of truth. */
+const DEFAULT_MAP_PINS = {
+  coords:          { field:"existing",    label:"Current location",       colour:"red",    defaultOn:true, anchor:true },
+  relocation:      { field:"newLocation", label:"Relocation site",        colour:"orange", defaultOn:true, requires:{ row:"relocation", not:"No" } },
+  riverCoords:     { field:"detail",      label:"River line termination", colour:"blue",   defaultOn:true },
+  riverRelocation: { field:"newRiver",    label:"River line relocation",  colour:"purple", defaultOn:true }
+};
 
 /* ===================== PROPERTY SERVICES =====================
    The "Property Services Instruction" block is a *second, separate* table shown
@@ -780,6 +895,21 @@ function normalizeDefinitions(raw){
     title: t.title || t.label || ("Table " + (ti+1)),
     rows: Array.isArray(t.rows) ? t.rows.map((r,ri)=>normalizeTableRow(r,ri)) : []
   }));
+  // Site Map pins: if the whole document predates the mapPin schema (nothing
+  // declares one), seed the known coordinate rows so the map works out of the
+  // box. A document that declares ANY mapPin is left exactly as authored (§4).
+  const anyPin = out.sharedRows.some(r=>r.mapPin) ||
+    out.tables.some(t=>t.rows.some(r=>!isSharedRef(r) && r.mapPin));
+  if(!anyPin){
+    const seed = (r)=>{
+      if(r && !r.mapPin && DEFAULT_MAP_PINS[r.id]){
+        const mp = normalizeMapPin(DEFAULT_MAP_PINS[r.id]);
+        if(mp) r.mapPin = mp;
+      }
+    };
+    out.sharedRows.forEach(seed);
+    out.tables.forEach(t=>t.rows.forEach(r=>{ if(!isSharedRef(r)) seed(r); }));
+  }
   return out;
 }
 // A table row is either a reference to a shared/common row ({shared:<id>}) or
@@ -805,6 +935,10 @@ function normalizeRow(r, ri){
     if(r.optionSet) row.optionSet = r.optionSet;
     else row.options = Array.isArray(r.options) ? r.options.map(String) : [];
   }
+  // Optional site-map pin declaration (see normalizeMapPin). Older definition
+  // documents simply carry no mapPin, so this degrades to "row has no pin".
+  const mp = normalizeMapPin(r.mapPin);
+  if(mp) row.mapPin = mp;
   if(Array.isArray(r.fields) && r.fields.length){
     row.fields = r.fields.map(f=>{
       const field = { key: f.key || "", label: f.label || "", type: (f.type === "textarea" ? "textarea" : "text") };
@@ -813,6 +947,40 @@ function normalizeRow(r, ri){
     });
   }
   return row;
+}
+
+/* Normalise a row's optional `mapPin` declaration. This is what lets a row
+   declare itself as carrying a coordinate for the Site Map, so adding a new
+   coordinate row is a *definitions* edit rather than a code change. Shape:
+     mapPin: {
+       field:     "<field key holding the coordinate>",   // required
+       label:     "Pin label",
+       colour:    "red" | "orange" | "blue" | "purple" | "green" | "#rrggbb",
+       defaultOn: true,          // pin ticked by default (default true)
+       anchor:    true,          // this pin is the default map centre (§6)
+       requires:  { row:"relocation", not:"No" }  // optional gating (generic)
+     }
+   Returns null (row carries no pin) when there is nothing usable. Unknown keys
+   are dropped, so a document written by a newer app still normalises cleanly. */
+function normalizeMapPin(mp){
+  if(!mp || typeof mp !== "object") return null;
+  const field = (mp.field != null && String(mp.field).trim()) ? String(mp.field).trim() : "";
+  if(!field) return null;   // a pin with no coordinate field is meaningless
+  const out = { field, label: mp.label != null ? String(mp.label) : "" };
+  const colour = (mp.colour != null ? mp.colour : mp.color);
+  if(colour != null && String(colour).trim()) out.colour = String(colour).trim();
+  out.defaultOn = mp.defaultOn !== false;   // ticked by default unless explicitly false
+  if(mp.anchor) out.anchor = true;
+  if(mp.requires && typeof mp.requires === "object" && mp.requires.row){
+    const req = { row: String(mp.requires.row) };
+    // A generic gate: show the pin only when the referenced row's answer
+    // is (not) a given value. Implemented generically — no row id is
+    // special-cased in JS (the "relocation not No" rule lives in data).
+    if(mp.requires.not != null)    req.not    = String(mp.requires.not);
+    if(mp.requires.equals != null) req.equals = String(mp.requires.equals);
+    out.requires = req;
+  }
+  return out;
 }
 
 /* Normalise the Property Services block, falling back to the built-in default
@@ -991,10 +1159,75 @@ function rowOutputLines(table, row){
   return lines;
 }
 
+// A field is a "coordinate field" when its row's mapPin points at it. This is
+// the single link between "this input holds a coordinate" and the Site Map, so
+// declaring a new coordinate row (a mapPin in the definitions) automatically
+// turns on validation here too — no hardcoded field list.
+function isCoordField(row, key){ return !!(row && row.mapPin && row.mapPin.field === key); }
+
+// Attach on-blur validation + DMS-paste conversion to a coordinate input. Uses
+// the shared parseCoord so "valid" means the same thing here and on the map.
+function attachCoordValidation(fieldEl, input, s, key){
+  const hint = document.createElement("div");
+  hint.className = "coord-hint"; hint.hidden = true;
+  fieldEl.appendChild(hint);
+  const commit = ()=>{ s.fields[key] = input.value; renderPreviewAndProgress(); };
+  const clearHint = ()=>{ hint.hidden = true; hint.innerHTML = ""; };
+  const wireFix = (r)=>{
+    const fix = hint.querySelector(".coord-fix");
+    if(fix && r.swap) fix.addEventListener("click", ()=>{
+      input.value = formatCoord(r.swap.lat, r.swap.lon); commit(); validate();
+    });
+  };
+  function validate(){
+    const r = parseCoord(input.value);
+    if(r.empty){ clearHint(); return; }          // empty = no pin, not an error
+    if(!r.ok){
+      let html = escapeHtml(r.error || "Not a valid coordinate.");
+      if(r.swap) html += ` <button type="button" class="coord-fix">Swap to ${escapeHtml(formatCoord(r.swap.lat, r.swap.lon))}</button>`;
+      hint.hidden = false; hint.className = "coord-hint coord-hint--error"; hint.innerHTML = html;
+      wireFix(r); return;
+    }
+    if(r.warn){
+      let html = escapeHtml(r.warn);
+      if(r.swap) html += ` <button type="button" class="coord-fix">Swap to ${escapeHtml(formatCoord(r.swap.lat, r.swap.lon))}</button>`;
+      hint.hidden = false; hint.className = "coord-hint coord-hint--warn"; hint.innerHTML = html;
+      wireFix(r); return;
+    }
+    clearHint();
+  }
+  input.addEventListener("blur", validate);
+  input.addEventListener("paste", (e)=>{
+    const cd = e.clipboardData || window.clipboardData;
+    const text = cd && cd.getData ? cd.getData("text") : "";
+    if(!text) return;
+    const r = parseCoord(text);
+    if(!(r.ok && r.format === "dms")) return;     // only convert real DMS
+    const converted = formatCoord(r.lat, r.lon);
+    // Only announce a conversion when the stored text visibly changes — pasting
+    // "-27.47° 153.02°" is already decimal and must not claim a DMS conversion.
+    if(converted.replace(/\s/g,"") === String(text).trim().replace(/\s/g,"")) return;
+    e.preventDefault();
+    input.value = converted; commit();
+    hint.hidden = false; hint.className = "coord-hint coord-hint--info";
+    hint.innerHTML = `Converted from DMS. <button type="button" class="coord-undo">Undo</button>`;
+    const undo = hint.querySelector(".coord-undo");
+    // mousedown + preventDefault so clicking Undo does NOT blur the input: a blur
+    // would run validate() on the now-valid decimal and clear this hint (and the
+    // Undo button with it) before the click could land.
+    undo.addEventListener("mousedown", (ev)=>{ ev.preventDefault(); input.value = String(text).trim(); commit(); validate(); });
+  });
+  // Validate whatever is already there on first render (e.g. restored answers).
+  if((input.value||"").trim()) validate();
+}
+
 function renderRows(){
   const table = activeTable();
   rowsContainerEl.innerHTML = "";
   updateUndoBtn();
+  // Option changes, tab switches and clears can all change the pins → the cached
+  // screenshot is stale (§7.3).
+  invalidateScreenshot();
   if(!table) return;
 
   let filledCount = 0;
@@ -1083,6 +1316,9 @@ function renderRows(){
         input.placeholder = f.placeholder || "";
         input.addEventListener("input", ()=>{ s.fields[f.key] = input.value; renderPreviewAndProgress(); });
         fieldEl.appendChild(input);
+        // Coordinate fields (those a mapPin points at) get live validation, a
+        // swapped-lat/lon fix, and DMS-paste conversion. See §3.
+        if(isCoordField(row, f.key)) attachCoordValidation(fieldEl, input, s, f.key);
         fieldsWrap.appendChild(fieldEl);
       });
       controlsEl.appendChild(fieldsWrap);
@@ -1142,6 +1378,9 @@ function updatePreviews(){
 
 function renderPreviewAndProgress(){
   updatePreviews();
+  // Any answer edit (coordinates included) makes a cached site-map screenshot
+  // stale (§7.3). Cheap flag flip; safe to call often.
+  invalidateScreenshot();
   const table = activeTable();
   if(!table) return;
   let filledCount = 0;
@@ -1188,6 +1427,130 @@ function escapeHtml(str){
 function cssEscape(str){
   if(window.CSS && CSS.escape) return CSS.escape(str);
   return String(str).replace(/["\\\]]/g, "\\$&");
+}
+
+/* ===================== COORDINATE PARSING (§3) =====================
+   ONE shared parser is the single definition of "a valid coordinate": it feeds
+   both the coordinate inputs in the Scope Builder and the Site Map. It accepts
+   decimal degrees and DMS, and reports structural errors, a QLD sanity warning,
+   and a likely lat/lon swap so the UI can offer a one-click fix.
+
+   parseCoord(input) -> {
+     ok,           // true when a usable lat/lon was produced
+     empty,        // true when the input was blank (valid — means "no pin")
+     lat, lon,     // numbers (decimal degrees) when ok
+     format,       // "decimal" | "dms"
+     error,        // human message when !ok
+     warn,         // amber, non-blocking (e.g. outside QLD)
+     swap          // when set, { lat, lon } of the swapped interpretation
+   }                                                                        */
+const QLD_BOUNDS = { latMin:-29.5, latMax:-9.0, lonMin:137.9, lonMax:153.6 };
+
+function inRange(lat, lon){ return lat>=-90 && lat<=90 && lon>=-180 && lon<=180; }
+function inQld(lat, lon){
+  return lat>=QLD_BOUNDS.latMin && lat<=QLD_BOUNDS.latMax &&
+         lon>=QLD_BOUNDS.lonMin && lon<=QLD_BOUNDS.lonMax;
+}
+
+// Does a string look like DMS (degrees/minutes/seconds) rather than decimal?
+function looksLikeDms(s){
+  if(/[°'"′″]/.test(s)) return true;                     // symbols
+  if(/\d\s*[NSEW]\b/i.test(s)) return true;              // hemisphere letters
+  if(/\d+\s*d\s*\d+\s*m/i.test(s)) return true;          // 27d28m..
+  // Three whitespace-separated numbers per axis (deg min sec) is DMS-ish.
+  const nums = (s.match(/-?\d+(?:\.\d+)?/g) || []).length;
+  return nums >= 5;                                       // ~ 3+3 minus overlap
+}
+
+// Sign for a DMS axis. A hemisphere letter is N/S/E/W that sits at a *token
+// boundary* (followed by whitespace, comma or end) — this deliberately ignores
+// the 'd'/'m'/'s' unit letters (e.g. the seconds 's' in "15.6s"), which are
+// always wedged between digits/letters rather than at a boundary. Falls back to
+// a leading minus sign when no hemisphere is present.
+function dmsSign(str){
+  const m = String(str).match(/([NSEW])(?=[\s,]|$)/i);
+  if(m) return /[SW]/i.test(m[1]) ? -1 : 1;
+  return /^\s*-/.test(str) ? -1 : 1;
+}
+// Parse a single DMS axis like  27°28'15.6"S  /  -27 28 15.6  /  27d28m15.6sS
+// Returns a signed decimal degree, or null if it doesn't parse.
+function parseDmsAxis(str){
+  const s = String(str).trim();
+  if(!s) return null;
+  // Drop symbols and every letter (unit letters and hemispheres alike) so only
+  // the numeric degree/minute/second run remains; the sign came from dmsSign.
+  const parts = (s.replace(/[°'"′″]/g," ").replace(/[a-zA-Z]/g," ").match(/\d+(?:\.\d+)?/g) || []).map(Number);
+  if(!parts.length) return null;
+  const d = parts[0]||0, m = parts[1]||0, sec = parts[2]||0;
+  if(m>=60 || sec>=60) return null;
+  return (d + m/60 + sec/3600) * dmsSign(s);
+}
+
+// Split a DMS blob into its lat and lon halves. Prefers a boundary N/S cut;
+// otherwise splits on a comma; otherwise splits the number run evenly in two.
+function splitDmsPair(s){
+  const t = s.trim();
+  // Cut right after a boundary N/S hemisphere (ignores a seconds 's').
+  const ns = t.match(/^(.*?[NS](?=[\s,]|$))\s*[, ]?\s*(.*)$/i);
+  if(ns && ns[2].trim()) return [ns[1], ns[2]];
+  if(t.includes(",")){ const p = t.split(","); if(p.length===2) return [p[0], p[1]]; }
+  // Fall back: even split of the number tokens.
+  const nums = t.match(/-?\d+(?:\.\d+)?/g) || [];
+  if(nums.length>=2 && nums.length%2===0){
+    const half = nums.length/2;
+    // Rebuild rough halves by string position of the (half+1)-th number.
+    let seen=0, idx=0;
+    t.replace(/-?\d+(?:\.\d+)?/g, (m,off)=>{ if(seen===half && !idx) idx=off; seen++; return m; });
+    if(idx) return [t.slice(0,idx), t.slice(idx)];
+  }
+  return null;
+}
+
+function parseCoord(input){
+  const raw = (input == null ? "" : String(input)).trim();
+  if(!raw) return { ok:false, empty:true, lat:null, lon:null };
+
+  let lat=null, lon=null, format="decimal";
+
+  if(looksLikeDms(raw)){
+    format = "dms";
+    const pair = splitDmsPair(raw);
+    if(!pair) return { ok:false, error:"Couldn't read that as coordinates." };
+    lat = parseDmsAxis(pair[0]);
+    lon = parseDmsAxis(pair[1]);
+    if(lat==null || lon==null) return { ok:false, error:"Couldn't read that DMS coordinate." };
+  } else {
+    const nums = raw.replace(/[°]/g," ").match(/-?\d+(?:\.\d+)?/g) || [];
+    if(nums.length < 2) return { ok:false, error:"Enter latitude and longitude (e.g. -27.4710, 153.0234)." };
+    if(nums.length > 2) return { ok:false, error:"Too many numbers — expected latitude, longitude." };
+    lat = Number(nums[0]); lon = Number(nums[1]);
+  }
+
+  if(!isFinite(lat) || !isFinite(lon)) return { ok:false, error:"Couldn't read that as coordinates." };
+
+  // Structural range check, with a swap suggestion when the pair is reversed.
+  if(!inRange(lat, lon)){
+    if(inRange(lon, lat)) return { ok:false, error:"Latitude/longitude look swapped.", swap:{ lat:lon, lon:lat } };
+    return { ok:false, error:"Latitude must be -90..90 and longitude -180..180." };
+  }
+
+  const out = { ok:true, lat, lon, format };
+  // Likely-swapped heuristic even when both are individually in range: QLD lat
+  // is negative and small-ish, lon is ~150. If swapping lands inside QLD while
+  // the current order does not, offer the swap.
+  if(!inQld(lat, lon) && inQld(lon, lat)){
+    out.swap = { lat:lon, lon:lat };
+    out.warn = "These look swapped for a Queensland site.";
+  } else if(!inQld(lat, lon)){
+    out.warn = "Outside the usual Queensland range — double-check.";
+  }
+  return out;
+}
+
+// Format a decimal-degree pair the way the app stores/copies coordinates.
+function formatCoord(lat, lon){
+  const r = n => (Math.round(n*1e6)/1e6);
+  return `${r(lat)}, ${r(lon)}`;
 }
 
 /* ===================== COPY TO CLIPBOARD ===================== */
@@ -1267,6 +1630,27 @@ async function copyTable(){
   // users want only the scope table.
   let html = buildHtmlTable();
   let text = buildPlainText();
+
+  // Optional site-map image (§7). Built here so that if it fails (offline, CORS,
+  // service down) the tables still copy exactly as before — the map can never
+  // break the copy (§7.4). With the tickbox unticked this whole block is skipped
+  // and the output is byte-identical to before this feature (§8).
+  let mapNote = "";
+  if(includeMapCopy){
+    showStatus("Preparing map…");
+    const res = await getMapImageForCopy();
+    if(res && res.dataUrl){
+      html += `<p style="margin:12px 0 0;font-family:Calibri,Arial,sans-serif;">&nbsp;</p>` +
+        `<div><img src="${res.dataUrl}" alt="Site map" style="width:16cm;max-width:100%;height:auto;border:1px solid #999;"></div>`;
+      text += "\n\n[Site map image included — contours: " + res.meta.interval + " m]\n";
+      const outside = res.meta.pinsTotal - res.meta.pinsInView;
+      if(outside > 0) mapNote = " — " + outside + " of " + res.meta.pinsTotal + " pins are outside the current view";
+      else mapNote = " (map included)";
+    } else {
+      mapNote = " (map not included — offline or no coordinates)";
+    }
+  }
+
   if(includePsCopy){
     html += `<p style="margin:12px 0 0;font-family:Calibri,Arial,sans-serif;">&nbsp;</p>` +
       buildPropertyServicesHtml(table);
@@ -1280,7 +1664,7 @@ async function copyTable(){
         "text/plain": new Blob([text], {type:"text/plain"})
       });
       await navigator.clipboard.write([item]);
-      showStatus("Copied — paste into Word");
+      showStatus("Copied — paste into Word" + mapNote);
       return;
     }
   }catch(e){ /* fall through to legacy method */ }
@@ -1303,12 +1687,12 @@ async function copyTable(){
     sel.removeAllRanges();
     document.body.removeChild(container);
 
-    if(ok){ showStatus("Copied — paste into Word"); }
+    if(ok){ showStatus("Copied — paste into Word" + mapNote); }
     else { throw new Error("execCommand failed"); }
   }catch(e){
     try{
       await navigator.clipboard.writeText(text);
-      showStatus("Copied as plain text only");
+      showStatus("Copied as plain text only" + (includeMapCopy ? " (map needs rich paste)" : ""));
     }catch(e2){
       showStatus("Copy failed — see console");
       console.error(e2);
@@ -1322,6 +1706,33 @@ function showStatus(msg){
 }
 
 copyBtn.addEventListener("click", copyTable);
+
+// Site Map button (opens the modal) + the "include map in copy" tickbox and the
+// two-step "Copy map image" fallback (§7.2), all sitting by the copy button.
+const siteMapBtn = document.getElementById("siteMapBtn");
+if(siteMapBtn) siteMapBtn.addEventListener("click", ()=> openSiteMap(siteMapBtn));
+const includeMapChk = document.getElementById("includeMapChk");
+const copyMapImgBtn = document.getElementById("copyMapImgBtn");
+if(includeMapChk) includeMapChk.addEventListener("change", ()=>{
+  includeMapCopy = includeMapChk.checked;
+  if(copyMapImgBtn) copyMapImgBtn.classList.toggle("hidden", !includeMapCopy);
+});
+if(copyMapImgBtn) copyMapImgBtn.addEventListener("click", copyMapImageOnly);
+
+// Fallback path (§7.2): copy just the PNG to the clipboard as an image, so the
+// user can paste it in one extra step if Word strips the inline data URI.
+async function copyMapImageOnly(){
+  showStatus("Preparing map…");
+  const res = await getMapImageForCopy();
+  if(!res || !res.dataUrl){ showStatus("Map not available (offline or no coordinates)"); return; }
+  try{
+    const blob = await (await fetch(res.dataUrl)).blob();
+    if(!(navigator.clipboard && window.ClipboardItem)) throw new Error("no image clipboard support");
+    await navigator.clipboard.write([ new ClipboardItem({ [blob.type]: blob }) ]);
+    showStatus("Map image copied — paste into Word");
+  }catch(e){ showStatus("Could not copy the map image — see console"); console.error(e); }
+}
+
 // Show the "Undo Clear Table" button only while there is a snapshot to restore
 // for the table currently on screen.
 function updateUndoBtn(){
@@ -1741,6 +2152,10 @@ function buildRowBody(row, opts){
       </div>
       <div class="field-editor fieldEditor"></div>
     </div>
+    <div class="ed-section">
+      <label style="font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:6px;">Site Map pin</label>
+      <div class="mappin-editor mapPinEditor"></div>
+    </div>
   `;
 
   // text inputs (no re-render)
@@ -1795,7 +2210,141 @@ function buildRowBody(row, opts){
 
   renderOptionsBlock(body.querySelector(".optionsBlock"), row);
   renderFieldEditor(body.querySelector(".fieldEditor"), row);
+  renderMapPinEditor(body.querySelector(".mapPinEditor"), row);
   return body;
+}
+
+/* Editor for a row's optional Site Map pin (§4). Declaring a pin here is what
+   makes a new coordinate row a *definitions* edit rather than a code change. */
+const MAP_PIN_COLOURS = ["red","orange","blue","purple","green","teal"];
+function renderMapPinEditor(host, row){
+  host.innerHTML = "";
+  const enable = document.createElement("label");
+  enable.className = "mappin-enable";
+  const cb = document.createElement("input");
+  cb.type = "checkbox"; cb.checked = !!row.mapPin;
+  enable.appendChild(cb);
+  enable.appendChild(document.createTextNode(" This row carries a coordinate for the Site Map"));
+  host.appendChild(enable);
+
+  const detail = document.createElement("div");
+  detail.className = "mappin-detail";
+  host.appendChild(detail);
+
+  const fieldKeys = (row.fields || []).map(f => f.key).filter(Boolean);
+
+  function drawDetail(){
+    detail.innerHTML = "";
+    if(!row.mapPin){ detail.classList.add("hidden"); return; }
+    detail.classList.remove("hidden");
+    const mp = row.mapPin;
+
+    // Which field holds the coordinate.
+    const fieldWrap = document.createElement("div");
+    fieldWrap.className = "ed-field";
+    fieldWrap.innerHTML = `<label>Coordinate field (which field above holds the lat/long)</label>`;
+    if(fieldKeys.length){
+      const sel = document.createElement("select");
+      fieldKeys.forEach(k=>{
+        const o = document.createElement("option"); o.value = k; o.textContent = k;
+        o.selected = k === mp.field; sel.appendChild(o);
+      });
+      if(!fieldKeys.includes(mp.field)){ const o=document.createElement("option"); o.value=mp.field; o.textContent=mp.field+" (missing)"; o.selected=true; sel.appendChild(o); }
+      sel.addEventListener("change", ()=>{ mp.field = sel.value; afterTextChange(); });
+      fieldWrap.appendChild(sel);
+    } else {
+      const inp = document.createElement("input");
+      inp.type = "text"; inp.placeholder = "field key"; inp.value = mp.field || "";
+      inp.addEventListener("change", ()=>{ mp.field = inp.value.trim(); afterTextChange(); });
+      fieldWrap.appendChild(inp);
+      const h = document.createElement("span"); h.className="hint"; h.textContent="Add a field above first, then pick it here.";
+      fieldWrap.appendChild(h);
+    }
+    detail.appendChild(fieldWrap);
+
+    // Label + colour.
+    const grid = document.createElement("div");
+    grid.className = "ed-grid";
+    grid.innerHTML = `
+      <div class="ed-field"><label>Pin label</label><input type="text" class="mp-label" value="${escapeHtml(mp.label||"")}"></div>
+      <div class="ed-field"><label>Pin colour</label><select class="mp-colour">${
+        MAP_PIN_COLOURS.map(c=>`<option value="${c}"${(mp.colour||"red")===c?" selected":""}>${c}</option>`).join("")
+      }</select></div>`;
+    grid.querySelector(".mp-label").addEventListener("input", e=>{ mp.label = e.target.value; afterTextChange(); });
+    grid.querySelector(".mp-colour").addEventListener("change", e=>{ mp.colour = e.target.value; afterTextChange(); });
+    detail.appendChild(grid);
+
+    // Flags.
+    const flags = document.createElement("div");
+    flags.className = "mappin-flags";
+    const onLbl = document.createElement("label");
+    const onCb = document.createElement("input"); onCb.type="checkbox"; onCb.checked = mp.defaultOn !== false;
+    onCb.addEventListener("change", ()=>{ mp.defaultOn = onCb.checked; afterTextChange(); });
+    onLbl.appendChild(onCb); onLbl.appendChild(document.createTextNode(" Ticked by default on the map"));
+    const anLbl = document.createElement("label");
+    const anCb = document.createElement("input"); anCb.type="checkbox"; anCb.checked = !!mp.anchor;
+    anCb.addEventListener("change", ()=>{ if(anCb.checked) mp.anchor = true; else delete mp.anchor; afterTextChange(); });
+    anLbl.appendChild(anCb); anLbl.appendChild(document.createTextNode(" Default map centre (anchor)"));
+    flags.appendChild(onLbl); flags.appendChild(anLbl);
+    detail.appendChild(flags);
+
+    // Optional gate: show this pin only when another row's answer is / isn't X.
+    const gate = document.createElement("div");
+    gate.className = "mappin-gate";
+    const hasReq = !!(mp.requires && mp.requires.row);
+    const gcb = document.createElement("label");
+    const gEnable = document.createElement("input"); gEnable.type="checkbox"; gEnable.checked = hasReq;
+    gEnable.addEventListener("change", ()=>{
+      if(gEnable.checked) mp.requires = { row:"", not:"No" }; else delete mp.requires;
+      afterTextChange(); drawDetail();
+    });
+    gcb.appendChild(gEnable); gcb.appendChild(document.createTextNode(" Only show when another row's answer gates it"));
+    gate.appendChild(gcb);
+    if(hasReq){
+      const gg = document.createElement("div");
+      gg.className = "ed-grid";
+      const rowIds = (activeManageTable() ? effectiveRows(activeManageTable()).map(r=>r.id) : []);
+      gg.innerHTML = `
+        <div class="ed-field"><label>Gate on row ID</label><input type="text" class="mp-req-row" list="mpReqRows" value="${escapeHtml(mp.requires.row||"")}"></div>
+        <div class="ed-field"><label>Condition</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select class="mp-req-kind"><option value="not"${mp.requires.not!=null?" selected":""}>is NOT</option><option value="equals"${mp.requires.equals!=null?" selected":""}>equals</option></select>
+            <input type="text" class="mp-req-val" style="flex:1" value="${escapeHtml(mp.requires.not!=null?mp.requires.not:(mp.requires.equals!=null?mp.requires.equals:""))}">
+          </div>
+        </div>`;
+      const dl = document.createElement("datalist"); dl.id="mpReqRows";
+      rowIds.forEach(id=>{ const o=document.createElement("option"); o.value=id; dl.appendChild(o); });
+      gg.appendChild(dl);
+      gg.querySelector(".mp-req-row").addEventListener("change", e=>{ mp.requires.row = e.target.value.trim(); afterTextChange(); });
+      const kindSel = gg.querySelector(".mp-req-kind");
+      const valInp = gg.querySelector(".mp-req-val");
+      const applyGate = ()=>{
+        const kind = kindSel.value, v = valInp.value;
+        delete mp.requires.not; delete mp.requires.equals;
+        mp.requires[kind] = v;
+        afterTextChange();
+      };
+      kindSel.addEventListener("change", applyGate);
+      valInp.addEventListener("input", applyGate);
+      gate.appendChild(gg);
+    }
+    detail.appendChild(gate);
+  }
+
+  cb.addEventListener("change", ()=>{
+    if(cb.checked){
+      row.mapPin = { field: fieldKeys[0] || "", label: row.item || "", colour:"red", defaultOn:true };
+    } else {
+      delete row.mapPin;
+    }
+    afterTextChange();
+    drawDetail();
+  });
+  drawDetail();
+}
+// The table currently open in Manage Tables (used to offer gate row-ID hints).
+function activeManageTable(){
+  return (defs && defs.tables && defs.tables[selectedTableIndex]) ? defs.tables[selectedTableIndex] : null;
 }
 
 function buildRowEditor(table, row, i){
@@ -3184,6 +3733,686 @@ function discardDraft(){
   localStorage.removeItem(LS_DEFS);
   mStatus("Discarded the unpublished draft.");
   renderManage();
+}
+
+/* ============================================================================
+   SITE MAP (§5, §6, §7)
+   ----------------------------------------------------------------------------
+   A modal ArcGIS map over QLD imagery + LiDAR contours + road reserve, pinned
+   with every coordinate the current table carries (declared via row.mapPin, §4),
+   optionally screenshotted into the Word copy.
+
+   The Esri payload and the QLD services are ALL external. This whole module is
+   written so that when they are unreachable (offline / file:// / blocked) the
+   app degrades cleanly: the modal explains it needs a network connection and the
+   Word copy still produces the tables. Nothing here may break the existing copy.
+   ========================================================================== */
+
+// Map *services* live here as a documented constant (like SUPABASE) so an
+// endpoint move is a one-line edit. WHICH ROWS feed the map is data-driven via
+// row.mapPin (§4) — deliberately not hardcoded here.
+const SITE_MAP_CONFIG = {
+  esriBase: "https://js.arcgis.com/4.31/",
+  imagery:  "https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer",
+  imageryLabels: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Basemaps/QldImageryLabel/MapServer",
+  contours: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/Contours/MapServer",
+  // Sublayer 30 = "Contour LiDAR 1m" (confirmed default). 5 m / 10 m IDs are
+  // probed from the live service by name (resolveContourLayers); these are only
+  // the fallback if the probe fails.
+  contourSublayers: { "1": 30, "5": null, "10": null },
+  cadastre: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer",
+  cadastreParcelsSublayer: 4,
+  // Candidate DCDB fields that may denote "road". The map reads the live schema,
+  // picks the first field that exists, and filters UPPER(field) LIKE '%ROAD%'.
+  // If none resolve (or none return features) the road layer is WITHHELD and a
+  // banner is shown — never full unfiltered cadastre (§5).
+  roadFieldCandidates: ["tenure","parcel_typ","parcel_type","feat_name","segpar_typ","lot_area"],
+  attribution: "© State of Queensland (Department of Natural Resources and Mines) — CC BY 4.0",
+  screenshotWidth: 1600,
+  offscreenSize: { width: 1000, height: 720 }
+};
+
+const PIN_RGB = {
+  red:[214,40,40], orange:[224,122,10], blue:[30,110,200],
+  purple:[130,60,200], green:[40,150,70], teal:[15,150,140]
+};
+function pinRgb(colour){ return PIN_RGB[colour] || PIN_RGB.red; }
+
+// Whether the site map is included in the Word copy. Off by default so existing
+// output is byte-identical unless the user opts in (§7.4, §8).
+let includeMapCopy = false;
+
+// Live module state. The MapView is kept alive between opens and re-fitted
+// rather than re-instantiated (§6). Screenshot is cached and invalidated on any
+// change to pins, coordinates, contour interval, or extent (§7.3).
+const siteMap = {
+  esriPromise: null, esri: null,
+  overlay: null, mapHost: null, panelHost: null, bannerHost: null, statusHost: null,
+  view: null, esriMap: null,
+  layers: {},               // { imagery, road, contour, labels }
+  contourIds: null,         // { "1":id, "5":id, "10":id } resolved from service
+  contourInterval: "1",     // requested interval
+  renderedInterval: "1",    // interval actually shown after coverage fallback
+  userHasAdjustedView: false,
+  pins: [],                 // resolved pin descriptors for the current table
+  triggerEl: null,
+  screenshot: { dataUrl: null, valid: false, meta: null },
+  building: false
+};
+
+/* ---- reading coordinates out of the active table (same source as the PS
+        mirror: state[table][row].fields[field]) ---- */
+function readRowCoordRaw(table, rowId, field){
+  const rs = state[table.id] && state[table.id][rowId];
+  if(!rs) return "";
+  if(field == null) return Array.isArray(rs.selected) ? rs.selected.join(", ") : (rs.selected || "");
+  return (rs.fields && rs.fields[field] != null) ? String(rs.fields[field]) : "";
+}
+
+// Generic mapPin gate (§4). No row id is special-cased here — the rule lives in
+// the definition's requires:{row,not|equals}.
+function mapPinGatePasses(table, requires){
+  if(!requires || !requires.row) return true;
+  const answer = readRowCoordRaw(table, requires.row, null).trim();
+  if(requires.not != null)    return answer.toLowerCase() !== String(requires.not).toLowerCase();
+  if(requires.equals != null) return answer.toLowerCase() === String(requires.equals).toLowerCase();
+  return true;
+}
+
+// Resolve the pins for a table into descriptors. Rows gated out (e.g. relocation
+// = "No") are dropped; rows with a present-but-invalid coordinate are KEPT and
+// flagged so the panel can show the parse error rather than silently dropping
+// them (§4). Empty coordinate = no pin.
+function resolveMapPins(table){
+  if(!table) return [];
+  const out = [];
+  effectiveRows(table).forEach(row=>{
+    const mp = row.mapPin;
+    if(!mp || !mp.field) return;
+    if(!mapPinGatePasses(table, mp.requires)) return;
+    const raw = readRowCoordRaw(table, row.id, mp.field).trim();
+    if(!raw) return;                       // empty = no pin
+    const parsed = parseCoord(raw);
+    out.push({
+      key: row.id,
+      rowId: row.id,
+      label: mp.label || row.item || row.id,
+      colour: mp.colour || "red",
+      anchor: !!mp.anchor,
+      defaultOn: mp.defaultOn !== false,
+      raw,
+      ok: !!parsed.ok,
+      lat: parsed.ok ? parsed.lat : null,
+      lon: parsed.ok ? parsed.lon : null,
+      error: parsed.ok ? "" : (parsed.error || "Invalid coordinate"),
+      warn: parsed.warn || ""
+    });
+  });
+  return out;
+}
+
+// Merge freshly-resolved pins with any existing on/off toggles so a re-resolve
+// (e.g. the user typed a new coordinate) keeps the panel choices.
+function refreshPins(table){
+  const prev = {};
+  siteMap.pins.forEach(p=>{ prev[p.key] = p.on; });
+  siteMap.pins = resolveMapPins(table).map(p=>({
+    ...p,
+    on: (p.key in prev) ? prev[p.key] : (p.ok && p.defaultOn)
+  }));
+  return siteMap.pins;
+}
+
+function activeSitePins(){ return siteMap.pins.filter(p=>p.on && p.ok); }
+
+/* ---- lazy Esri loader (§5, §7.3): inject CSS + AMD loader once, on demand ---- */
+function loadEsri(){
+  if(siteMap.esri) return Promise.resolve(siteMap.esri);
+  if(siteMap.esriPromise) return siteMap.esriPromise;
+  siteMap.esriPromise = new Promise((resolve, reject)=>{
+    try{
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = SITE_MAP_CONFIG.esriBase + "esri/themes/light/main.css";
+      document.head.appendChild(css);
+      const s = document.createElement("script");
+      s.src = SITE_MAP_CONFIG.esriBase;
+      s.async = true;
+      s.onload = ()=>{
+        if(!window.require){ reject(new Error("Esri loader did not initialise")); return; }
+        window.require([
+          "esri/Map","esri/views/MapView",
+          "esri/layers/ImageryLayer","esri/layers/ImageryTileLayer",
+          "esri/layers/MapImageLayer","esri/layers/TileLayer",
+          "esri/Graphic","esri/core/reactiveUtils","esri/config"
+        ], (Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,Graphic,reactiveUtils,esriConfig)=>{
+          siteMap.esri = { Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,Graphic,reactiveUtils,esriConfig };
+          resolve(siteMap.esri);
+        }, reject);
+      };
+      s.onerror = ()=> reject(new Error("Could not load the Esri map library (network required)"));
+      document.head.appendChild(s);
+    }catch(e){ reject(e); }
+  });
+  // A slow/blocked CDN shouldn't hang forever.
+  const timeout = new Promise((_,rej)=> setTimeout(()=>rej(new Error("Timed out loading the map library")), 20000));
+  siteMap.esriPromise = Promise.race([siteMap.esriPromise, timeout]).catch(err=>{
+    siteMap.esriPromise = null;   // allow a later retry
+    throw err;
+  });
+  return siteMap.esriPromise;
+}
+
+/* ---- resolve the road-reserve filter from the LIVE cadastre schema (§5) ---- */
+async function resolveRoadWhere(){
+  const base = SITE_MAP_CONFIG.cadastre + "/" + SITE_MAP_CONFIG.cadastreParcelsSublayer;
+  let fields = [];
+  try{
+    const meta = await fetch(base + "?f=json", { cache:"no-store" }).then(r=>r.json());
+    fields = (meta.fields || []).map(f=> String(f.name));
+  }catch(e){ return null; }   // schema unreadable → caller withholds the layer
+  const lower = fields.map(f=>f.toLowerCase());
+  const candidates = SITE_MAP_CONFIG.roadFieldCandidates
+    .filter(c => lower.includes(c.toLowerCase()))
+    .map(c => fields[lower.indexOf(c.toLowerCase())]);
+  for(const field of candidates){
+    const where = "UPPER(" + field + ") LIKE '%ROAD%'";
+    try{
+      const q = base + "/query?where=" + encodeURIComponent(where) + "&returnCountOnly=true&f=json";
+      const res = await fetch(q, { cache:"no-store" }).then(r=>r.json());
+      if(res && typeof res.count === "number" && res.count > 0){
+        return { field, where };
+      }
+    }catch(e){ /* try the next candidate */ }
+  }
+  return null;   // nothing resolved → withhold road layer, show banner (§5)
+}
+
+/* ---- probe contour sublayer IDs by name (1 m / 5 m / 10 m) ---- */
+async function resolveContourLayers(){
+  const ids = { "1": SITE_MAP_CONFIG.contourSublayers["1"], "5": SITE_MAP_CONFIG.contourSublayers["5"], "10": SITE_MAP_CONFIG.contourSublayers["10"] };
+  try{
+    const meta = await fetch(SITE_MAP_CONFIG.contours + "?f=json", { cache:"no-store" }).then(r=>r.json());
+    (meta.layers || []).forEach(l=>{
+      const n = String(l.name||"").toLowerCase();
+      if(/lidar/.test(n) || /contour/.test(n)){
+        if(/\b1\s*m\b/.test(n))  ids["1"]  = l.id;
+        if(/\b5\s*m\b/.test(n))  ids["5"]  = l.id;
+        if(/\b10\s*m\b/.test(n)) ids["10"] = l.id;
+      }
+    });
+  }catch(e){ /* keep defaults */ }
+  siteMap.contourIds = ids;
+  return ids;
+}
+
+/* ---- banners (non-fatal layer/service problems, §6) ---- */
+function siteMapBanner(msg, kind){
+  if(!siteMap.bannerHost) return;
+  const b = document.createElement("div");
+  b.className = "smap-banner smap-banner--" + (kind||"warn");
+  b.innerHTML = `<span>${escapeHtml(msg)}</span><button type="button" class="smap-banner-x" aria-label="Dismiss">✕</button>`;
+  b.querySelector(".smap-banner-x").addEventListener("click", ()=> b.remove());
+  siteMap.bannerHost.appendChild(b);
+}
+function clearSiteMapBanners(){ if(siteMap.bannerHost) siteMap.bannerHost.innerHTML = ""; }
+
+/* ---- build the MapView + layers once, into a container ---- */
+async function buildView(container){
+  const E = siteMap.esri;
+  const map = new E.Map();
+  siteMap.esriMap = map;
+
+  // Imagery base (ImageServer → ImageryLayer; ImageryTileLayer if it is a cache).
+  try{
+    let imagery;
+    try{ imagery = new E.ImageryTileLayer({ url: SITE_MAP_CONFIG.imagery }); await imagery.load(); }
+    catch(_){ imagery = new E.ImageryLayer({ url: SITE_MAP_CONFIG.imagery }); await imagery.load(); }
+    siteMap.layers.imagery = imagery;
+    map.add(imagery);
+  }catch(e){ siteMapBanner("Imagery layer failed to load ("+ (e.message||"error") +").", "error"); }
+
+  // Road reserve — resolved + filtered from the live schema, or withheld (§5).
+  try{
+    const road = await resolveRoadWhere();
+    if(road){
+      const roadLayer = new E.MapImageLayer({
+        url: SITE_MAP_CONFIG.cadastre, opacity: 0.85,
+        sublayers: [{ id: SITE_MAP_CONFIG.cadastreParcelsSublayer, visible:true, definitionExpression: road.where }]
+      });
+      await roadLayer.load();
+      siteMap.layers.road = roadLayer;
+      map.add(roadLayer);
+    } else {
+      siteMapBanner("Road reserve hidden: could not resolve the road filter from the live cadastre schema. Showing imagery + contours only (never unfiltered cadastre).", "warn");
+    }
+  }catch(e){ siteMapBanner("Road reserve layer failed to load ("+ (e.message||"error") +").", "error"); }
+
+  // Contours (interval-selectable). All resolved sublayers added; visibility
+  // toggled by interval.
+  try{
+    await resolveContourLayers();
+    const subs = [];
+    ["1","5","10"].forEach(k=>{ if(siteMap.contourIds[k] != null) subs.push({ id: siteMap.contourIds[k], visible: k === siteMap.contourInterval }); });
+    if(subs.length){
+      const contour = new E.MapImageLayer({ url: SITE_MAP_CONFIG.contours, opacity: 0.7, sublayers: subs });
+      await contour.load();
+      siteMap.layers.contour = contour;
+      map.add(contour);
+    }
+  }catch(e){ siteMapBanner("Contour layer failed to load ("+ (e.message||"error") +").", "error"); }
+
+  // Optional imagery labels on top of the imagery.
+  try{
+    const labels = new E.MapImageLayer({ url: SITE_MAP_CONFIG.imageryLabels, opacity: 0.9 });
+    await labels.load();
+    siteMap.layers.labels = labels;
+    map.add(labels);
+  }catch(e){ /* labels are optional; ignore */ }
+
+  const view = new E.MapView({
+    container, map,
+    center: [153.0234, -27.4710], zoom: 6,
+    popup: { dockEnabled:false, collapseEnabled:false }
+  });
+  siteMap.view = view;
+  await view.when();
+
+  // First *manual* pan/zoom latches userHasAdjustedView and stops auto-refit;
+  // it also invalidates the cached screenshot (§6.1, §7.3). Watch `interacting`
+  // (true only on real user pointer/wheel/keyboard input) — NOT `navigating`,
+  // which is also set by our own programmatic goTo auto-fit and would latch it
+  // the moment the map first framed itself.
+  E.reactiveUtils.when(()=> view.interacting, ()=>{
+    if(!siteMap.userHasAdjustedView){ siteMap.userHasAdjustedView = true; renderSiteMapPanel(); }
+    invalidateScreenshot();
+  });
+  E.reactiveUtils.watch(()=> view.stationary, (stationary)=>{ if(stationary) invalidateScreenshot(); });
+
+  return view;
+}
+
+/* ---- pin graphics (always on top, in view.graphics) ---- */
+function drawPins(){
+  const view = siteMap.view;
+  if(!view) return;
+  const E = siteMap.esri;
+  view.graphics.removeAll();
+  activeSitePins().forEach(p=>{
+    view.graphics.add(new E.Graphic({
+      geometry: { type:"point", longitude:p.lon, latitude:p.lat },
+      symbol: { type:"simple-marker", color: pinRgb(p.colour), size:15, outline:{ color:[255,255,255], width:2 } },
+      attributes: { label:p.label, coord: formatCoord(p.lat, p.lon) },
+      popupTemplate: { title:"{label}", content:"{coord}" }
+    }));
+  });
+}
+
+// Fit the view to the active pins, centred on the anchor pin, unless the user
+// has taken manual control of the view (§6.1, §6.2).
+async function fitView(){
+  const view = siteMap.view;
+  if(!view || siteMap.userHasAdjustedView) return;
+  const pins = activeSitePins();
+  if(!pins.length) return;
+  const anchor = pins.find(p=>p.anchor) || pins[0];
+  const anchorPoint = { type:"point", longitude:anchor.lon, latitude:anchor.lat };
+  try{
+    if(pins.length === 1){
+      await view.goTo({ target: anchorPoint, zoom: 17 }, { animate:false });
+    } else {
+      const graphics = view.graphics.toArray();
+      await view.goTo({ target: graphics, center: [anchor.lon, anchor.lat] }, { animate:false, padding: 60 });
+      // Guard against a distant pin zooming the site out to an unreadable dot.
+      if(view.scale > 25000){
+        siteMapBanner("A pin is far from the site — showing the site at a readable scale. Use “Fit all pins” to see them all.", "warn");
+        await view.goTo({ target: anchorPoint, scale: 12000 }, { animate:false });
+      }
+    }
+  }catch(e){ /* goTo can reject if interrupted; ignore */ }
+  invalidateScreenshot();
+}
+
+/* ---- switch contour interval, with coverage auto-fallback (§5) ---- */
+async function applyContourInterval(interval){
+  siteMap.contourInterval = interval;
+  siteMap.renderedInterval = interval;
+  invalidateScreenshot();
+  const layer = siteMap.layers.contour;
+  if(!layer || !siteMap.contourIds){ return; }
+  const setVisible = (k)=>{
+    ["1","5","10"].forEach(kk=>{
+      const id = siteMap.contourIds[kk];
+      if(id == null) return;
+      const sub = layer.findSublayerById(id);
+      if(sub) sub.visible = (kk === k);
+    });
+    siteMap.renderedInterval = k;
+  };
+  setVisible(interval);
+
+  // Coverage check: if the requested interval has no features in view, fall back
+  // to the coarsest interval that does, and say so (§5).
+  try{
+    const view = siteMap.view;
+    if(!view || !view.extent) return;
+    const order = [interval, "5", "10"].filter((v,i,a)=> a.indexOf(v)===i && siteMap.contourIds[v] != null);
+    for(const k of order){
+      const count = await contourCountInExtent(siteMap.contourIds[k], view.extent);
+      if(count == null) break;         // query failed — leave as requested
+      if(count > 0){ setVisible(k); if(k !== interval){ siteMapBanner("No " + interval + " m contour coverage here — showing " + k + " m contours.", "warn"); } updateIntervalStamp(); return; }
+    }
+    // none returned features
+    if(order.length){ siteMapBanner("No contour coverage at this location for the selected intervals.", "warn"); }
+  }catch(e){ /* non-fatal */ }
+  updateIntervalStamp();
+}
+async function contourCountInExtent(sublayerId, extent){
+  try{
+    const geom = { xmin:extent.xmin, ymin:extent.ymin, xmax:extent.xmax, ymax:extent.ymax, spatialReference: extent.spatialReference.toJSON() };
+    const url = SITE_MAP_CONFIG.contours + "/" + sublayerId + "/query" +
+      "?where=1%3D1&geometry=" + encodeURIComponent(JSON.stringify(geom)) +
+      "&geometryType=esriGeometryEnvelope&inSR=" + (extent.spatialReference.wkid||102100) +
+      "&spatialRel=esriSpatialRelIntersects&returnCountOnly=true&f=json";
+    const res = await fetch(url, { cache:"no-store" }).then(r=>r.json());
+    return (res && typeof res.count === "number") ? res.count : null;
+  }catch(e){ return null; }
+}
+
+/* ---- the modal ---- */
+function buildSiteMapModal(){
+  if(siteMap.overlay) return siteMap.overlay;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay smap-overlay hidden";
+  overlay.innerHTML = `
+    <div class="modal modal--map" role="dialog" aria-modal="true" aria-label="Site map">
+      <div class="modal-head">
+        <h3>Site Map</h3>
+        <div class="smap-interval">
+          <span>Contours:</span>
+          <label><input type="radio" name="smapInterval" value="1" checked> 1 m</label>
+          <label><input type="radio" name="smapInterval" value="5"> 5 m</label>
+          <label><input type="radio" name="smapInterval" value="10"> 10 m</label>
+          <span class="smap-interval-stamp"></span>
+        </div>
+        <button type="button" class="btn btn-secondary smap-fitall" style="padding:6px 12px;">Fit all pins</button>
+        <button type="button" class="btn btn-secondary smap-reset" style="padding:6px 12px;">Reset view</button>
+        <button type="button" class="icon-btn smap-close" title="Close" aria-label="Close">✕</button>
+      </div>
+      <div class="smap-banners"></div>
+      <div class="modal-body smap-body">
+        <div class="smap-map"><div class="smap-status"></div></div>
+        <aside class="smap-panel">
+          <div class="smap-panel-head">Pins on the map</div>
+          <div class="smap-pin-list"></div>
+          <div class="smap-legend"></div>
+          <div class="smap-credit"></div>
+        </aside>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  siteMap.overlay   = overlay;
+  siteMap.mapHost   = overlay.querySelector(".smap-map");
+  siteMap.statusHost= overlay.querySelector(".smap-status");
+  siteMap.panelHost = overlay.querySelector(".smap-pin-list");
+  siteMap.bannerHost= overlay.querySelector(".smap-banners");
+
+  overlay.querySelector(".smap-close").addEventListener("click", closeSiteMap);
+  overlay.addEventListener("mousedown", (e)=>{ if(e.target === overlay) closeSiteMap(); });
+  overlay.querySelector(".smap-reset").addEventListener("click", ()=>{
+    siteMap.userHasAdjustedView = false;
+    clearSiteMapBanners();
+    renderSiteMapPanel();
+    fitView();
+  });
+  overlay.querySelector(".smap-fitall").addEventListener("click", async ()=>{
+    siteMap.userHasAdjustedView = false;
+    const pins = activeSitePins();
+    if(siteMap.view && pins.length){
+      try{ await siteMap.view.goTo(siteMap.view.graphics.toArray(), { animate:false, padding:60 }); }catch(_){}
+      invalidateScreenshot();
+    }
+  });
+  overlay.querySelectorAll('input[name="smapInterval"]').forEach(r=>{
+    r.addEventListener("change", ()=>{ if(r.checked){ clearSiteMapBanners(); applyContourInterval(r.value); } });
+  });
+  document.addEventListener("keydown", siteMapKeydown);
+  return overlay;
+}
+function siteMapKeydown(e){
+  if(e.key === "Escape" && siteMap.overlay && !siteMap.overlay.classList.contains("hidden")) closeSiteMap();
+}
+function updateIntervalStamp(){
+  if(!siteMap.overlay) return;
+  const el = siteMap.overlay.querySelector(".smap-interval-stamp");
+  if(el) el.textContent = siteMap.renderedInterval && siteMap.renderedInterval !== siteMap.contourInterval
+    ? "(showing " + siteMap.renderedInterval + " m)" : "";
+}
+
+function renderSiteMapPanel(){
+  if(!siteMap.panelHost) return;
+  const host = siteMap.panelHost;
+  host.innerHTML = "";
+  if(!siteMap.pins.length){
+    host.innerHTML = `<div class="smap-empty">No coordinates entered in this table yet. Add a coordinate to a mapped row to see a pin.</div>`;
+  }
+  siteMap.pins.forEach(p=>{
+    const row = document.createElement("label");
+    row.className = "smap-pin" + (p.ok ? "" : " smap-pin--invalid");
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = !!p.on; cb.disabled = !p.ok;
+    cb.addEventListener("change", ()=>{
+      p.on = cb.checked;
+      drawPins();
+      fitView();           // re-fit on selection change (unless user-adjusted)
+      invalidateScreenshot();
+    });
+    const dot = document.createElement("span");
+    dot.className = "smap-dot"; dot.style.background = "rgb(" + pinRgb(p.colour).join(",") + ")";
+    const txt = document.createElement("span");
+    txt.className = "smap-pin-text";
+    txt.innerHTML = `<span class="smap-pin-label">${escapeHtml(p.label)}${p.anchor ? ' <span class="smap-anchor">centre</span>' : ""}</span>` +
+      (p.ok ? `<span class="smap-pin-coord">${escapeHtml(formatCoord(p.lat, p.lon))}${p.warn ? ' — ' + escapeHtml(p.warn) : ""}</span>`
+            : `<span class="smap-pin-coord smap-pin-err">${escapeHtml(p.raw)} — ${escapeHtml(p.error)}</span>`);
+    row.appendChild(cb); row.appendChild(dot); row.appendChild(txt);
+    host.appendChild(row);
+  });
+
+  // Legend + credit.
+  const legend = siteMap.overlay.querySelector(".smap-legend");
+  const used = {};
+  siteMap.pins.filter(p=>p.ok).forEach(p=>{ used[p.colour] = p.label; });
+  legend.innerHTML = `<div class="smap-legend-head">Legend</div>` + Object.keys(used).map(c=>
+    `<div class="smap-legend-row"><span class="smap-dot" style="background:rgb(${pinRgb(c).join(",")})"></span>${escapeHtml(used[c])}</div>`
+  ).join("");
+  const credit = siteMap.overlay.querySelector(".smap-credit");
+  credit.textContent = SITE_MAP_CONFIG.attribution;
+
+  const resetBtn = siteMap.overlay.querySelector(".smap-reset");
+  if(resetBtn) resetBtn.classList.toggle("smap-reset--active", siteMap.userHasAdjustedView);
+}
+
+async function openSiteMap(triggerEl){
+  const table = activeTable();
+  if(!table){ showStatus("No table to map"); return; }
+  siteMap.triggerEl = triggerEl || document.activeElement;
+  buildSiteMapModal();
+  clearSiteMapBanners();
+  refreshPins(table);
+  siteMap.overlay.classList.remove("hidden");
+  renderSiteMapPanel();
+  const closeBtn = siteMap.overlay.querySelector(".smap-close");
+  if(closeBtn) closeBtn.focus();
+
+  siteMap.statusHost.hidden = false;
+  siteMap.statusHost.textContent = "Loading map…";
+
+  try{
+    await loadEsri();
+    if(!siteMap.view){
+      await buildView(siteMap.mapHost);
+      drawPins();
+      await fitView();
+    } else {
+      // Re-use the existing view: re-draw pins, re-fit unless user-adjusted (§6).
+      drawPins();
+      await fitView();
+    }
+    siteMap.statusHost.hidden = true;
+    updateIntervalStamp();
+  }catch(err){
+    siteMap.statusHost.hidden = false;
+    siteMap.statusHost.innerHTML = `<div class="smap-offline">🗺️ The site map requires a network connection.<br><span>${escapeHtml(err.message||"Could not load the map.")}</span></div>`;
+  }
+}
+
+function closeSiteMap(){
+  if(!siteMap.overlay) return;
+  siteMap.overlay.classList.add("hidden");
+  if(siteMap.triggerEl && siteMap.triggerEl.focus){ try{ siteMap.triggerEl.focus(); }catch(_){} }
+}
+
+/* ---- screenshot for the Word copy (§7) ---- */
+function invalidateScreenshot(){ siteMap.screenshot.valid = false; siteMap.screenshot.dataUrl = null; }
+
+// Composite legend + interval stamp + attribution onto the raw screenshot.
+// Throws (SecurityError) if the canvas is tainted by a non-CORS layer (§7.1).
+async function compositeScreenshot(shot, interval){
+  const img = new Image();
+  await new Promise((res,rej)=>{ img.onload=res; img.onerror=()=>rej(new Error("screenshot image failed")); img.src = shot.dataUrl; });
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  const W = canvas.width, H = canvas.height;
+  const pad = Math.round(W*0.012), fs = Math.max(13, Math.round(W*0.013));
+  ctx.font = fs + "px Segoe UI, Arial, sans-serif";
+  ctx.textBaseline = "top";
+
+  // Legend (top-left) over a translucent panel.
+  const pins = activeSitePins();
+  const used = {}; pins.forEach(p=>{ used[p.colour] = p.label; });
+  const entries = Object.keys(used);
+  if(entries.length){
+    const lh = fs + 8, boxW = Math.round(W*0.28), boxH = lh*entries.length + pad;
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    roundRect(ctx, pad, pad, boxW, boxH, 6); ctx.fill();
+    entries.forEach((c,i)=>{
+      const y = pad + Math.round(pad/2) + i*lh;
+      ctx.fillStyle = "rgb(" + pinRgb(c).join(",") + ")";
+      ctx.beginPath(); ctx.arc(pad*1.6, y + fs/2, fs*0.45, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#152531";
+      ctx.fillText(used[c], pad*2.4, y);
+    });
+  }
+  // Interval stamp (top-right).
+  const stamp = "Contours: " + interval + " m LiDAR";
+  const sw = ctx.measureText(stamp).width;
+  ctx.fillStyle = "rgba(255,255,255,0.82)";
+  roundRect(ctx, W - sw - pad*2.4, pad, sw + pad*1.4, fs + pad, 6); ctx.fill();
+  ctx.fillStyle = "#152531";
+  ctx.fillText(stamp, W - sw - pad*1.7, pad + pad*0.3);
+  // Attribution (bottom, full width band).
+  const band = fs + pad;
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(0, H - band, W, band);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(SITE_MAP_CONFIG.attribution, pad, H - band + pad*0.35);
+
+  return canvas.toDataURL("image/png");
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+// Count how many active pins are inside the current view extent (§6.1 warning).
+function pinsInView(view){
+  const pins = activeSitePins();
+  if(!view || !view.extent) return { total: pins.length, inside: pins.length };
+  let inside = 0;
+  const E = siteMap.esri;
+  pins.forEach(p=>{
+    try{
+      const pt = new E.Graphic({ geometry:{ type:"point", longitude:p.lon, latitude:p.lat } }).geometry;
+      if(view.extent.contains(pt)) inside++;
+    }catch(_){ inside++; }
+  });
+  return { total: pins.length, inside };
+}
+
+// Produce the map image for the copy. Uses the live view (honouring the user's
+// framing) when one exists; otherwise builds an off-screen view with the default
+// auto-fit framing (§7.3). Returns { dataUrl, meta } or null on any failure —
+// the copy must never be broken by the map (§7.4).
+async function getMapImageForCopy(){
+  const table = activeTable();
+  if(!table) return null;
+  refreshPins(table);
+  if(!activeSitePins().length) return null;   // nothing to show
+
+  if(siteMap.screenshot.valid && siteMap.screenshot.dataUrl){
+    return { dataUrl: siteMap.screenshot.dataUrl, meta: siteMap.screenshot.meta };
+  }
+  try{
+    await loadEsri();
+  }catch(e){ return null; }   // offline / blocked → table-only copy
+
+  try{
+    if(siteMap.view){
+      // Live view exists — screenshot AT ITS CURRENT EXTENT (no refit) so the
+      // user's framing is what gets pasted (§7.3).
+      const view = siteMap.view;
+      const pv = pinsInView(view);
+      const shot = await view.takeScreenshot({ width: SITE_MAP_CONFIG.screenshotWidth });
+      const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
+      const meta = { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside };
+      siteMap.screenshot = { dataUrl, valid: true, meta };
+      return { dataUrl, meta };
+    }
+    // No live view — build off-screen with default framing (§7.3).
+    return await captureOffscreen(table);
+  }catch(err){
+    if(/tainted|SecurityError|insecure/i.test(err.name + " " + err.message)){
+      console.error("Site map screenshot blocked by a non-CORS layer (tainted canvas).", err);
+    } else {
+      console.error("Site map screenshot failed.", err);
+    }
+    return null;
+  }
+}
+
+async function captureOffscreen(table){
+  const E = siteMap.esri;
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-10000px;top:0;width:" + SITE_MAP_CONFIG.offscreenSize.width + "px;height:" + SITE_MAP_CONFIG.offscreenSize.height + "px;";
+  document.body.appendChild(host);
+  // Build a throwaway view sharing the module's layer setup.
+  const savedView = siteMap.view, savedMap = siteMap.esriMap, savedLayers = siteMap.layers, savedIds = siteMap.contourIds, savedRendered = siteMap.renderedInterval;
+  siteMap.view = null; siteMap.esriMap = null; siteMap.layers = {};
+  try{
+    await buildView(host);
+    drawPins();
+    // Off-screen path has no manual view to honour → default auto-fit (§6.1).
+    const savedAdjust = siteMap.userHasAdjustedView; siteMap.userHasAdjustedView = false;
+    await fitView();
+    siteMap.userHasAdjustedView = savedAdjust;
+    const view = siteMap.view;
+    await new Promise(res=> E.reactiveUtils.whenOnce(()=> !view.updating).then(res));
+    const pv = pinsInView(view);
+    const shot = await view.takeScreenshot({ width: SITE_MAP_CONFIG.screenshotWidth });
+    const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
+    const meta = { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside };
+    siteMap.screenshot = { dataUrl, valid: true, meta };
+    return { dataUrl, meta };
+  } finally {
+    try{ if(siteMap.view) siteMap.view.destroy(); }catch(_){}
+    host.remove();
+    // Restore the interactive view state.
+    siteMap.view = savedView; siteMap.esriMap = savedMap; siteMap.layers = savedLayers; siteMap.contourIds = savedIds; siteMap.renderedInterval = savedRendered;
+  }
 }
 
 /* ===================== BOOTSTRAP ===================== */

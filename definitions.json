@@ -232,14 +232,21 @@
       "instruction": "(Existing)",
       "type": "none",
       "icon": "🗺",
-      "note": "Coming soon... A MAP!",
+      "note": "Enter as decimal degrees, e.g. -27.4710, 153.0234. Use the Site Map button to view the location.",
       "fields": [
         {
           "key": "existing",
           "label": "Existing",
           "type": "text"
         }
-      ]
+      ],
+      "mapPin": {
+        "field": "existing",
+        "label": "Current location",
+        "colour": "red",
+        "defaultOn": true,
+        "anchor": true
+      }
     },
     {
       "id": "relocation",
@@ -263,7 +270,17 @@
           "label": "New Location (coordinates)",
           "type": "text"
         }
-      ]
+      ],
+      "mapPin": {
+        "field": "newLocation",
+        "label": "Relocation site",
+        "colour": "orange",
+        "defaultOn": true,
+        "requires": {
+          "row": "relocation",
+          "not": "No"
+        }
+      }
     },
     {
       "id": "accessibility",
@@ -570,7 +587,13 @@
               "label": "Coordinates",
               "type": "text"
             }
-          ]
+          ],
+          "mapPin": {
+            "field": "detail",
+            "label": "River line termination",
+            "colour": "blue",
+            "defaultOn": true
+          }
         },
         {
           "shared": "coords"
@@ -590,7 +613,13 @@
               "label": "New Coordinates",
               "type": "text"
             }
-          ]
+          ],
+          "mapPin": {
+            "field": "newRiver",
+            "label": "River line relocation",
+            "colour": "purple",
+            "defaultOn": true
+          }
         },
         {
           "id": "gaugeBoards",
