@@ -342,10 +342,27 @@ not "No", and — on the Water Level table — `riverCoords` / `riverRelocation`
   misbehaves, open it, copy, and paste it back. Every external call is bounded by
   a timeout (see `SITE_MAP_CONFIG.timeouts`), so no service can ever hang the modal.
 - **Row-selection panel** — tick/untick which pins show; the view re-fits as you
-  do (until you pan or zoom, after which **Reset view** restores auto-fit).
-- **Contour interval** — 1 m / 5 m / 10 m, defaulting to 1 m. Outside LiDAR
-  coverage the map falls back to a coarser interval and says which one it is
-  showing (1 m LiDAR only exists over the eastern/SEQ coverage area).
+  do (until you pan or zoom, after which **Reset view** restores auto-fit). Each
+  pin's coordinate is shown next to its label, and travels into the exported image.
+- **Contour interval** — 1 m / 5 m / 10 m, defaulting to 1 m, with an on/off
+  toggle for a fast imagery-and-pins map. Outside LiDAR coverage the map falls
+  back to a coarser interval and says which one it is showing (1 m LiDAR only
+  exists over the eastern/SEQ coverage area).
+- **Move pins** — a toolbar toggle (off by default). While on, drag a pin to a
+  new location: the coordinate is rounded to 6 dp, written back to the scope
+  row's field, and a toast shows how far it moved with a one-click **Undo**. The
+  scope field shows the new value on close — no silent rewrites, no accidental
+  nudges (the mode is explicit).
+- **Measure** — Esri's `DistanceMeasurement2D`, geodesic, metres switching to km
+  above 1 km, with the widget's own clear/reset. Measurements are transient and
+  do not appear in the exported image.
+- **Relocation distance** — when both the current-location and relocation-site
+  pins parse, the panel offers the geodesic distance between them as a one-click
+  suggestion for the Relocation *Distance* field (it never overwrites a typed
+  value silently, and it is undoable). Recomputed when a pin is dragged. The
+  river-line relocation distance is intentionally **not** auto-calculated: there
+  is no matching field in `definitions.json`, so it is left alone rather than
+  guessed at.
 - **Include in the Word copy** — tick *"Include site map in copied output"* to
   paste a screenshot of the map (with pins, legend, contour interval and the
   QLD/Esri attribution) into Word alongside the tables. The **Copy map image**
@@ -366,29 +383,44 @@ and filters to it; if it cannot resolve cleanly it hides the road layer and show
 a banner rather than drawing unfiltered cadastre. This lookup runs **off the
 critical path**: the map opens and frames the pins while it is still outstanding.
 
-> **Outstanding unknown — cadastre road field.** Which DCDB field/value the road
-> filter resolves to is still not confirmed against the live service (egress to
-> the QLD hosts is blocked in the build sandbox). The candidate list is
-> `SITE_MAP_CONFIG.roadFieldCandidates` (currently `tenure`, `parcel_typ`,
-> `parcel_type`, `feat_name`, `segpar_typ`, `lot_area`). The **Map diagnostics**
-> panel now prints the field and value it actually resolved to (e.g. `tenure LIKE
-> '%ROAD%'`) — read it once on a real network and record the confirmed field here,
-> then the candidate list can be trimmed. The 1 m / 5 m / 10 m contour sublayer IDs
-> are likewise probed by name at runtime and reported in the same panel; confirm
-> them there too (the fallback for 1 m is sublayer `30`).
+> **Confirmed against the live service** (from a working diagnostics session, so
+> these are now facts, not candidates):
+>
+> - **Cadastre road field — resolved.** The road filter is
+>   **`UPPER(tenure) LIKE '%ROAD%'`**, matching **202 parcels** at a real site.
+>   `tenure` is the confirmed DCDB field; the rest of
+>   `SITE_MAP_CONFIG.roadFieldCandidates` remain only as fallbacks should the
+>   schema ever change.
+> - **Contour sublayer IDs — resolved.** 1 m = **30**, 5 m = **20**, 10 m = **10**
+>   on the `Elevation/Contours` MapServer. (These are also probed by name at
+>   runtime; the values above are what the live service returns.)
+> - **Imagery — confirmed.** Loads as an **`ImageryTileLayer`** in ~0.0 s (Esri
+>   CDN ~0.9 s); all QLD hosts reachable.
+>
+> Road reserve is drawn as a **client-side `FeatureLayer`** with a high-contrast
+> **magenta 2 px outline and no fill**, and **no zoomed-in scale ceiling**
+> (`maxScale: 0`): the cadastre service's own hairline outline is invisible over
+> aerial imagery, and a server-side `maxScale` would hide the parcels at close
+> zoom — the diagnostics panel prints the service's declared min/max scale for
+> sublayer 4 so that suppression is visible if it ever recurs. Contours are drawn
+> as a **`FeatureLayer`** for the selected interval (client-side WebGL, no
+> per-pan `exportImage` round-trip), with a lean `png8`/dpi-96 `MapImageLayer`
+> fallback and an on/off toggle.
 
-> **Note for maintainers:** the QLD ArcGIS endpoints and the Esri CDN could not
-> be reached from the build sandbox (blocked by network egress policy), so the
-> live map render, the road-filter resolution, the `takeScreenshot` CORS
-> behaviour, and the paste into desktop Word were **not** verifiable there. What
-> *was* verified offline, against the real app code, with a mocked Esri CDN and
-> forced-failing QLD hosts (a Playwright harness): the modal opens centred on the
-> anchor pin, the overlay clears on `view.when()` before layers finish, every
-> external call is bounded by a timeout, and each host failing individually (and
-> all together, and a *hanging* cadastre/contours host) still opens the map with
-> an accurate banner — no code path leaves the overlay up. The live render still
-> needs a quick confirmation in a real browser. If an endpoint has moved, update
-> `SITE_MAP_CONFIG`. Everything that does not need those services (coordinate
-> parsing/validation, pin resolution and gating, the panel, the offline
-> degradation, and the byte-identical copy when the tickbox is off) is covered by
-> the `verify` skill's checks.
+> **Note for maintainers:** the live map now renders correctly at real sites
+> (imagery, 1 m contours, pins, framing and diagnostics all confirmed). The QLD
+> ArcGIS endpoints and the Esri CDN remain **unreachable from the build sandbox**
+> (network egress policy), so changes touching the live render, the road-filter
+> resolution, the `takeScreenshot` CORS behaviour, or the paste into desktop Word
+> must still be spot-checked in a real browser. Logic that does **not** need those
+> services is covered by automated checks:
+>
+> - `tests/reopen-coords.test.mjs` — A3 regression: reopening the modal after a
+>   table edit re-resolves the pins from app state and re-centres on the anchor
+>   when it moved (see `tests/README.md` to run it). It drives the real app code
+>   in headless Chromium and stubs no QLD service.
+> - The `verify` skill covers coordinate parsing/validation, pin resolution and
+>   gating, the panel, offline degradation, and the byte-identical copy when the
+>   map tickbox is off.
+>
+> If an endpoint has moved, update `SITE_MAP_CONFIG`.

@@ -675,6 +675,54 @@
     font-family:"Cascadia Code",Consolas,"Courier New",monospace;
   }
 
+  /* Active state for the toolbar toggles (Move pins / Measure), §B1/§B2. */
+  .smap-move--on, .smap-measure--on{
+    border-color:var(--accent) !important; color:var(--accent-dark) !important;
+    background:var(--accent-soft) !important; font-weight:700;
+  }
+  /* Grab cursor while Move-pins mode is armed and the pointer is over a pin (§B1). */
+  .smap-map.smap-move-armed .esri-view-surface,
+  .smap-map.smap-move-armed canvas{ cursor:grab !important; }
+  .smap-map.smap-grabbing .esri-view-surface,
+  .smap-map.smap-grabbing canvas{ cursor:grabbing !important; }
+
+  /* Undo toast after a pin drag (§B1) — over the map, bottom-centre. */
+  .smap-toast-host{
+    position:absolute; left:50%; bottom:54px; transform:translateX(-50%); z-index:7;
+    display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none;
+  }
+  .smap-toast{
+    display:flex; align-items:center; gap:12px; padding:9px 14px; border-radius:10px;
+    background:rgba(21,37,49,.94); color:#fff; font-size:.8rem; line-height:1.35;
+    box-shadow:0 4px 14px rgba(0,0,0,.3); pointer-events:auto; max-width:520px;
+  }
+  .smap-toast-msg{ flex:1; }
+  .smap-toast-undo{
+    appearance:none; border:1px solid rgba(255,255,255,.5); background:transparent; color:#fff;
+    border-radius:7px; padding:4px 12px; font-size:.78rem; font-weight:700; cursor:pointer; white-space:nowrap;
+  }
+  .smap-toast-undo:hover{ background:rgba(255,255,255,.15); }
+
+  /* Legend coordinate on screen (§B3). */
+  .smap-legend-row{ align-items:flex-start; }
+  .smap-legend-text{ display:flex; flex-direction:column; gap:0; min-width:0; }
+  .smap-legend-label{ font-weight:600; }
+  .smap-legend-coord{ font-size:.72rem; color:var(--ink-soft); word-break:break-word; }
+
+  /* Auto-calculated relocation distance suggestion in the pin panel (§B4). */
+  .smap-distsuggest{
+    margin-top:6px; border-top:1px solid var(--line); padding-top:8px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .smap-distsuggest-row{ display:flex; align-items:center; gap:8px; font-size:.8rem; flex-wrap:wrap; }
+  .smap-distsuggest-val{ font-weight:700; }
+  .smap-distsuggest-use{
+    appearance:none; border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent-dark);
+    border-radius:7px; padding:3px 10px; font-size:.74rem; font-weight:700; cursor:pointer; white-space:nowrap;
+  }
+  .smap-distsuggest-use:hover{ background:var(--accent); color:#fff; }
+  .smap-distsuggest-note{ font-size:.72rem; color:var(--ink-soft); line-height:1.4; }
+
   @media (max-width: 720px){
     .smap-body{ flex-direction:column; }
     .smap-panel{ width:auto; border-left:none; border-top:1px solid var(--line); max-height:38%; }
@@ -1667,6 +1715,7 @@ async function copyTable(){
   let mapNote = "";
   if(includeMapCopy){
     showStatus("Preparing map…");
+    const hadPins = (function(){ const t = activeTable(); refreshPins(t); return activeSitePins().length > 0; })();
     const res = await getMapImageForCopy();
     if(res && res.dataUrl){
       html += `<p style="margin:12px 0 0;font-family:Calibri,Arial,sans-serif;">&nbsp;</p>` +
@@ -1675,8 +1724,12 @@ async function copyTable(){
       const outside = res.meta.pinsTotal - res.meta.pinsInView;
       if(outside > 0) mapNote = " — " + outside + " of " + res.meta.pinsTotal + " pins are outside the current view";
       else mapNote = " (map included)";
+    } else if(!hadPins){
+      mapNote = " (map not included — no coordinates entered)";
     } else {
-      mapNote = " (map not included — offline or no coordinates)";
+      // Pins exist but the raster didn't capture: never paste black — omit the
+      // image and point the user at the diagnostics (A2 "fail loudly").
+      mapNote = " (map not included — capture failed; open the Site Map ▸ Map diagnostics)";
     }
   }
 
@@ -3792,6 +3845,15 @@ const SITE_MAP_CONFIG = {
   contourSublayers: { "1": 30, "5": null, "10": null },
   cadastre: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer",
   cadastreParcelsSublayer: 4,
+  // Road-reserve boundaries are drawn client-side as a FeatureLayer so we control
+  // symbology + scale ourselves (A1 §5): the service's own hairline outline is
+  // invisible over aerial imagery, and we never want a server-side maxScale to
+  // hide it when zoomed in. High-contrast magenta outline, NO fill.
+  roadOutline: { color: [255, 0, 200, 1], width: 2 },
+  // Explicit draw order (A1 §2): layers stream in as they resolve, so map.layers
+  // must be ordered by design, not by completion time. Lower index = bottom.
+  // Pins live in view.graphics and are always on top of every layer here.
+  layerOrder: { imagery: 0, road: 1, contour: 2, labels: 3 },
   // Candidate DCDB fields that may denote "road". The map reads the live schema,
   // picks the first field that exists, and filters UPPER(field) LIKE '%ROAD%'.
   // If none resolve (or none return features) the road layer is WITHHELD and a
@@ -3837,7 +3899,14 @@ const siteMap = {
   contourIds: null,         // { "1":id, "5":id, "10":id } resolved from service
   contourInterval: "1",     // requested interval
   renderedInterval: "1",    // interval actually shown after coverage fallback
+  contourMode: "",          // "feature" | "mapimage" — how contours are drawn (A4)
+  contoursOn: true,         // contours on/off toggle (A4 §4)
   userHasAdjustedView: false,
+  moveMode: false,          // "Move pins" mode — draggable pins, off by default (B1)
+  hoverGraphic: null,       // pin graphic currently under the pointer (B1)
+  dragGraphic: null,        // pin graphic being dragged (B1)
+  lastPinEdit: null,        // { tableId, rowId, field, prevValue } for undo (B1)
+  measureWidget: null,      // DistanceMeasurement2D widget instance (B2)
   pins: [],                 // resolved pin descriptors for the current table
   triggerEl: null,
   screenshot: { dataUrl: null, valid: false, meta: null },
@@ -3890,10 +3959,15 @@ function freshDiag(){
   return {
     esri:     { status:"pending", ms:null, note:"" },
     imagery:  { status:"pending", ms:null, note:"", layerClass:"" },
-    contours: { status:"pending", ms:null, note:"", sublayer:"" },
-    cadastre: { status:"pending", ms:null, note:"", resolved:"" },
-    road:     { status:"pending", ms:null, note:"" },
+    contours: { status:"pending", ms:null, note:"", sublayer:"", mode:"" },
+    cadastre: { status:"pending", ms:null, note:"", resolved:"", serviceScale:"" },
+    road:     { status:"pending", ms:null, note:"", mode:"" },
     labels:   { status:"pending", ms:null, note:"" },
+    // Screenshot capture (A5): did takeScreenshot land a raster on the canvas?
+    screenshot: { status:"idle", note:"", dims:"", decoded:null },
+    // Per-layer snapshot rebuilt from map.layers on demand (A5): visible,
+    // effective min/max scale, and index in the stack.
+    layers: [],
     log: []
   };
 }
@@ -3948,6 +4022,7 @@ function resolveMapPins(table){
     out.push({
       key: row.id,
       rowId: row.id,
+      field: mp.field,                       // which field this pin writes back to (B1/B4)
       label: mp.label || row.item || row.id,
       colour: mp.colour || "red",
       anchor: !!mp.anchor,
@@ -3977,6 +4052,53 @@ function refreshPins(table){
 
 function activeSitePins(){ return siteMap.pins.filter(p=>p.on && p.ok); }
 
+// Coordinate equality to the app's stored precision (6 dp ≈ 0.1 m).
+function coordEq(a, b){
+  if(!a || !b) return a === b;
+  const r = n => Math.round(n*1e6);
+  return r(a.lat) === r(b.lat) && r(a.lon) === r(b.lon);
+}
+// Snapshot the current anchor pin coordinate (rowId + lat/lon) for change
+// detection across a modal re-open (A3).
+function anchorSnapshot(pins){
+  const list = (pins || []).filter(p=>p.on && p.ok);
+  const anchor = list.find(p=>p.anchor) || list[0];
+  return anchor ? { rowId: anchor.rowId, lat: anchor.lat, lon: anchor.lon } : null;
+}
+
+// Re-read every pin from app state on each open and decide how the view must
+// react (A3). The view is kept alive between opens, but the pins — and the
+// framing — must always reflect the CURRENT table values, not the values from
+// when the view was first built. Returns { anchorChanged, anyChanged }.
+function syncPinsForReopen(table){
+  // Snapshot the pins as they stood before this open, keyed by row, so we can
+  // tell what the table edit actually changed.
+  const prevByRow = {};
+  siteMap.pins.forEach(p=>{ if(p.ok) prevByRow[p.rowId] = { lat:p.lat, lon:p.lon }; });
+  const prevAnchor = anchorSnapshot(siteMap.pins);
+
+  refreshPins(table);                 // re-resolve from state, preserving toggles
+
+  const nextAnchor = anchorSnapshot(siteMap.pins);
+  const anchorChanged = !!(prevAnchor && nextAnchor) &&
+    (prevAnchor.rowId !== nextAnchor.rowId || !coordEq(prevAnchor, nextAnchor));
+
+  let anyChanged = false;
+  const nowByRow = {};
+  siteMap.pins.forEach(p=>{ if(p.ok) nowByRow[p.rowId] = { lat:p.lat, lon:p.lon }; });
+  const rows = new Set([...Object.keys(prevByRow), ...Object.keys(nowByRow)]);
+  rows.forEach(r=>{ if(!coordEq(prevByRow[r], nowByRow[r])) anyChanged = true; });
+
+  if(anchorChanged){
+    // The manual framing was for the OLD location and is no longer meaningful —
+    // drop it so fitView re-centres on the new anchor.
+    siteMap.userHasAdjustedView = false;
+    diagLog("Anchor pin coordinate changed since last open — re-centring on the new location.");
+  }
+  if(anyChanged) invalidateScreenshot();
+  return { anchorChanged, anyChanged };
+}
+
 /* ---- lazy Esri loader (§5, §7.3): inject CSS + AMD loader once, on demand ---- */
 function loadEsri(){
   if(siteMap.esri){ setDiag("esri", { status:"loaded" }); return Promise.resolve(siteMap.esri); }
@@ -3997,10 +4119,11 @@ function loadEsri(){
         window.require([
           "esri/Map","esri/views/MapView",
           "esri/layers/ImageryLayer","esri/layers/ImageryTileLayer",
-          "esri/layers/MapImageLayer","esri/layers/TileLayer",
-          "esri/Graphic","esri/core/reactiveUtils","esri/config"
-        ], (Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,Graphic,reactiveUtils,esriConfig)=>{
-          siteMap.esri = { Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,Graphic,reactiveUtils,esriConfig };
+          "esri/layers/MapImageLayer","esri/layers/TileLayer","esri/layers/FeatureLayer",
+          "esri/Graphic","esri/core/reactiveUtils","esri/config",
+          "esri/widgets/DistanceMeasurement2D"
+        ], (Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,FeatureLayer,Graphic,reactiveUtils,esriConfig,DistanceMeasurement2D)=>{
+          siteMap.esri = { Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,FeatureLayer,Graphic,reactiveUtils,esriConfig,DistanceMeasurement2D };
           resolve(siteMap.esri);
         }, reject);
       };
@@ -4035,7 +4158,15 @@ async function resolveRoadWhere(){
   try{
     const { json, ms } = await timedFetchJson(base + "?f=json", "Cadastre schema (cadastre ?f=json)", T);
     fields = (json.fields || []).map(f=> String(f.name));
-    setDiag("cadastre", { ms }, "Cadastre schema returned " + fields.length + " fields.");
+    // Surface the service's OWN declared scale window for sublayer 4 (A1 §4 / A5):
+    // a server-side maxScale here would hide parcels when zoomed in, exactly the
+    // road-reserve-invisible symptom. minScale 0 / maxScale 0 = no server limit.
+    const smin = (json.minScale != null) ? json.minScale : 0;
+    const smax = (json.maxScale != null) ? json.maxScale : 0;
+    const scaleNote = "sublayer " + SITE_MAP_CONFIG.cadastreParcelsSublayer +
+      " service min:" + (smin || 0) + " max:" + (smax || 0) +
+      ((smax && smax > 0) ? " ** service hides this sublayer when zoomed in past 1:" + smax + " **" : "");
+    setDiag("cadastre", { ms, serviceScale: scaleNote }, "Cadastre schema returned " + fields.length + " fields; " + scaleNote + ".");
   }catch(e){
     setDiag("cadastre", { status: e.isTimeout ? "timed out" : "failed", ms: e._ms||null, note: e.message||"error" },
       "Cadastre schema lookup " + (e.isTimeout ? "timed out" : "failed") + ": " + (e.message||"error"));
@@ -4124,6 +4255,21 @@ function updateScaleHint(view){
   } else { host.hidden = true; host.textContent = ""; }
 }
 
+/* ---- explicit layer stacking (A1 §2) --------------------------------------
+   Layers stream in as they resolve, so map.add() (append) leaves map.layers
+   ordered by completion time, not by design — and the road reserve can end up
+   under the contours or the labels and never show. Every layer carries its
+   designed z-order and is inserted at the position that keeps the stack
+   imagery → road → contours → labels, regardless of who finishes first. Pins
+   live in view.graphics and always draw above every layer here. */
+function insertLayerOrdered(map, layer, kind){
+  const order = SITE_MAP_CONFIG.layerOrder[kind];
+  layer.__zorder = (order == null) ? 99 : order;
+  let idx = 0;
+  map.layers.forEach(l=>{ if((l.__zorder != null ? l.__zorder : 99) <= layer.__zorder) idx++; });
+  map.add(layer, idx);
+}
+
 /* ---- individual layer loaders, each bounded + self-reporting (§4.3, §6) ----
    `silent` suppresses banners/diagnostics for the throwaway off-screen copy view
    (captureOffscreen) so it never disturbs the interactive modal's report. */
@@ -4133,6 +4279,7 @@ async function loadImageryLayer(imagery, map, silent){
     // §3/§4.2: the ImageServer reports a Single Fused Map Cache, so it must be an
     // ImageryTileLayer (pre-built /tile/{z}/{y}/{x}), not a dynamic ImageryLayer.
     await withTimeout(imagery.load(), SITE_MAP_CONFIG.timeouts.layer, "Imagery service (ImageServer)");
+    imagery.__zorder = SITE_MAP_CONFIG.layerOrder.imagery;
     if(!silent) setDiag("imagery", { status:"loaded", ms: Math.round(smNow()-start), layerClass:"ImageryTileLayer" }, "Imagery loaded as ImageryTileLayer (tiled).");
   }catch(e){
     // Last-resort fallback to a dynamic ImageryLayer. Per §4.2 this should not be
@@ -4141,7 +4288,7 @@ async function loadImageryLayer(imagery, map, silent){
       try{ map.remove(imagery); }catch(_){}
       const dyn = new siteMap.esri.ImageryLayer({ url: SITE_MAP_CONFIG.imagery });
       await withTimeout(dyn.load(), SITE_MAP_CONFIG.timeouts.layer, "Imagery service (ImageServer, dynamic)");
-      siteMap.layers.imagery = dyn; map.add(dyn, 0);
+      siteMap.layers.imagery = dyn; insertLayerOrdered(map, dyn, "imagery");
       if(!silent){
         setDiag("imagery", { status:"loaded", ms: Math.round(smNow()-start), layerClass:"ImageryLayer (dynamic fallback)" }, "Tiled imagery failed; loaded dynamic ImageryLayer fallback.");
         siteMapBanner("Imagery loaded in slower dynamic mode (tiled imagery was unavailable).", "warn");
@@ -4154,18 +4301,74 @@ async function loadImageryLayer(imagery, map, silent){
     }
   }
 }
+
+// Elevation-label rendering for the FeatureLayer contour path (A4 §1): keep the
+// metre labels the MapImageLayer used to draw server-side, but under our control.
+// The elevation field name isn't hardcoded — it's detected from the layer schema
+// (detectElevationField) so a wrong guess can't silently break the labels.
+function contourLabelingInfo(fieldName){
+  if(!fieldName) return [];
+  return [{
+    labelExpressionInfo: { expression: "Text(Round($feature." + fieldName + ", 1)) + ' m'" },
+    symbol: { type:"text", color:[40,30,15], haloColor:[255,255,255,0.9], haloSize:1, font:{ size:9, weight:"bold" } },
+    minScale: 8000, maxScale: 0,
+    labelPlacement: "center-along"
+  }];
+}
+// Pick the field that holds the contour's elevation value from the layer's schema.
+function detectElevationField(layer){
+  const fields = (layer && layer.fields) || [];
+  const numeric = f => /small-integer|integer|single|double|long/.test(String(f.type||""));
+  // Prefer an obvious elevation/contour/height field; fall back to any numeric one.
+  const byName = fields.find(f=> numeric(f) && /elev|contour|height|^alt$|_alt|value|^z$/i.test(f.name));
+  if(byName) return byName.name;
+  const anyNum = fields.find(f=> numeric(f) && !/objectid|shape|fid|id$/i.test(f.name));
+  return anyNum ? anyNum.name : "";
+}
+function contourRenderer(){
+  return { type:"simple", symbol:{ type:"simple-line", color:[150,90,30,0.9], width:0.7 } };
+}
+
+/* Contours (A4): draw the requested interval as a FeatureLayer so it renders
+   client-side with WebGL and caches features locally instead of round-tripping a
+   server-side exportImage on every pan/zoom — the actual cause of the slowness.
+   Falls back to a lean png8 MapImageLayer if the FeatureLayer path is unavailable
+   (option 2). Honours the contours on/off toggle (option 4). */
 async function loadContourLayer(map, silent){
   const start = smNow();
+  if(!siteMap.contoursOn){ if(!silent) setDiag("contours", { status:"off", ms:0, note:"contours toggled off" }, "Contours are toggled off."); return; }
   try{
     await resolveContourLayers();   // sets siteMap.contourIds (bounded fetch inside)
+    const id = siteMap.contourIds && siteMap.contourIds[siteMap.contourInterval];
+    if(id == null){ if(!silent) setDiag("contours", { status:"failed", ms: Math.round(smNow()-start), note:"no contour sublayer resolved for " + siteMap.contourInterval + " m" }, "No contour sublayer resolved for " + siteMap.contourInterval + " m."); return; }
+    // Primary: FeatureLayer on the single requested-interval sublayer (A4 §1).
+    try{
+      const fl = new siteMap.esri.FeatureLayer({
+        url: SITE_MAP_CONFIG.contours + "/" + id,
+        outFields: ["*"], opacity: 0.9,
+        minScale: 0, maxScale: 0,
+        renderer: contourRenderer()
+      });
+      await withTimeout(fl.load(), SITE_MAP_CONFIG.timeouts.layer, "Contours service (FeatureLayer)");
+      if(fl.capabilities && fl.capabilities.query && fl.capabilities.query.supportsQuery === false) throw new Error("sublayer does not support query");
+      const elevField = detectElevationField(fl);
+      if(elevField){ fl.labelingInfo = contourLabelingInfo(elevField); fl.labelsVisible = true; }
+      siteMap.contourElevField = elevField;
+      siteMap.layers.contour = fl; siteMap.contourMode = "feature"; insertLayerOrdered(map, fl, "contour");
+      if(!silent) setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + id + ")", mode:"FeatureLayer (client-side WebGL)" }, "Contours loaded as FeatureLayer (client-side, no per-pan round-trip) — " + siteMap.contourInterval + " m, sublayer id " + id + ".");
+      return;
+    }catch(eFeat){
+      diagLog("Contours FeatureLayer path unavailable (" + (eFeat.message||"error") + ") — falling back to a lean png8 MapImageLayer.");
+    }
+    // Fallback: MapImageLayer, png8 + dpi 96 to cut the exportImage payload (A4 §2).
     const subs = [];
     ["1","5","10"].forEach(k=>{ if(siteMap.contourIds[k] != null) subs.push({ id: siteMap.contourIds[k], visible: k === siteMap.contourInterval }); });
     if(!subs.length){ if(!silent) setDiag("contours", { status:"failed", ms: Math.round(smNow()-start), note:"no contour sublayers resolved" }, "No contour sublayers could be resolved."); return; }
-    const contour = new siteMap.esri.MapImageLayer({ url: SITE_MAP_CONFIG.contours, opacity: 0.7, minScale: SITE_MAP_CONFIG.dynamicMinScale, sublayers: subs });
+    const contour = new siteMap.esri.MapImageLayer({ url: SITE_MAP_CONFIG.contours, opacity: 0.7, minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0, imageFormat:"png8", dpi:96, sublayers: subs });
     await withTimeout(contour.load(), SITE_MAP_CONFIG.timeouts.layer, "Contours service (MapServer)");
-    siteMap.layers.contour = contour; map.add(contour);
+    siteMap.layers.contour = contour; siteMap.contourMode = "mapimage"; insertLayerOrdered(map, contour, "contour");
     const shownId = siteMap.contourIds[siteMap.contourInterval];
-    if(!silent) setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + shownId + ")" }, "Contours loaded (showing " + siteMap.contourInterval + " m, sublayer id " + shownId + ").");
+    if(!silent) setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + shownId + ")", mode:"MapImageLayer png8 (server render)" }, "Contours loaded (MapImageLayer png8/dpi96, showing " + siteMap.contourInterval + " m, sublayer id " + shownId + ").");
   }catch(e){
     if(!silent){
       setDiag("contours", { status: e.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: e.message||"error" }, "Contours service " + (e.isTimeout?"timed out":"failed") + ": " + (e.message||"error"));
@@ -4173,22 +4376,51 @@ async function loadContourLayer(map, silent){
     }
   }
 }
+
+/* Road reserve (A1): draw as a FeatureLayer with a high-contrast magenta outline
+   and NO scale ceiling, so it is legible over aerial imagery and never hidden by
+   a server-side maxScale when zoomed in (the reported symptom). Falls back to a
+   MapImageLayer with the same outline renderer if the FeatureLayer path is
+   unavailable. Never renders unfiltered cadastre — the filter must resolve first. */
 async function loadRoadLayer(map, silent){
   const start = smNow();
   try{
     const road = await resolveRoadWhere();   // bounded + diag inside; off critical path (§4.1)
-    if(road){
-      const roadLayer = new siteMap.esri.MapImageLayer({
-        url: SITE_MAP_CONFIG.cadastre, opacity: 0.85, minScale: SITE_MAP_CONFIG.dynamicMinScale,
-        sublayers: [{ id: SITE_MAP_CONFIG.cadastreParcelsSublayer, visible:true, definitionExpression: road.where }]
-      });
-      await withTimeout(roadLayer.load(), SITE_MAP_CONFIG.timeouts.layer, "Road reserve (cadastre MapServer)");
-      siteMap.layers.road = roadLayer; map.add(roadLayer);
-      if(!silent) setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where }, "Road reserve layer applied (" + road.where + ").");
-    } else if(!silent){
-      setDiag("road", { status:"withheld", ms: Math.round(smNow()-start), note:"road filter could not be resolved from the live cadastre schema" }, "Road reserve withheld — filter not resolved.");
-      siteMapBanner("Road reserve hidden: could not resolve the road filter from the live cadastre schema. Showing imagery + contours only (never unfiltered cadastre).", "warn");
+    if(!road){
+      if(!silent){
+        setDiag("road", { status:"withheld", ms: Math.round(smNow()-start), note:"road filter could not be resolved from the live cadastre schema" }, "Road reserve withheld — filter not resolved.");
+        siteMapBanner("Road reserve hidden: could not resolve the road filter from the live cadastre schema. Showing imagery + contours only (never unfiltered cadastre).", "warn");
+      }
+      return;
     }
+    const outline = SITE_MAP_CONFIG.roadOutline;
+    const roadRenderer = { type:"simple", symbol:{ type:"simple-fill", color:[0,0,0,0], outline:{ color: outline.color, width: outline.width } } };
+    // Primary: FeatureLayer — client-side symbology we control, no server maxScale.
+    try{
+      const fl = new siteMap.esri.FeatureLayer({
+        url: SITE_MAP_CONFIG.cadastre + "/" + SITE_MAP_CONFIG.cadastreParcelsSublayer,
+        definitionExpression: road.where,
+        outFields: ["*"], opacity: 1,
+        minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0,   // no zoomed-in ceiling
+        renderer: roadRenderer
+      });
+      await withTimeout(fl.load(), SITE_MAP_CONFIG.timeouts.layer, "Road reserve (cadastre FeatureLayer)");
+      if(fl.capabilities && fl.capabilities.query && fl.capabilities.query.supportsQuery === false) throw new Error("sublayer does not support query");
+      siteMap.layers.road = fl; insertLayerOrdered(map, fl, "road");
+      if(!silent) setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where, mode:"FeatureLayer, magenta outline, maxScale 0" }, "Road reserve applied as FeatureLayer (" + road.where + ") — magenta 2 px outline, no zoomed-in scale ceiling.");
+      return;
+    }catch(eFeat){
+      diagLog("Road reserve FeatureLayer path unavailable (" + (eFeat.message||"error") + ") — falling back to MapImageLayer with the same outline.");
+    }
+    // Fallback: MapImageLayer, still with an explicit outline renderer + maxScale 0.
+    const roadLayer = new siteMap.esri.MapImageLayer({
+      url: SITE_MAP_CONFIG.cadastre, opacity: 1, minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0,
+      sublayers: [{ id: SITE_MAP_CONFIG.cadastreParcelsSublayer, visible:true, definitionExpression: road.where,
+        renderer: roadRenderer }]
+    });
+    await withTimeout(roadLayer.load(), SITE_MAP_CONFIG.timeouts.layer, "Road reserve (cadastre MapServer)");
+    siteMap.layers.road = roadLayer; insertLayerOrdered(map, roadLayer, "road");
+    if(!silent) setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where, mode:"MapImageLayer, outline renderer, maxScale 0" }, "Road reserve applied as MapImageLayer (" + road.where + ") — outline renderer, no zoomed-in scale ceiling.");
   }catch(e){
     if(!silent){
       setDiag("road", { status: e.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: e.message||"error" }, "Road reserve " + (e.isTimeout?"timed out":"failed") + ": " + (e.message||"error"));
@@ -4201,7 +4433,7 @@ async function loadLabelsLayer(map, silent){
   try{
     const labels = new siteMap.esri.MapImageLayer({ url: SITE_MAP_CONFIG.imageryLabels, opacity: 0.9 });
     await withTimeout(labels.load(), SITE_MAP_CONFIG.timeouts.layer, "Imagery labels service");
-    siteMap.layers.labels = labels; map.add(labels);
+    siteMap.layers.labels = labels; insertLayerOrdered(map, labels, "labels");
     if(!silent) setDiag("labels", { status:"loaded", ms: Math.round(smNow()-start) }, "Imagery labels loaded.");
   }catch(e){
     if(!silent) setDiag("labels", { status: e.isTimeout ? "timed out" : "not loaded", ms: Math.round(smNow()-start), note: e.message||"error" }, "Imagery labels not loaded (optional): " + (e.message||"error"));
@@ -4224,7 +4456,10 @@ async function buildView(container, opts){
   siteMap.layers = {};
 
   // Imagery created + added up front so it is the bottom layer; loaded below.
+  // Tag its z-order now (A1 §2) so later layers insert above it even while it
+  // is still loading.
   const imagery = new E.ImageryTileLayer({ url: SITE_MAP_CONFIG.imagery });
+  imagery.__zorder = SITE_MAP_CONFIG.layerOrder.imagery;
   siteMap.layers.imagery = imagery;
   map.add(imagery);
   if(!offscreen) setDiag("imagery", { layerClass: "ImageryTileLayer" });
@@ -4255,6 +4490,7 @@ async function buildView(container, opts){
     });
     E.reactiveUtils.watch(()=> view.stationary, (stationary)=>{ if(stationary){ invalidateScreenshot(); renderDiagnostics(); } });
     startScaleHintWatch(view);
+    attachPinDragHandlers(view);      // draggable pins in Move-pins mode (§B1)
     renderDiagnostics();
 
     // Stream the operational layers in WITHOUT blocking the already-open modal.
@@ -4281,12 +4517,14 @@ function drawPins(){
   const E = siteMap.esri;
   view.graphics.removeAll();
   activeSitePins().forEach(p=>{
-    view.graphics.add(new E.Graphic({
+    const g = new E.Graphic({
       geometry: { type:"point", longitude:p.lon, latitude:p.lat },
       symbol: { type:"simple-marker", color: pinRgb(p.colour), size:15, outline:{ color:[255,255,255], width:2 } },
       attributes: { label:p.label, coord: formatCoord(p.lat, p.lon) },
       popupTemplate: { title:"{label}", content:"{coord}" }
-    }));
+    });
+    g.__pin = p;                     // link the graphic back to its pin (§B1 drag)
+    view.graphics.add(g);
   });
 }
 
@@ -4315,34 +4553,247 @@ async function fitView(){
   invalidateScreenshot();
 }
 
-/* ---- switch contour interval, with coverage auto-fallback (§5) ---- */
+/* ============================================================================
+   PART B — draggable pins, distance measurement, legend coordinates, auto
+   relocation distance. Everything here edits or reads the USER'S coordinates,
+   so it is deliberately opt-in and reversible.
+   ========================================================================== */
+
+/* ---- Move-pins mode toggle (§B1) — off by default, unambiguous, cheap ---- */
+function setMoveMode(on){
+  siteMap.moveMode = (on == null) ? !siteMap.moveMode : !!on;
+  if(siteMap.moveMode && siteMap.measureWidget) setMeasureOn(false);   // mutually exclusive
+  const btn = siteMap.overlay && siteMap.overlay.querySelector(".smap-move");
+  if(btn){ btn.textContent = "Move pins: " + (siteMap.moveMode ? "on" : "off"); btn.setAttribute("aria-pressed", String(siteMap.moveMode)); btn.classList.toggle("smap-move--on", siteMap.moveMode); }
+  if(!siteMap.moveMode){
+    siteMap.hoverGraphic = null; siteMap.dragGraphic = null;
+    if(siteMap.mapHost) siteMap.mapHost.classList.remove("smap-move-armed","smap-grabbing");
+  }
+  if(siteMap.moveMode) siteMapBanner("Move-pins mode is on — drag a pin to reposition it; the new coordinate is written back to the table (with undo).", "warn");
+}
+
+// Find a pin graphic in a hitTest result (only our pins carry __pin).
+function findPinGraphic(hit){
+  if(!hit || !hit.results) return null;
+  for(const r of hit.results){
+    const g = r.graphic;
+    if(g && g.__pin && g.__pin.field) return g;
+  }
+  return null;
+}
+
+/* Attach the drag recipe (§B1). Hover sets a grab cursor over a draggable pin;
+   a drag that starts on a hovered pin repositions THAT pin (and stops the map
+   from panning), updates the readout live, and on release writes the rounded
+   coordinate back to the table with a toast + undo. */
+function attachPinDragHandlers(view){
+  view.on("pointer-move", (event)=>{
+    if(!siteMap.moveMode || siteMap.dragGraphic) return;
+    view.hitTest(event).then(hit=>{
+      const g = findPinGraphic(hit);
+      siteMap.hoverGraphic = g || null;
+      if(siteMap.mapHost) siteMap.mapHost.classList.toggle("smap-move-armed", !!g);
+    }).catch(()=>{});
+  });
+  view.on("drag", (event)=>{
+    if(!siteMap.moveMode) return;
+    if(event.action === "start"){
+      if(siteMap.hoverGraphic){
+        siteMap.dragGraphic = siteMap.hoverGraphic;
+        const geom = siteMap.dragGraphic.geometry;
+        siteMap.dragStart = geom ? { lat: geom.latitude, lon: geom.longitude } : null;
+        if(siteMap.mapHost) siteMap.mapHost.classList.add("smap-grabbing");
+        event.stopPropagation();              // don't pan the map while dragging a pin
+      }
+    } else if(event.action === "update" && siteMap.dragGraphic){
+      const pt = view.toMap({ x: event.x, y: event.y });
+      if(pt){
+        siteMap.dragGraphic.geometry = { type:"point", longitude: pt.longitude, latitude: pt.latitude };
+        updateDragReadout(siteMap.dragGraphic, pt.latitude, pt.longitude);
+      }
+      event.stopPropagation();
+    } else if(event.action === "end" && siteMap.dragGraphic){
+      const g = siteMap.dragGraphic;
+      siteMap.dragGraphic = null;
+      if(siteMap.mapHost) siteMap.mapHost.classList.remove("smap-grabbing");
+      finalizePinDrag(g);
+      event.stopPropagation();
+    }
+  });
+}
+
+// Live coordinate readout in the pin panel while dragging (§B1).
+function updateDragReadout(graphic, lat, lon){
+  const p = graphic.__pin; if(!p) return;
+  p.lat = lat; p.lon = lon;
+  const host = siteMap.panelHost;
+  if(host){
+    const row = host.querySelector('[data-pin-key="' + cssEscape(p.key) + '"] .smap-pin-coord');
+    if(row) row.textContent = formatCoord(lat, lon);
+  }
+  renderDistanceSuggestion();      // keep any relocation-distance suggestion live (§B4)
+}
+
+/* On release: round to 6 dp (~0.1 m), re-parse through the shared path, write it
+   back to the originating row's field in app state, and offer undo (§B1). */
+function finalizePinDrag(graphic){
+  const p = graphic.__pin; if(!p) return;
+  const table = activeTable(); if(!table){ return; }
+  const geom = graphic.geometry; if(!geom) return;
+  const lat = Math.round(geom.latitude*1e6)/1e6;
+  const lon = Math.round(geom.longitude*1e6)/1e6;
+  const newStr = formatCoord(lat, lon);              // decimal degrees — the app's canonical field format
+  const parsed = parseCoord(newStr);
+  if(!parsed.ok){ siteMapBanner("Could not apply the dragged coordinate.", "error"); return; }
+
+  const rs = state[table.id] && state[table.id][p.rowId];
+  if(!rs){ return; }
+  const prevValue = (rs.fields && rs.fields[p.field] != null) ? String(rs.fields[p.field]) : "";
+  if(!rs.fields) rs.fields = {};
+  rs.fields[p.field] = newStr;
+
+  // Distance moved, for the toast (geodesic-ish via Haversine — no new dependency).
+  const from = siteMap.dragStart;
+  const movedM = from ? Math.round(haversineKm(from.lat, from.lon, lat, lon) * 1000) : null;
+  siteMap.dragStart = null;
+
+  // Update descriptor, re-resolve pins from state, redraw, refresh dependents.
+  refreshPins(table);
+  drawPins();
+  invalidateScreenshot();
+  reflectTableEdit(table);           // builder field shows the new value on close
+  renderSiteMapPanel();              // panel readout + B4 suggestion follow along
+
+  siteMap.lastPinEdit = { tableId: table.id, rowId: p.rowId, field: p.field, prevValue };
+  const movedStr = (movedM == null) ? "" : (movedM >= 1000 ? (movedM/1000).toFixed(2) + " km" : movedM + " m");
+  showPinMoveToast((p.label || "Pin") + " moved" + (movedStr ? " " + movedStr : "") + " → " + newStr);
+}
+
+// Push a table edit made from the map back into the builder so the field shows
+// the new value without a manual refresh (§B1). Cheap; no persistence layer for
+// answers, so re-rendering the visible builder is all that's needed.
+function reflectTableEdit(table){
+  try{
+    if(typeof mode !== "undefined" && mode === "builder" && activeTableId === table.id && typeof renderRows === "function"){
+      renderRows();
+    } else if(typeof invalidateScreenshot === "function"){ /* nothing else to do */ }
+  }catch(_){ /* builder not present — ignore */ }
+}
+
+/* Undo toast after a drag (§B1). One at a time; auto-dismisses. */
+function showPinMoveToast(msg){
+  const host = siteMap.overlay && siteMap.overlay.querySelector(".smap-toast-host");
+  if(!host) return;
+  host.innerHTML = "";
+  const toast = document.createElement("div");
+  toast.className = "smap-toast";
+  const span = document.createElement("span");
+  span.className = "smap-toast-msg"; span.textContent = msg;
+  const undo = document.createElement("button");
+  undo.type = "button"; undo.className = "smap-toast-undo"; undo.textContent = "Undo";
+  let timer = setTimeout(()=>{ toast.remove(); }, 9000);
+  undo.addEventListener("click", ()=>{ clearTimeout(timer); undoPinMove(); toast.remove(); });
+  toast.appendChild(span); toast.appendChild(undo);
+  host.appendChild(toast);
+}
+function undoPinMove(){
+  const e = siteMap.lastPinEdit; if(!e) return;
+  const rs = state[e.tableId] && state[e.tableId][e.rowId];
+  if(rs){ if(!rs.fields) rs.fields = {}; rs.fields[e.field] = e.prevValue; }
+  siteMap.lastPinEdit = null;
+  const table = activeTable();
+  refreshPins(table); drawPins(); invalidateScreenshot();
+  reflectTableEdit(table); renderSiteMapPanel();
+  siteMapBanner("Reverted the pin move.", "warn");
+}
+
+/* ---- distance measurement widget (§B2) — geodesic, transient ---- */
+function setMeasureOn(on){
+  const view = siteMap.view;
+  const btn = siteMap.overlay && siteMap.overlay.querySelector(".smap-measure");
+  const want = (on == null) ? !siteMap.measureWidget : !!on;
+  if(want){
+    if(siteMap.moveMode) setMoveMode(false);        // mutually exclusive
+    if(!view || !siteMap.esri.DistanceMeasurement2D) return;
+    if(!siteMap.measureWidget){
+      // "metric" auto-switches m → km above 1 km; DistanceMeasurement2D is geodesic
+      // in a Web Mercator/geographic view. The widget carries its own New/Clear UI.
+      siteMap.measureWidget = new siteMap.esri.DistanceMeasurement2D({ view, unit: "metric" });
+      view.ui.add(siteMap.measureWidget, "top-right");
+      try{ siteMap.measureWidget.viewModel.start(); }catch(_){}
+    }
+  } else if(siteMap.measureWidget){
+    try{ siteMap.measureWidget.viewModel.clear(); }catch(_){}
+    try{ view && view.ui.remove(siteMap.measureWidget); }catch(_){}
+    try{ siteMap.measureWidget.destroy(); }catch(_){}
+    siteMap.measureWidget = null;
+  }
+  if(btn){ const active = !!siteMap.measureWidget; btn.setAttribute("aria-pressed", String(active)); btn.classList.toggle("smap-measure--on", active); btn.textContent = active ? "Measure: on" : "Measure"; }
+}
+
+/* ---- contours on/off toggle (A4 §4) ---- */
+async function setContoursOn(on){
+  siteMap.contoursOn = on;
+  invalidateScreenshot();
+  const map = siteMap.esriMap;
+  if(!map) return;
+  if(!on){
+    if(siteMap.layers.contour){ try{ map.remove(siteMap.layers.contour); }catch(_){} siteMap.layers.contour = null; }
+    setDiag("contours", { status:"off", ms:0, note:"contours toggled off" }, "Contours toggled off.");
+    return;
+  }
+  // Turning back on: rebuild the layer for the current interval.
+  await loadContourLayer(map, false);
+}
+
+/* ---- switch contour interval, with coverage auto-fallback (§5) ----
+   Works for both contour render modes (A4): a FeatureLayer draws a single
+   interval-sublayer so switching means swapping the layer's source URL; a
+   MapImageLayer just toggles sublayer visibility. */
 async function applyContourInterval(interval){
   siteMap.contourInterval = interval;
   siteMap.renderedInterval = interval;
   invalidateScreenshot();
-  const layer = siteMap.layers.contour;
-  if(!layer || !siteMap.contourIds){ return; }
-  const setVisible = (k)=>{
-    ["1","5","10"].forEach(kk=>{
-      const id = siteMap.contourIds[kk];
-      if(id == null) return;
-      const sub = layer.findSublayerById(id);
-      if(sub) sub.visible = (kk === k);
-    });
+  if(!siteMap.contoursOn){ updateIntervalStamp(); return; }
+  if(!siteMap.layers.contour || !siteMap.contourIds){ updateIntervalStamp(); return; }
+
+  const setVisible = async (k)=>{
+    const id = siteMap.contourIds[k];
+    if(id == null) return;
+    if(siteMap.contourMode === "feature"){
+      // Point the FeatureLayer at the k-interval sublayer by rebuilding it in place.
+      const map = siteMap.esriMap;
+      try{ if(siteMap.layers.contour) map.remove(siteMap.layers.contour); }catch(_){}
+      const fl = new siteMap.esri.FeatureLayer({
+        url: SITE_MAP_CONFIG.contours + "/" + id,
+        outFields: ["*"], opacity: 0.9, minScale: 0, maxScale: 0,
+        renderer: contourRenderer()
+      });
+      fl.load().then(()=>{ const ef = detectElevationField(fl); if(ef){ fl.labelingInfo = contourLabelingInfo(ef); fl.labelsVisible = true; } }).catch(()=>{});
+      siteMap.layers.contour = fl; insertLayerOrdered(map, fl, "contour");
+    } else {
+      const layer = siteMap.layers.contour;
+      ["1","5","10"].forEach(kk=>{
+        const sid = siteMap.contourIds[kk];
+        if(sid == null || !layer.findSublayerById) return;
+        const sub = layer.findSublayerById(sid);
+        if(sub) sub.visible = (kk === k);
+      });
+    }
     siteMap.renderedInterval = k;
   };
-  setVisible(interval);
+  await setVisible(interval);
 
   // Coverage check: if the requested interval has no features in view, fall back
   // to the coarsest interval that does, and say so (§5).
   try{
     const view = siteMap.view;
-    if(!view || !view.extent) return;
+    if(!view || !view.extent){ updateIntervalStamp(); return; }
     const order = [interval, "5", "10"].filter((v,i,a)=> a.indexOf(v)===i && siteMap.contourIds[v] != null);
     for(const k of order){
       const count = await contourCountInExtent(siteMap.contourIds[k], view.extent);
       if(count == null) break;         // query failed — leave as requested
-      if(count > 0){ setVisible(k); if(k !== interval){ siteMapBanner("No " + interval + " m contour coverage here — showing " + k + " m contours.", "warn"); } updateIntervalStamp(); return; }
+      if(count > 0){ if(k !== interval){ await setVisible(k); siteMapBanner("No " + interval + " m contour coverage here — showing " + k + " m contours.", "warn"); } updateIntervalStamp(); return; }
     }
     // none returned features
     if(order.length){ siteMapBanner("No contour coverage at this location for the selected intervals.", "warn"); }
@@ -4371,7 +4822,7 @@ function buildSiteMapModal(){
       <div class="modal-head">
         <h3>Site Map</h3>
         <div class="smap-interval">
-          <span>Contours:</span>
+          <label class="smap-contours-on" title="Show or hide the contour layer — a fast map without contours is sometimes all you need"><input type="checkbox" class="smap-contours-chk" checked> Contours:</label>
           <label><input type="radio" name="smapInterval" value="1" checked> 1 m</label>
           <label><input type="radio" name="smapInterval" value="5"> 5 m</label>
           <label><input type="radio" name="smapInterval" value="10"> 10 m</label>
@@ -4379,6 +4830,8 @@ function buildSiteMapModal(){
         </div>
         <button type="button" class="btn btn-secondary smap-fitall" style="padding:6px 12px;">Fit all pins</button>
         <button type="button" class="btn btn-secondary smap-reset" style="padding:6px 12px;">Reset view</button>
+        <button type="button" class="btn btn-secondary smap-move" title="Turn on to drag pins to a new location — the coordinate is written back to the table" aria-pressed="false" style="padding:6px 12px;">Move pins: off</button>
+        <button type="button" class="btn btn-secondary smap-measure" title="Measure geodesic distance between points on the map" aria-pressed="false" style="padding:6px 12px;">Measure</button>
         <button type="button" class="icon-btn smap-close" title="Close" aria-label="Close">✕</button>
       </div>
       <div class="smap-banners"></div>
@@ -4386,6 +4839,7 @@ function buildSiteMapModal(){
         <div class="smap-map">
           <div class="smap-status"></div>
           <div class="smap-scalehint" hidden></div>
+          <div class="smap-toast-host"></div>
         </div>
         <aside class="smap-panel">
           <div class="smap-panel-head">Pins on the map</div>
@@ -4442,6 +4896,18 @@ function buildSiteMapModal(){
   overlay.querySelectorAll('input[name="smapInterval"]').forEach(r=>{
     r.addEventListener("change", ()=>{ if(r.checked){ clearSiteMapBanners(); applyContourInterval(r.value); } });
   });
+  // Move pins (§B1) + Measure (§B2) toggles.
+  const moveBtn = overlay.querySelector(".smap-move");
+  if(moveBtn) moveBtn.addEventListener("click", ()=>{ clearSiteMapBanners(); setMoveMode(); });
+  const measureBtn = overlay.querySelector(".smap-measure");
+  if(measureBtn) measureBtn.addEventListener("click", ()=> setMeasureOn());
+  // Contours on/off (A4 §4): a fast imagery+pins map when contours aren't needed.
+  const contoursChk = overlay.querySelector(".smap-contours-chk");
+  if(contoursChk) contoursChk.addEventListener("change", ()=>{
+    clearSiteMapBanners();
+    overlay.querySelectorAll('input[name="smapInterval"]').forEach(r=> r.disabled = !contoursChk.checked);
+    setContoursOn(contoursChk.checked);
+  });
   document.addEventListener("keydown", siteMapKeydown);
   return overlay;
 }
@@ -4468,6 +4934,26 @@ function fmtDiagDur(d){ return (d && d.ms != null) ? " (" + (d.ms/1000).toFixed(
 function diagLine(label, d){
   return "- " + label + ": " + ((d && d.status) || "pending") + fmtDiagDur(d) + (d && d.note ? " — " + d.note : "");
 }
+// Read the live layer stack for diagnostics (A5): each layer's title/type,
+// visibility, effective min/max scale, and its index in map.layers. "min/max
+// scale" shows the effective values the layer resolved (from what we set and
+// what the service declares) so a hidden layer is explained, not a mystery.
+function describeLayerStack(){
+  const map = siteMap.esriMap;
+  if(!map || !map.layers) return [];
+  const out = [];
+  map.layers.forEach((l, i)=>{
+    const type = l.type || (l.declaredClass || "").split(".").pop() || "layer";
+    const title = l.title || l.url || type;
+    const minS = (l.minScale != null) ? l.minScale : 0;
+    const maxS = (l.maxScale != null) ? l.maxScale : 0;
+    out.push("[" + i + "] " + title.replace(/^https?:\/\/[^/]+/, "…") +
+      " (" + type + ") visible:" + (l.visible !== false) +
+      " min:" + minS + " max:" + maxS);
+  });
+  return out;
+}
+
 function diagnosticsText(){
   const d = siteMap.diag || freshDiag();
   const view = siteMap.view;
@@ -4497,11 +4983,26 @@ function diagnosticsText(){
   L.push("External dependencies:");
   L.push(diagLine("Esri CDN (js.arcgis.com)", d.esri));
   L.push(diagLine("Imagery ImageServer [" + (d.imagery.layerClass || "?") + "]", d.imagery));
-  L.push(diagLine("Contours MapServer [sublayer " + (d.contours.sublayer || "?") + "]", d.contours));
+  L.push(diagLine("Contours [" + (d.contours.sublayer || "?") + (d.contours.mode ? ", " + d.contours.mode : "") + "]", d.contours));
   L.push("- Cadastre ?f=json lookup: " + (d.cadastre.status || "pending") + fmtDiagDur(d.cadastre) +
     (d.cadastre.resolved ? " — resolved to " + d.cadastre.resolved : (d.cadastre.note ? " — " + d.cadastre.note : "")));
-  L.push("- Road-reserve layer: " + (d.road.status || "pending") + fmtDiagDur(d.road) + (d.road.note ? " — " + d.road.note : ""));
+  if(d.cadastre.serviceScale) L.push("    " + d.cadastre.serviceScale);
+  L.push("- Road-reserve layer: " + (d.road.status || "pending") + fmtDiagDur(d.road) + (d.road.note ? " — " + d.road.note : "") + (d.road.mode ? " [" + d.road.mode + "]" : ""));
   L.push(diagLine("Imagery labels (optional)", d.labels));
+  L.push("");
+  // Per-layer stack snapshot (A5): visible, effective min/max scale (what we set
+  // AND what the layer resolved from the service), and index in map.layers.
+  L.push("Layer stack (bottom → top; pins draw above all):");
+  const layerRows = describeLayerStack();
+  if(layerRows.length) layerRows.forEach(r=> L.push("  " + r));
+  else L.push("  (no layers yet)");
+  L.push("");
+  // Screenshot capture (A5).
+  const ss = d.screenshot || {};
+  L.push("Screenshot capture: " + (ss.status || "idle") +
+    (ss.dims ? " — " + ss.dims : "") +
+    (ss.decoded === true ? " — raster decoded" : ss.decoded === false ? " — raster did NOT decode" : "") +
+    (ss.note ? " — " + ss.note : ""));
   L.push("");
   L.push("Activity log:");
   (d.log.length ? d.log : ["(nothing logged yet)"]).forEach(l => L.push("  " + l));
@@ -4523,6 +5024,7 @@ function renderSiteMapPanel(){
   siteMap.pins.forEach(p=>{
     const row = document.createElement("label");
     row.className = "smap-pin" + (p.ok ? "" : " smap-pin--invalid");
+    row.dataset.pinKey = p.key;      // for the live drag readout (§B1)
     const cb = document.createElement("input");
     cb.type = "checkbox"; cb.checked = !!p.on; cb.disabled = !p.ok;
     cb.addEventListener("change", ()=>{
@@ -4530,6 +5032,7 @@ function renderSiteMapPanel(){
       drawPins();
       fitView();           // re-fit on selection change (unless user-adjusted)
       invalidateScreenshot();
+      renderDistanceSuggestion();
     });
     const dot = document.createElement("span");
     dot.className = "smap-dot"; dot.style.background = "rgb(" + pinRgb(p.colour).join(",") + ")";
@@ -4542,18 +5045,89 @@ function renderSiteMapPanel(){
     host.appendChild(row);
   });
 
-  // Legend + credit.
+  // Legend + credit. B3: show each pin's coordinate alongside its label on screen
+  // (the exported image carries them too, see compositeScreenshot). Iterate active
+  // pins directly so every pin's coordinate shows, not one per colour.
   const legend = siteMap.overlay.querySelector(".smap-legend");
-  const used = {};
-  siteMap.pins.filter(p=>p.ok).forEach(p=>{ used[p.colour] = p.label; });
-  legend.innerHTML = `<div class="smap-legend-head">Legend</div>` + Object.keys(used).map(c=>
-    `<div class="smap-legend-row"><span class="smap-dot" style="background:rgb(${pinRgb(c).join(",")})"></span>${escapeHtml(used[c])}</div>`
+  const active = activeSitePins();
+  legend.innerHTML = `<div class="smap-legend-head">Legend</div>` + active.map(p=>
+    `<div class="smap-legend-row"><span class="smap-dot" style="background:rgb(${pinRgb(p.colour).join(",")})"></span>` +
+    `<span class="smap-legend-text"><span class="smap-legend-label">${escapeHtml(p.label)}</span>` +
+    `<span class="smap-legend-coord">${escapeHtml(formatCoord(p.lat, p.lon))}</span></span></div>`
   ).join("");
   const credit = siteMap.overlay.querySelector(".smap-credit");
   credit.textContent = SITE_MAP_CONFIG.attribution;
 
+  renderDistanceSuggestion();        // §B4 relocation-distance suggestion
+
   const resetBtn = siteMap.overlay.querySelector(".smap-reset");
   if(resetBtn) resetBtn.classList.toggle("smap-reset--active", siteMap.userHasAdjustedView);
+}
+
+/* ---- B4: auto-calculated relocation distance (STRETCH, non-destructive) -----
+   Only the `relocation` row's `distance` field resolves cleanly from
+   definitions.json (row `relocation`, field `distance`, semantics current
+   location → relocation site). It carries NO declared unit, and there is NO
+   `newRiverDistance` field in the definitions at all — so, per the brief, the
+   river-relocation distance is deliberately skipped and reported rather than
+   guessed. The relocation distance is offered as a one-click suggestion (never
+   silently overwriting a typed value) and recomputed on pin drag (§B1). */
+const B4_DISTANCE = { row: "relocation", field: "distance", fromRow: "coords", toRow: "relocation", toField: "newLocation" };
+function findPinByRow(rowId){ return siteMap.pins.find(p=>p.rowId === rowId && p.ok); }
+function renderDistanceSuggestion(){
+  if(!siteMap.overlay) return;
+  const legend = siteMap.overlay.querySelector(".smap-legend");
+  if(!legend) return;
+  let box = siteMap.overlay.querySelector(".smap-distsuggest");
+  if(box) box.remove();
+
+  const table = activeTable();
+  if(!table) return;
+  // Does this table actually have the relocation distance field?
+  const hasDistanceField = effectiveRows(table).some(r=> r.id === B4_DISTANCE.row && (r.fields||[]).some(f=> f.key === B4_DISTANCE.field));
+  if(!hasDistanceField) return;
+
+  const from = findPinByRow(B4_DISTANCE.fromRow);       // current location (anchor)
+  const to   = findPinByRow(B4_DISTANCE.toRow);         // relocation site
+  if(!from || !to) return;                              // need both endpoints parsed
+
+  const metres = Math.round(haversineKm(from.lat, from.lon, to.lat, to.lon) * 1000);
+  const valStr = metres >= 1000 ? (metres/1000).toFixed(2) + " km" : metres + " m";
+
+  const rs = state[table.id] && state[table.id][B4_DISTANCE.row];
+  const current = (rs && rs.fields && rs.fields[B4_DISTANCE.field] != null) ? String(rs.fields[B4_DISTANCE.field]).trim() : "";
+
+  box = document.createElement("div");
+  box.className = "smap-distsuggest";
+  const head = document.createElement("div");
+  head.className = "smap-legend-head"; head.textContent = "Relocation distance";
+  box.appendChild(head);
+  const rowEl = document.createElement("div");
+  rowEl.className = "smap-distsuggest-row";
+  rowEl.innerHTML = `<span>Current → relocation site:</span> <span class="smap-distsuggest-val">${escapeHtml(valStr)}</span> <span style="color:var(--ink-soft);font-size:.72rem;">(geodesic)</span>`;
+  const useBtn = document.createElement("button");
+  useBtn.type = "button"; useBtn.className = "smap-distsuggest-use";
+  useBtn.textContent = current ? "Replace “" + current + "”" : "Use this";
+  useBtn.addEventListener("click", ()=>{
+    const prevValue = current;
+    if(!rs.fields) rs.fields = {};
+    rs.fields[B4_DISTANCE.field] = valStr;
+    reflectTableEdit(table);
+    invalidateScreenshot();
+    siteMap.lastPinEdit = { tableId: table.id, rowId: B4_DISTANCE.row, field: B4_DISTANCE.field, prevValue };
+    showPinMoveToast("Relocation distance set to " + valStr);
+    renderDistanceSuggestion();
+  });
+  rowEl.appendChild(useBtn);
+  box.appendChild(rowEl);
+  const note = document.createElement("div");
+  note.className = "smap-distsuggest-note";
+  note.textContent = current
+    ? "The Distance field already reads “" + current + "” — this only changes it if you click, and you can undo."
+    : "Fills the empty Distance field on the Relocation row. Won't overwrite anything you type.";
+  box.appendChild(note);
+
+  legend.parentNode.insertBefore(box, legend.nextSibling);
 }
 
 async function openSiteMap(triggerEl){
@@ -4562,7 +5136,11 @@ async function openSiteMap(triggerEl){
   siteMap.triggerEl = triggerEl || document.activeElement;
   buildSiteMapModal();
   clearSiteMapBanners();
-  refreshPins(table);
+  // A3: always re-read pins from app state on every open (the view is kept alive
+  // between opens, so a table edit made while it was closed must still take
+  // effect). If the anchor coordinate moved, syncPinsForReopen clears the manual
+  // framing so the view re-centres on the new location below.
+  syncPinsForReopen(table);
   siteMap.overlay.classList.remove("hidden");
   renderSiteMapPanel();
   const closeBtn = siteMap.overlay.querySelector(".smap-close");
@@ -4603,6 +5181,9 @@ async function openSiteMap(triggerEl){
 
 function closeSiteMap(){
   if(!siteMap.overlay) return;
+  // Leave Move-pins and Measure off so the next open starts in a neutral state.
+  if(siteMap.moveMode) setMoveMode(false);
+  if(siteMap.measureWidget) setMeasureOn(false);
   siteMap.overlay.classList.add("hidden");
   if(siteMap.triggerEl && siteMap.triggerEl.focus){ try{ siteMap.triggerEl.focus(); }catch(_){} }
 }
@@ -4610,41 +5191,118 @@ function closeSiteMap(){
 /* ---- screenshot for the Word copy (§7) ---- */
 function invalidateScreenshot(){ siteMap.screenshot.valid = false; siteMap.screenshot.dataUrl = null; }
 
+// Sample a grid of pixels; return true only if EVERY sample is pure black or
+// fully transparent (A2). Real aerial imagery is never uniformly (0,0,0), so this
+// catches the "map raster never landed on the canvas" failure without tripping on
+// legitimately dark ground (water, shadow). Returns false if it can't read the
+// canvas (e.g. tainted) — the caller handles the SecurityError separately.
+function looksAllBlack(ctx, W, H){
+  try{
+    const N = 6;
+    for(let i=1;i<N;i++){ for(let j=1;j<N;j++){
+      const d = ctx.getImageData(Math.round(W*i/N), Math.round(H*j/N), 1, 1).data;
+      const black = (d[0]===0 && d[1]===0 && d[2]===0);
+      const transparent = (d[3]===0);
+      if(!black && !transparent) return false;   // found real colour → not black
+    }}
+    return true;
+  }catch(_){ return false; }
+}
+
 // Composite legend + interval stamp + attribution onto the raw screenshot.
-// Throws (SecurityError) if the canvas is tainted by a non-CORS layer (§7.1).
+// Throws (SecurityError) if the canvas is tainted by a non-CORS layer (§7.1), or a
+// plain Error if the screenshot raster is missing/black (A2) — the caller must
+// never export a black rectangle.
 async function compositeScreenshot(shot, interval){
+  if(!shot || !shot.dataUrl){
+    setDiag("screenshot", { status:"failed", note:"takeScreenshot returned no dataUrl" }, "Screenshot capture returned nothing (no dataUrl) — not exporting a blank image.");
+    throw new Error("screenshot returned no image data");
+  }
+  // Decode the screenshot BEFORE drawing it. drawImage on an undecoded image draws
+  // nothing, leaving the canvas base fill — the exact black-map failure (A2). Use
+  // img.decode() where available, falling back to onload.
   const img = new Image();
-  await new Promise((res,rej)=>{ img.onload=res; img.onerror=()=>rej(new Error("screenshot image failed")); img.src = shot.dataUrl; });
+  img.src = shot.dataUrl;
+  let decoded = false;
+  try{
+    if(img.decode){ await img.decode(); decoded = true; }
+    else { await new Promise((res,rej)=>{ img.onload=res; img.onerror=()=>rej(new Error("screenshot image failed to load")); }); decoded = true; }
+  }catch(e){
+    // decode() can reject on some data URIs even when onload would succeed — retry.
+    try{ await new Promise((res,rej)=>{ img.onload=res; img.onerror=()=>rej(new Error("screenshot image failed to load")); }); decoded = true; }
+    catch(e2){ decoded = false; }
+  }
+
   const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth || img.width;
-  canvas.height = img.naturalHeight || img.height;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0);
+  canvas.width  = img.naturalWidth  || img.width  || (shot.width  || 0);
+  canvas.height = img.naturalHeight || img.height || (shot.height || 0);
   const W = canvas.width, H = canvas.height;
+  if(!W || !H){
+    setDiag("screenshot", { status:"failed", note:"zero-sized screenshot", decoded }, "Screenshot had no dimensions — not exporting a blank image.");
+    throw new Error("screenshot had no dimensions");
+  }
+  const ctx = canvas.getContext("2d");
+  // White base (A2): if any future draw failure leaves the raster missing, the
+  // result is obviously blank white — not a deliberate-looking black rectangle.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+  if(!decoded){
+    setDiag("screenshot", { status:"failed", note:"raster did not decode", dims: W + "×" + H, decoded:false }, "Screenshot raster did not decode — not exporting a blank image.");
+    throw new Error("screenshot raster did not decode");
+  }
+  ctx.drawImage(img, 0, 0, W, H);
+
+  // Never export a canvas the raster didn't land on (A2). If sampling shows a
+  // uniformly black/empty frame, fail loudly rather than paste black into a scope
+  // document. (A tainted canvas throws here on read and is handled by the caller.)
+  if(looksAllBlack(ctx, W, H)){
+    setDiag("screenshot", { status:"failed", note:"raster sampled all-black (capture did not land)", dims: W + "×" + H, decoded:true }, "Screenshot sampled all-black — the map raster did not capture; not exporting a black image.");
+    throw new Error("screenshot raster is black");
+  }
+  setDiag("screenshot", { status:"ok", note:"raster captured", dims: W + "×" + H, decoded:true }, "Screenshot raster captured (" + W + "×" + H + ").");
+
   const pad = Math.round(W*0.012), fs = Math.max(13, Math.round(W*0.013));
-  ctx.font = fs + "px Segoe UI, Arial, sans-serif";
   ctx.textBaseline = "top";
 
-  // Legend (top-left) over a translucent panel.
+  // Legend (top-left) over a translucent panel — B3: each pin's label AND its
+  // coordinate travel into the exported image, since the scope document may be the
+  // only record of where the site is. Label on line 1, coordinate on line 2, and
+  // the box grows to fit rather than the type shrinking.
   const pins = activeSitePins();
-  const used = {}; pins.forEach(p=>{ used[p.colour] = p.label; });
-  const entries = Object.keys(used);
-  if(entries.length){
-    const lh = fs + 8, boxW = Math.round(W*0.28), boxH = lh*entries.length + pad;
-    ctx.fillStyle = "rgba(255,255,255,0.82)";
+  const legend = pins.map(p=>({ colour:p.colour, label:p.label, coord: formatCoord(p.lat, p.lon) }));
+  if(legend.length){
+    const labelFs = fs, coordFs = Math.max(11, Math.round(fs*0.85));
+    const lineGap = 4, rowGap = 8;
+    const rowH = labelFs + lineGap + coordFs + rowGap;
+    let maxTextW = 0;
+    legend.forEach(e=>{
+      ctx.font = "bold " + labelFs + "px Segoe UI, Arial, sans-serif";
+      maxTextW = Math.max(maxTextW, ctx.measureText(e.label).width);
+      ctx.font = coordFs + "px Segoe UI, Arial, sans-serif";
+      maxTextW = Math.max(maxTextW, ctx.measureText(e.coord).width);
+    });
+    const textX = pad*2.6;
+    const boxW = Math.min(Math.round(W*0.55), Math.round(textX + maxTextW + pad*1.2));
+    const boxH = rowH*legend.length + pad;
+    ctx.fillStyle = "rgba(255,255,255,0.86)";
     roundRect(ctx, pad, pad, boxW, boxH, 6); ctx.fill();
-    entries.forEach((c,i)=>{
-      const y = pad + Math.round(pad/2) + i*lh;
-      ctx.fillStyle = "rgb(" + pinRgb(c).join(",") + ")";
-      ctx.beginPath(); ctx.arc(pad*1.6, y + fs/2, fs*0.45, 0, Math.PI*2); ctx.fill();
+    legend.forEach((e,i)=>{
+      const y = pad + Math.round(pad/2) + i*rowH;
+      ctx.fillStyle = "rgb(" + pinRgb(e.colour).join(",") + ")";
+      ctx.beginPath(); ctx.arc(pad*1.7, y + labelFs*0.6, labelFs*0.45, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = "#152531";
-      ctx.fillText(used[c], pad*2.4, y);
+      ctx.font = "bold " + labelFs + "px Segoe UI, Arial, sans-serif";
+      ctx.fillText(e.label, textX, y);
+      ctx.fillStyle = "#3a4a56";
+      ctx.font = coordFs + "px Segoe UI, Arial, sans-serif";
+      ctx.fillText(e.coord, textX, y + labelFs + lineGap);
     });
   }
   // Interval stamp (top-right).
+  ctx.font = fs + "px Segoe UI, Arial, sans-serif";
   const stamp = "Contours: " + interval + " m LiDAR";
   const sw = ctx.measureText(stamp).width;
-  ctx.fillStyle = "rgba(255,255,255,0.82)";
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
   roundRect(ctx, W - sw - pad*2.4, pad, sw + pad*1.4, fs + pad, 6); ctx.fill();
   ctx.fillStyle = "#152531";
   ctx.fillText(stamp, W - sw - pad*1.7, pad + pad*0.3);
@@ -4701,7 +5359,7 @@ async function getMapImageForCopy(){
       // user's framing is what gets pasted (§7.3).
       const view = siteMap.view;
       const pv = pinsInView(view);
-      const shot = await view.takeScreenshot({ width: SITE_MAP_CONFIG.screenshotWidth });
+      const shot = await takeViewScreenshot(view);
       const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
       const meta = { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside };
       siteMap.screenshot = { dataUrl, valid: true, meta };
@@ -4710,13 +5368,29 @@ async function getMapImageForCopy(){
     // No live view — build off-screen with default framing (§7.3).
     return await captureOffscreen(table);
   }catch(err){
+    // Any failure here means the raster is missing — report it plainly and return
+    // null so the copy is table-only (§7.4). NEVER fall through to a black export.
     if(/tainted|SecurityError|insecure/i.test(err.name + " " + err.message)){
+      setDiag("screenshot", { status:"failed", note:"tainted canvas (a map layer blocked CORS)" }, "Screenshot blocked by a non-CORS layer (tainted canvas) — map omitted from the copy.");
       console.error("Site map screenshot blocked by a non-CORS layer (tainted canvas).", err);
     } else {
+      setDiag("screenshot", { status:"failed", note: err.message || "capture failed" }, "Screenshot failed (" + (err.message||"error") + ") — map omitted from the copy.");
       console.error("Site map screenshot failed.", err);
     }
+    invalidateScreenshot();
     return null;
   }
+}
+
+// Take a view screenshot at the screenshot width, keeping the view's own aspect
+// ratio (A2): passing width alone can letterbox/square the output on some
+// versions, which then misplaces the composited legend/stamp. Compute height from
+// the live view aspect so the exported image matches what is on screen.
+async function takeViewScreenshot(view){
+  const opts = { width: SITE_MAP_CONFIG.screenshotWidth };
+  const vw = view && view.width, vh = view && view.height;
+  if(vw && vh){ opts.height = Math.round(SITE_MAP_CONFIG.screenshotWidth * (vh / vw)); }
+  return view.takeScreenshot(opts);
 }
 
 async function captureOffscreen(table){
@@ -4744,7 +5418,7 @@ async function captureOffscreen(table){
       new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.layer))
     ]);
     const pv = pinsInView(view);
-    const shot = await view.takeScreenshot({ width: SITE_MAP_CONFIG.screenshotWidth });
+    const shot = await takeViewScreenshot(view);
     const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
     const meta = { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside };
     siteMap.screenshot = { dataUrl, valid: true, meta };
