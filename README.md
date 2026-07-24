@@ -324,10 +324,11 @@ bake those defaults (or your own) into the central store.
 
 The **Site Map** button (next to *Copy table for Word*) opens a modal showing the
 current table's coordinates over Queensland Government aerial imagery, LiDAR
-contours (5 m by default), and the road reserve (cadastral parcels filtered to
-road, filled a translucent sandy colour like the QLD Globe view). Pins come
-from every row with a `mapPin` (above): `coords` always, `relocation` when it is
-not "No", and — on the Water Level table — `riverCoords` / `riverRelocation`.
+contours (5 m by default), the road reserve (the cadastre's road parcels, filled a
+translucent sandy colour), and **railway lines** (heavy rail, sidings, sugar-cane
+and tourist lines, like the QLD Globe *Road and rail* layer). Pins come from every
+row with a `mapPin` (above): `coords` always, `relocation` when it is not "No",
+and — on the Water Level table — `riverCoords` / `riverRelocation`.
 
 - **Framing** — the view is *constructed at the anchor pin's coordinate* (not a
   default state/CBD extent that a later `goTo` corrects), so it opens on the site
@@ -352,6 +353,21 @@ not "No", and — on the Water Level table — `riverCoords` / `riverRelocation`
   rather than disappearing into it. Outside LiDAR coverage the map falls back to a
   coarser interval and says which one it is showing (1 m LiDAR only exists over
   the eastern/SEQ coverage area).
+- **Rail lines** — an on/off toggle in the header (on by default). Railway
+  sublayers are resolved by name at runtime from the *Transportation/OtherTransport*
+  MapServer (the `built.trans_railways` dataset) — every railway type is kept
+  (heavy rail, sidings, sugar-cane, tourist/historic) and aviation/ports are
+  dropped — and drawn with the service's own rail cartography, so the map matches
+  the QLD Globe *Road and rail* look. Because it is a real map layer it is captured
+  by the screenshot, so it travels into the Word-copy export too.
+- **Edit a pin's coordinate** — every pin in the side panel has a **text field**
+  (with a **Set** button; also commits on Enter or blur). Type a coordinate — decimal
+  degrees or DMS, in the same formats the scope fields accept — and the pin moves,
+  the value is written back to the scope row's field, and a toast offers **Undo**.
+  A bad entry is refused with an inline message (and a lat/lon **swap** hint when
+  the pair looks reversed), and *invalid* pins are editable too, so a mistyped
+  coordinate can be fixed straight from the map. Clearing the field removes the pin
+  (undoably). This is the keyboard counterpart to *Move pins*.
 - **Build progress** — a thin progress bar along the bottom edge of the map (with
   a small "Building map…" label) shows how much of the *whole* map is still being
   generated: imagery, the LiDAR contours (the slow part), the road reserve and the
@@ -388,18 +404,43 @@ The map *services* (imagery / contour / cadastre endpoints) live in a documented
 endpoint move is a one-line edit. The imagery ImageServer reports a *Single Fused
 Map Cache*, so it is loaded as an **`ImageryTileLayer`** (pre-built tiles), not a
 plain `ImageryLayer` (which would re-render a dynamic mosaic on every pan/zoom).
-The road-reserve filter is **resolved against the live cadastre schema at
-runtime**, and — critically — validated **against the site, not the state**: a
-candidate field is only accepted if `UPPER(field) LIKE '%ROAD%'` matches parcels
-inside a ~2 km envelope around the anchor pin. A state-wide count proved to be a
-false positive (`tenure` matched 202 stray parcels across all of Queensland,
-none near any given site, so the layer "applied" while drawing nothing). If no
-candidate matches near the site, the resolver falls back to state-wide counts
-and takes the **largest** match (a genuine road-parcel field matches in bulk;
-202-out-of-millions noise loses), flagging in the diagnostics that nothing
-matched at this location. If nothing resolves at all, the road layer is hidden
-with a banner — never unfiltered cadastre. This lookup runs **off the critical
-path**: the map opens and frames the pins while it is still outstanding.
+The road-reserve **source** is **resolved against the live cadastre service at
+runtime** (`resolveRoadSource`), best first, so the highlighted corridor matches
+QLD Globe's *Road parcel* layer:
+
+1. **A dedicated road sublayer.** QLD Globe's *Road parcel* draws the cadastre's
+   *own* road feature set, so we first look for a dedicated **road polygon**
+   sublayer in the service's layer list (by name — road labels / centrelines are
+   excluded) and draw it **whole**, exactly the selection QLD Globe shows. It is
+   still validated site-locally (a ~2 km envelope around the anchor pin) so an
+   empty or annotation layer is never adopted.
+2. **The parcel-filter fallback.** If no dedicated road sublayer exists, we fall
+   back to the previous heuristic — the general parcel sublayer with a
+   `UPPER(field) LIKE '%ROAD%'` filter, validated **against the site, not the
+   state**: a candidate field is only accepted if it matches parcels inside the
+   ~2 km envelope. A state-wide count proved to be a false positive (`tenure`
+   matched 202 stray parcels across all of Queensland, none near any given site,
+   so the layer "applied" while drawing nothing). If no candidate matches near the
+   site, the resolver takes the **largest** state-wide match (a genuine road-parcel
+   field matches in bulk; 202-out-of-millions noise loses), flagging in the
+   diagnostics that nothing matched locally.
+
+If nothing resolves at all, the road layer is hidden with a banner — never
+unfiltered cadastre. This lookup runs **off the critical path**: the map opens and
+frames the pins while it is still outstanding.
+
+> **Why the road parcel used to look different from QLD Globe.** QLD Globe draws
+> the cadastre's authoritative road parcels; the old code instead took the general
+> parcel layer and applied a heuristic `LIKE '%ROAD%'` text-filter, a *different*
+> selection (it can catch parcels merely *named* "…road…" and miss road parcels
+> coded without the literal word), so the corridor didn't match. Preferring the
+> dedicated road sublayer (above) fixes the selection. Two further differences are
+> expected, not bugs: the **styling** is ours (a magenta outline over a translucent
+> sandy fill, for contrast over aerial — QLD Globe uses a paler yellow highlight),
+> and the cadastre feed is **DCDB-derived** — per its metadata the DCDB is **frozen
+> as of 18 Apr 2026** (QSCF is now the source of truth), so a current QLD Globe can
+> legitimately differ from a DCDB service for recently-changed parcels. The
+> diagnostics *Cadastre* line reports which road source resolved.
 
 > **Confirmed against the live service** (from working diagnostics sessions):
 >
@@ -465,6 +506,16 @@ path**: the map opens and frames the pins while it is still outstanding.
 >   and the bottom-of-map build-progress bar (start → milestone → trickle →
 >   settle/hide → reset, and that it never captures pointer events). Hermetic:
 >   the store, the Esri CDN and every QLD host are blocked.
+> - `tests/pin-coord-entry.test.mjs` — §C2: editing a pin's coordinate from the
+>   panel **text field** writes back to the scope row (undoable), refuses a bad
+>   value with an inline message and a swap hint, keeps *invalid* pins editable,
+>   and treats an empty entry as "remove the pin". Hermetic (no view, no network).
+> - `tests/rail-road-source.test.mjs` — §C1 rail: `resolveRailLayers()` keeps only
+>   the railway sublayers of the OtherTransport service (never aviation/ports, never
+>   group layers); §A7 road: `resolveRoadSource()` prefers the cadastre's dedicated
+>   road polygon sublayer (drawn whole, matching QLD Globe) and falls back to the
+>   parcel-filter heuristic when none exists. Stubs only the ArcGIS REST endpoints,
+>   like `road-filter.test.mjs`.
 > - The `verify` skill covers coordinate parsing/validation, pin resolution and
 >   gating, the panel, offline degradation, and the byte-identical copy when the
 >   map tickbox is off.

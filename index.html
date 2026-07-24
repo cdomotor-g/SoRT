@@ -596,6 +596,7 @@
   .smap-interval{ display:flex; align-items:center; gap:8px; font-size:.8rem; color:var(--ink-soft); }
   .smap-interval label{ display:flex; align-items:center; gap:4px; cursor:pointer; color:var(--ink); }
   .smap-interval-stamp{ color:var(--amber); font-weight:600; }
+  .smap-rail-on{ display:flex; align-items:center; gap:4px; cursor:pointer; font-size:.8rem; color:var(--ink); }
   .smap-reset--active{ border-color:var(--accent) !important; color:var(--accent-dark) !important; }
 
   .smap-banners{ display:flex; flex-direction:column; }
@@ -633,20 +634,35 @@
   .smap-empty{ font-size:.8rem; color:var(--ink-soft); line-height:1.4; }
   .smap-pin{
     display:flex; align-items:flex-start; gap:8px; padding:7px 8px; border:1px solid var(--line);
-    border-radius:7px; cursor:pointer; font-size:.82rem;
+    border-radius:7px; font-size:.82rem;
   }
   .smap-pin:hover{ border-color:var(--accent); }
-  .smap-pin--invalid{ opacity:.7; cursor:default; background:var(--danger-soft); border-color:#e9c4c0; }
-  .smap-pin input{ margin-top:2px; }
+  .smap-pin--invalid{ opacity:.85; background:var(--danger-soft); border-color:#e9c4c0; }
+  .smap-pin > input[type="checkbox"]{ margin-top:3px; flex:none; cursor:pointer; }
   .smap-dot{ width:12px; height:12px; border-radius:50%; margin-top:3px; flex:none; box-shadow:0 0 0 1px rgba(0,0,0,.15); }
-  .smap-pin-text{ display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .smap-pin-text{ display:flex; flex-direction:column; gap:3px; min-width:0; flex:1; }
   .smap-pin-label{ font-weight:600; }
+  /* Editable coordinate field per pin (§C2). */
+  .smap-pin-editrow{ display:flex; align-items:center; gap:5px; }
+  .smap-pin-input{
+    flex:1; min-width:0; font-size:.76rem; padding:3px 6px; border:1px solid var(--line);
+    border-radius:5px; background:var(--card); color:var(--ink);
+    font-family:"Cascadia Code",Consolas,"Courier New",monospace;
+  }
+  .smap-pin-input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+  .smap-pin-apply{
+    appearance:none; border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent-dark);
+    border-radius:5px; padding:3px 9px; font-size:.72rem; font-weight:700; cursor:pointer; white-space:nowrap; flex:none;
+  }
+  .smap-pin-apply:hover{ background:var(--accent); color:#fff; }
+  .smap-pin-msg{ font-size:.72rem; line-height:1.35; word-break:break-word; }
+  .smap-pin-msg:empty{ display:none; }
+  .smap-pin-msg--err{ color:var(--danger); }
+  .smap-pin-msg--warn{ color:var(--amber); }
   .smap-anchor{
     font-size:.6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--accent-dark);
     background:var(--accent-soft); border-radius:8px; padding:1px 5px; margin-left:4px; font-weight:700;
   }
-  .smap-pin-coord{ color:var(--ink-soft); font-size:.76rem; word-break:break-word; }
-  .smap-pin-err{ color:var(--danger); }
   .smap-legend{ margin-top:6px; border-top:1px solid var(--line); padding-top:8px; display:flex; flex-direction:column; gap:4px; }
   .smap-legend-row{ display:flex; align-items:center; gap:7px; font-size:.8rem; }
   .smap-credit{ padding-top:10px; font-size:.68rem; color:var(--ink-soft); line-height:1.4; }
@@ -3874,6 +3890,22 @@ const SITE_MAP_CONFIG = {
   contourLayerOpacity: 0.95,
   cadastre: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer",
   cadastreParcelsSublayer: 4,
+  // Names on the cadastre MapServer that denote a DEDICATED road-parcel sublayer
+  // (what QLD Globe's "Road parcel" layer actually draws — the cadastre's own road
+  // feature set, not a text-filtered slice of the general parcel layer). When one
+  // resolves, it is drawn whole (no LIKE filter), matching QLD Globe's selection;
+  // otherwise we fall back to the parcel-layer + field-filter heuristic below (§5).
+  roadSublayerNames: ["road"],
+  // Rail network (Transportation/OtherTransport MapServer, dataset built.trans_railways
+  // per the Rail-network metadata). The service carries railways AND aviation/ports in
+  // one tree; the railway sublayers are resolved by name at runtime (resolveRailLayers),
+  // with these fallback ids from the metadata's declared layer list (156,155,157,158).
+  otherTransport: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/OtherTransport/MapServer",
+  railSublayersFallback: [155, 156, 157, 158],
+  // Names on the OtherTransport tree that ARE railways (kept) vs that are not (dropped),
+  // used to pick the railway sublayers out of the shared railway+aviation service.
+  railInclude: /rail|railway|tram|monorail|siding|cane|light rail/i,
+  railExclude: /aviat|aero|airport|airstrip|airfield|aerodrome|runway|helipad|heliport|\bport\b|wharf|jetty|marine/i,
   // Road-reserve boundaries are drawn client-side as a FeatureLayer so we control
   // symbology + scale ourselves (A1 §5): the service's own hairline outline is
   // invisible over aerial imagery, and we never want a server-side maxScale to
@@ -3887,8 +3919,10 @@ const SITE_MAP_CONFIG = {
   roadFill: [224, 196, 132, 0.5],
   // Explicit draw order (A1 §2): layers stream in as they resolve, so map.layers
   // must be ordered by design, not by completion time. Lower index = bottom.
+  // Rail sits above the road-reserve fill and the contours so the line reads
+  // unbroken (like the QLD Globe "Road and rail" layer); labels stay on top.
   // Pins live in view.graphics and are always on top of every layer here.
-  layerOrder: { imagery: 0, road: 1, contour: 2, labels: 3 },
+  layerOrder: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4 },
   // Candidate DCDB fields that may denote "road". The map reads the live schema
   // and filters UPPER(field) LIKE '%ROAD%'. A candidate is only accepted if it
   // matches parcels NEAR THE SITE (resolveRoadWhere) — a state-wide count is not
@@ -3951,6 +3985,8 @@ const siteMap = {
   renderedInterval: "5",    // interval actually shown after coverage fallback
   contourMode: "",          // "feature" | "mapimage" — how contours are drawn (A4)
   contoursOn: true,         // contours on/off toggle (A4 §4)
+  railOn: true,             // rail lines on/off toggle (C1)
+  railIds: null,            // railway sublayer ids resolved from the OtherTransport service
   userHasAdjustedView: false,
   moveMode: false,          // "Move pins" mode — draggable pins, off by default (B1)
   hoverGraphic: null,       // pin graphic currently under the pointer (B1)
@@ -4012,6 +4048,7 @@ function freshDiag(){
     contours: { status:"pending", ms:null, note:"", sublayer:"", mode:"", drawn:"" },
     cadastre: { status:"pending", ms:null, note:"", resolved:"", serviceScale:"" },
     road:     { status:"pending", ms:null, note:"", mode:"", drawn:"" },
+    rail:     { status:"pending", ms:null, note:"", sublayers:"", drawn:"" },
     labels:   { status:"pending", ms:null, note:"" },
     // Screenshot capture (A5): did takeScreenshot land a raster on the canvas?
     screenshot: { status:"idle", note:"", dims:"", decoded:null },
@@ -4296,6 +4333,60 @@ async function resolveRoadWhere(){
   return null;   // nothing resolved → withhold road layer, show banner (§5)
 }
 
+/* ---- resolve the road-reserve SOURCE (§5 / QLD-Globe parity, A7) -----------
+   Why the road parcel used to look different from QLD Globe: QLD Globe's "Road
+   parcel" layer draws the cadastre's OWN dedicated road feature set, whereas we
+   took the general Land-Parcel/Property-Framework layer and applied a heuristic
+   UPPER(field) LIKE '%ROAD%' text-filter — a different selection (it can catch
+   parcels merely NAMED "…road…" and miss road parcels coded without the literal
+   word), so the highlighted corridor didn't match. This resolver prefers the
+   authoritative source, best first, and can only ever match QLD Globe better:
+     1. A dedicated ROAD polygon sublayer on the cadastre MapServer, drawn whole
+        (no filter) — the same selection QLD Globe shows — validated site-locally
+        so an empty/annotation layer is never adopted; otherwise
+     2. the previous parcel sublayer + LIKE '%ROAD%' heuristic (resolveRoadWhere),
+        kept intact as the fallback (zero regression when no road sublayer exists).
+   Note the cadastre feed is DCDB-derived; per its metadata the DCDB is frozen as
+   of 18 Apr 2026 (QSCF is now the source of truth), so a genuinely current QLD
+   Globe can still differ from a DCDB service for recently-changed parcels — that
+   is a data-currency difference, reported in the diagnostics, not a bug here.
+   Returns { sublayer, where, source } or null (caller withholds + banners). */
+async function resolveRoadSource(){
+  const T = SITE_MAP_CONFIG.timeouts.meta;
+  // Tier 1: probe the service's layer list for a dedicated road POLYGON sublayer.
+  try{
+    const { json } = await timedFetchJson(SITE_MAP_CONFIG.cadastre + "?f=json", "Cadastre layer list (cadastre ?f=json)", T);
+    const layers = (json && json.layers) || [];
+    const dedicated = layers.filter(l=>{
+      const n = String(l.name || "").toLowerCase();
+      const isRoad     = SITE_MAP_CONFIG.roadSublayerNames.some(k=> n.includes(k));
+      const isPolygon  = !l.geometryType || l.geometryType === "esriGeometryPolygon";
+      const notNoise   = !/label|annotation|centre|center|\bline\b|text|rail/.test(n);
+      return isRoad && isPolygon && notNoise;
+    });
+    const env = siteEnvelope(SITE_MAP_CONFIG.roadProbeKm);
+    for(const l of dedicated){
+      const base = SITE_MAP_CONFIG.cadastre + "/" + l.id;
+      let count = null;
+      try{ count = await countRoadParcels(base, "1=1", env, T); }catch(_){}
+      if(count == null && env){ try{ count = await countRoadParcels(base, "1=1", null, T); }catch(_){} }
+      if(count && count > 0){
+        setDiag("cadastre", { status:"resolved", resolved: 'dedicated "' + l.name + '" road sublayer (id ' + l.id + ', ' + count + ' parcels' + (env ? " near the site" : " state-wide") + ')' },
+          'Road source: dedicated "' + l.name + '" sublayer (id ' + l.id + ') — drawn whole, matching QLD Globe’s Road parcel selection.');
+        return { sublayer: l.id, where: "1=1", source: 'dedicated "' + l.name + '" sublayer (id ' + l.id + ')' };
+      }
+    }
+    if(dedicated.length) diagLog("A dedicated road sublayer was found but returned no parcels near the site — using the parcel-filter fallback.");
+    else diagLog("No dedicated road sublayer on the cadastre service — using the parcel-filter fallback (heuristic LIKE '%ROAD%').");
+  }catch(e){
+    diagLog("Cadastre layer-list probe " + (e.isTimeout ? "timed out" : "failed") + " (" + (e.message||"error") + ") — using the parcel-filter fallback.");
+  }
+  // Tier 2: the previous heuristic — parcel sublayer + UPPER(field) LIKE '%ROAD%'.
+  const road = await resolveRoadWhere();
+  if(!road) return null;
+  return { sublayer: SITE_MAP_CONFIG.cadastreParcelsSublayer, where: road.where, source: "parcel filter " + road.where };
+}
+
 /* ---- probe contour sublayer IDs by name (1 m / 5 m / 10 m), bounded (§4.3) ---- */
 async function resolveContourLayers(){
   const ids = { "1": SITE_MAP_CONFIG.contourSublayers["1"], "5": SITE_MAP_CONFIG.contourSublayers["5"], "10": SITE_MAP_CONFIG.contourSublayers["10"] };
@@ -4566,14 +4657,15 @@ async function loadContourLayer(map, silent){
 async function loadRoadLayer(map, silent){
   const start = smNow();
   try{
-    const road = await resolveRoadWhere();   // bounded + diag inside; off critical path (§4.1)
+    const road = await resolveRoadSource();   // bounded + diag inside; off critical path (§4.1)
     if(!road){
       if(!silent){
-        setDiag("road", { status:"withheld", ms: Math.round(smNow()-start), note:"road filter could not be resolved from the live cadastre schema" }, "Road reserve withheld — filter not resolved.");
-        siteMapBanner("Road reserve hidden: could not resolve the road filter from the live cadastre schema. Showing imagery + contours only (never unfiltered cadastre).", "warn");
+        setDiag("road", { status:"withheld", ms: Math.round(smNow()-start), note:"road source could not be resolved from the live cadastre schema" }, "Road reserve withheld — source not resolved.");
+        siteMapBanner("Road reserve hidden: could not resolve the road parcels from the live cadastre service. Showing imagery + contours only (never unfiltered cadastre).", "warn");
       }
       return;
     }
+    const roadUrl = SITE_MAP_CONFIG.cadastre + "/" + road.sublayer;
     const outline = SITE_MAP_CONFIG.roadOutline;
     const roadRenderer = { type:"simple", symbol:{ type:"simple-fill", color: SITE_MAP_CONFIG.roadFill, outline:{ color: outline.color, width: outline.width } } };
     // Primary: FeatureLayer — client-side symbology we control, no server
@@ -4581,7 +4673,7 @@ async function loadRoadLayer(map, silent){
     // feature tiles carry geometry only.
     try{
       const fl = new siteMap.esri.FeatureLayer({
-        url: SITE_MAP_CONFIG.cadastre + "/" + SITE_MAP_CONFIG.cadastreParcelsSublayer,
+        url: roadUrl,
         definitionExpression: road.where,
         opacity: 1,
         minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0,   // no zoomed-in ceiling
@@ -4591,7 +4683,7 @@ async function loadRoadLayer(map, silent){
       if(fl.capabilities && fl.capabilities.query && fl.capabilities.query.supportsQuery === false) throw new Error("sublayer does not support query");
       siteMap.layers.road = fl; insertLayerOrdered(map, fl, "road");
       if(!silent){
-        setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where, mode:"FeatureLayer, magenta outline, maxScale 0" }, "Road reserve applied as FeatureLayer (" + road.where + ") — magenta 2 px outline, no zoomed-in scale ceiling.");
+        setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.source, mode:"FeatureLayer, magenta outline, maxScale 0" }, "Road reserve applied as FeatureLayer (" + road.source + ") — magenta 2 px outline, no zoomed-in scale ceiling.");
         reportLayerFirstDraw(fl, "road", "Road reserve", start);
       }
       return;
@@ -4601,19 +4693,79 @@ async function loadRoadLayer(map, silent){
     // Fallback: MapImageLayer, still with an explicit outline renderer + maxScale 0.
     const roadLayer = new siteMap.esri.MapImageLayer({
       url: SITE_MAP_CONFIG.cadastre, opacity: 1, minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0,
-      sublayers: [{ id: SITE_MAP_CONFIG.cadastreParcelsSublayer, visible:true, definitionExpression: road.where,
+      sublayers: [{ id: road.sublayer, visible:true, definitionExpression: road.where,
         renderer: roadRenderer }]
     });
     await withTimeout(roadLayer.load(), SITE_MAP_CONFIG.timeouts.layer, "Road reserve (cadastre MapServer)");
     siteMap.layers.road = roadLayer; insertLayerOrdered(map, roadLayer, "road");
     if(!silent){
-      setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.where, mode:"MapImageLayer, outline renderer, maxScale 0" }, "Road reserve applied as MapImageLayer (" + road.where + ") — outline renderer, no zoomed-in scale ceiling.");
+      setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.source, mode:"MapImageLayer, outline renderer, maxScale 0" }, "Road reserve applied as MapImageLayer (" + road.source + ") — outline renderer, no zoomed-in scale ceiling.");
       reportLayerFirstDraw(roadLayer, "road", "Road reserve", start);
     }
   }catch(e){
     if(!silent){
       setDiag("road", { status: e.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: e.message||"error" }, "Road reserve " + (e.isTimeout?"timed out":"failed") + ": " + (e.message||"error"));
       siteMapBanner("Road reserve layer did not load (" + (e.message||"error") + "). The rest of the map is unaffected.", "error");
+    }
+  }
+}
+
+/* ---- resolve the railway sublayer ids from the OtherTransport service (C1) --
+   The Transportation/OtherTransport MapServer carries railways AND aviation/ports
+   in one tree (the Rail-network metadata lists sublayers 156,155,157,158). We keep
+   only the RAILWAY sublayers — matched by name (railInclude) and never aviation or
+   ports (railExclude) — so the map shows rail without airports/heliports/wharves.
+   Bounded (§4.3); falls back to the metadata ids if the name probe can't run. */
+async function resolveRailLayers(){
+  if(siteMap.railIds) return siteMap.railIds;
+  let ids = null;
+  try{
+    const { json } = await timedFetchJson(SITE_MAP_CONFIG.otherTransport + "?f=json", "Rail schema (OtherTransport ?f=json)", SITE_MAP_CONFIG.timeouts.meta);
+    const picked = [];
+    (json.layers || []).forEach(l=>{
+      const n = String(l.name || "");
+      // Skip group layers (they carry no features of their own).
+      const isGroup = Array.isArray(l.subLayerIds) && l.subLayerIds.length;
+      if(isGroup) return;
+      if(SITE_MAP_CONFIG.railInclude.test(n) && !SITE_MAP_CONFIG.railExclude.test(n)) picked.push(l.id);
+    });
+    if(picked.length){ ids = picked; diagLog("Rail sublayers resolved by name: " + picked.join(", ") + "."); }
+    else diagLog("Rail schema returned no railway-named sublayers — using the fallback ids " + SITE_MAP_CONFIG.railSublayersFallback.join(", ") + ".");
+  }catch(e){
+    diagLog("Rail schema probe " + (e.isTimeout ? "timed out" : "failed") + " (" + (e.message||"error") + ") — using the fallback ids " + SITE_MAP_CONFIG.railSublayersFallback.join(", ") + ".");
+  }
+  siteMap.railIds = ids || SITE_MAP_CONFIG.railSublayersFallback.slice();
+  return siteMap.railIds;
+}
+
+/* ---- rail lines (C1) -------------------------------------------------------
+   Drawn as a MapImageLayer over the resolved railway sublayers so the map carries
+   the service's own recognisable rail cartography (the black line with cross-ties,
+   like the QLD Globe "Road and rail" layer) across every railway type — heavy rail,
+   sidings, sugar-cane, tourist/historic — rather than one client-styled sublayer.
+   Honours the rail on/off toggle. Bounded + self-reporting (§4.3, §6); a failure
+   never blocks the map or the other layers. Because it is a real map layer it is
+   captured by view.takeScreenshot, so it travels into the Word-copy export too. */
+async function loadRailLayer(map, silent){
+  const start = smNow();
+  if(!siteMap.railOn){ if(!silent) setDiag("rail", { status:"off", ms:0, note:"rail toggled off" }, "Rail lines are toggled off."); return; }
+  try{
+    const ids = await resolveRailLayers();
+    if(!ids || !ids.length){ if(!silent) setDiag("rail", { status:"failed", ms: Math.round(smNow()-start), note:"no railway sublayers resolved" }, "No railway sublayers resolved."); return; }
+    const rail = new siteMap.esri.MapImageLayer({
+      url: SITE_MAP_CONFIG.otherTransport, opacity: 1,
+      sublayers: ids.map(id=>({ id, visible:true }))
+    });
+    await withTimeout(rail.load(), SITE_MAP_CONFIG.timeouts.layer, "Rail service (OtherTransport MapServer)");
+    siteMap.layers.rail = rail; insertLayerOrdered(map, rail, "rail");
+    if(!silent){
+      setDiag("rail", { status:"loaded", ms: Math.round(smNow()-start), sublayers: ids.join(", ") }, "Rail lines loaded (MapImageLayer over sublayers " + ids.join(", ") + ").");
+      reportLayerFirstDraw(rail, "rail", "Rail lines", start);
+    }
+  }catch(e){
+    if(!silent){
+      setDiag("rail", { status: e.isTimeout ? "timed out" : "failed", ms: Math.round(smNow()-start), note: e.message||"error" }, "Rail service " + (e.isTimeout?"timed out":"failed") + ": " + (e.message||"error"));
+      siteMapBanner("Rail lines did not load (" + (e.message||"error") + "). The rest of the map is unaffected.", "error");
     }
   }
 }
@@ -4787,6 +4939,7 @@ async function buildView(container, opts){
     loadImageryLayer(imagery, map, false);
     loadContourLayer(map, false);
     loadRoadLayer(map, false);       // road resolution is OFF the critical path (§4.1)
+    loadRailLayer(map, false);       // rail sublayers resolved off the critical path too
     loadLabelsLayer(map, false);
   } else {
     // Off-screen copy view — the screenshot needs the layers present, so await
@@ -4794,6 +4947,7 @@ async function buildView(container, opts){
     await loadImageryLayer(imagery, map, true);
     await loadContourLayer(map, true);
     await loadRoadLayer(map, true);
+    await loadRailLayer(map, true);
     await loadLabelsLayer(map, true);
   }
 
@@ -4943,16 +5097,44 @@ function attachPinDragHandlers(view){
   });
 }
 
-// Live coordinate readout in the pin panel while dragging (§B1).
+// Live coordinate readout in the pin panel while dragging (§B1) — writes into the
+// same editable field the user can type into (§C2), so drag and type stay in sync.
 function updateDragReadout(graphic, lat, lon){
   const p = graphic.__pin; if(!p) return;
   p.lat = lat; p.lon = lon;
   const host = siteMap.panelHost;
   if(host){
-    const row = host.querySelector('[data-pin-key="' + cssEscape(p.key) + '"] .smap-pin-coord');
-    if(row) row.textContent = formatCoord(lat, lon);
+    const field = host.querySelector('[data-pin-key="' + cssEscape(p.key) + '"] .smap-pin-input');
+    if(field && document.activeElement !== field) field.value = formatCoord(lat, lon);
   }
   renderDistanceSuggestion();      // keep any relocation-distance suggestion live (§B4)
+}
+
+/* Shared write-back for a coordinate edit made in the modal — used by BOTH the pin
+   drag (§B1) and the panel text-entry (§C2). Writes the canonical string into the
+   originating row's field, re-resolves + redraws the pins, records an undo, refreshes
+   the dependents, and toasts. `opts.reframe` re-frames the view to show the result
+   (a typed coordinate can land anywhere) — the drag deliberately does NOT, so the
+   map stays put under the dropped pin. Returns true when the write happened. */
+function writePinCoord(table, pin, newStr, toastMsg, opts){
+  opts = opts || {};
+  const rs = state[table.id] && state[table.id][pin.rowId];
+  if(!rs) return false;
+  const prevValue = (rs.fields && rs.fields[pin.field] != null) ? String(rs.fields[pin.field]) : "";
+  if(!rs.fields) rs.fields = {};
+  rs.fields[pin.field] = newStr;
+  siteMap.lastPinEdit = { tableId: table.id, rowId: pin.rowId, field: pin.field, prevValue };
+
+  // Re-resolve pins from state, redraw, refresh dependents.
+  refreshPins(table);
+  drawPins();
+  invalidateScreenshot();
+  reflectTableEdit(table);           // builder field shows the new value on close
+  if(opts.reframe) siteMap.userHasAdjustedView = false;   // typed coordinate re-frames (§C2)
+  renderSiteMapPanel();              // panel readout + B4 suggestion follow along
+  if(opts.reframe) fitView();
+  if(toastMsg) showPinMoveToast(toastMsg);
+  return true;
 }
 
 /* On release: round to 6 dp (~0.1 m), re-parse through the shared path, write it
@@ -4967,27 +5149,52 @@ function finalizePinDrag(graphic){
   const parsed = parseCoord(newStr);
   if(!parsed.ok){ siteMapBanner("Could not apply the dragged coordinate.", "error"); return; }
 
-  const rs = state[table.id] && state[table.id][p.rowId];
-  if(!rs){ return; }
-  const prevValue = (rs.fields && rs.fields[p.field] != null) ? String(rs.fields[p.field]) : "";
-  if(!rs.fields) rs.fields = {};
-  rs.fields[p.field] = newStr;
-
   // Distance moved, for the toast (geodesic-ish via Haversine — no new dependency).
   const from = siteMap.dragStart;
   const movedM = from ? Math.round(haversineKm(from.lat, from.lon, lat, lon) * 1000) : null;
   siteMap.dragStart = null;
-
-  // Update descriptor, re-resolve pins from state, redraw, refresh dependents.
-  refreshPins(table);
-  drawPins();
-  invalidateScreenshot();
-  reflectTableEdit(table);           // builder field shows the new value on close
-  renderSiteMapPanel();              // panel readout + B4 suggestion follow along
-
-  siteMap.lastPinEdit = { tableId: table.id, rowId: p.rowId, field: p.field, prevValue };
   const movedStr = (movedM == null) ? "" : (movedM >= 1000 ? (movedM/1000).toFixed(2) + " km" : movedM + " m");
-  showPinMoveToast((p.label || "Pin") + " moved" + (movedStr ? " " + movedStr : "") + " → " + newStr);
+
+  writePinCoord(table, p, newStr, (p.label || "Pin") + " moved" + (movedStr ? " " + movedStr : "") + " → " + newStr);
+}
+
+/* Apply a coordinate typed into a pin's panel field (§C2). Parses through the SAME
+   parseCoord path as every other coordinate in the app, so DMS, swapped-pair fixes
+   and range checks all work; on a parse failure the pin's inline message explains
+   why (and offers the lat/lon swap when that is the likely fix) and nothing is
+   written. An empty entry clears the coordinate (removing the pin), undoably. */
+function commitPinCoordEntry(pinKey, rawInput){
+  const table = activeTable(); if(!table) return false;
+  const pin = siteMap.pins.find(p=> p.key === pinKey);
+  if(!pin || !pin.field) return false;
+  const raw = (rawInput == null ? "" : String(rawInput)).trim();
+  const rs = state[table.id] && state[table.id][pin.rowId];
+  const current = (rs && rs.fields && rs.fields[pin.field] != null) ? String(rs.fields[pin.field]).trim() : "";
+  if(raw === current) return false;                  // unchanged — no-op (and no toast)
+  if(!raw){
+    writePinCoord(table, pin, "", (pin.label || "Pin") + " coordinate cleared", { reframe:true });
+    return true;
+  }
+  const parsed = parseCoord(raw);
+  if(!parsed.ok){
+    const hint = parsed.swap ? " Did you mean " + formatCoord(parsed.swap.lat, parsed.swap.lon) + "?" : "";
+    showPinCoordError(pinKey, (parsed.error || "Couldn't read that as coordinates.") + hint);
+    return false;
+  }
+  const newStr = formatCoord(parsed.lat, parsed.lon);
+  writePinCoord(table, pin, newStr, (pin.label || "Pin") + " set to " + newStr, { reframe:true });
+  return true;
+}
+
+/* Show a parse error under a pin's coordinate input WITHOUT re-rendering the panel
+   (so the text the user typed is preserved for them to correct). */
+function showPinCoordError(pinKey, msg){
+  const host = siteMap.panelHost; if(!host) return;
+  const row = host.querySelector('[data-pin-key="' + cssEscape(pinKey) + '"]');
+  if(!row) return;
+  const msgEl = row.querySelector(".smap-pin-msg");
+  if(msgEl){ msgEl.textContent = msg; msgEl.className = "smap-pin-msg smap-pin-msg--err"; }
+  row.classList.add("smap-pin--invalid");
 }
 
 // Push a table edit made from the map back into the builder so the field shows
@@ -5066,6 +5273,21 @@ async function setContoursOn(on){
   // Turning back on: rebuild the layer for the current interval.
   mapBuildStart();           // rebuilding contours — reset the bar
   await loadContourLayer(map, false);
+}
+
+/* ---- rail lines on/off (C1) — mirrors the contours toggle ---- */
+async function setRailOn(on){
+  siteMap.railOn = on;
+  invalidateScreenshot();
+  const map = siteMap.esriMap;
+  if(!map) return;
+  if(!on){
+    if(siteMap.layers.rail){ try{ map.remove(siteMap.layers.rail); }catch(_){} siteMap.layers.rail = null; }
+    setDiag("rail", { status:"off", ms:0, note:"rail toggled off" }, "Rail lines toggled off.");
+    return;
+  }
+  mapBuildStart();           // rebuilding rail — reset the bar
+  await loadRailLayer(map, false);
 }
 
 /* ---- switch contour interval, with coverage auto-fallback (§5) ----
@@ -5149,6 +5371,7 @@ function buildSiteMapModal(){
           <label><input type="radio" name="smapInterval" value="10"> 10 m</label>
           <span class="smap-interval-stamp"></span>
         </div>
+        <label class="smap-rail-on" title="Show or hide railway lines (heavy rail, sidings, sugar-cane and tourist lines)"><input type="checkbox" class="smap-rail-chk" checked> Rail</label>
         <button type="button" class="btn btn-secondary smap-fitall" style="padding:6px 12px;">Fit all pins</button>
         <button type="button" class="btn btn-secondary smap-reset" style="padding:6px 12px;">Reset view</button>
         <button type="button" class="btn btn-secondary smap-move" title="Turn on to drag pins to a new location — the coordinate is written back to the table" aria-pressed="false" style="padding:6px 12px;">Move pins: off</button>
@@ -5235,6 +5458,9 @@ function buildSiteMapModal(){
     overlay.querySelectorAll('input[name="smapInterval"]').forEach(r=> r.disabled = !contoursChk.checked);
     setContoursOn(contoursChk.checked);
   });
+  // Rail lines on/off (C1).
+  const railChk = overlay.querySelector(".smap-rail-chk");
+  if(railChk) railChk.addEventListener("change", ()=>{ clearSiteMapBanners(); setRailOn(railChk.checked); });
   document.addEventListener("keydown", siteMapKeydown);
   return overlay;
 }
@@ -5316,6 +5542,7 @@ function diagnosticsText(){
     (d.cadastre.resolved ? " — resolved to " + d.cadastre.resolved : (d.cadastre.note ? " — " + d.cadastre.note : "")));
   if(d.cadastre.serviceScale) L.push("    " + d.cadastre.serviceScale);
   L.push("- Road-reserve layer: " + (d.road.status || "pending") + fmtDiagDur(d.road) + (d.road.note ? " — " + d.road.note : "") + (d.road.mode ? " [" + d.road.mode + "]" : "") + (d.road.drawn ? " — " + d.road.drawn : ""));
+  L.push("- Rail lines [" + (d.rail.sublayers || "?") + "]: " + (d.rail.status || "pending") + fmtDiagDur(d.rail) + (d.rail.note ? " — " + d.rail.note : "") + (d.rail.drawn ? " — " + d.rail.drawn : ""));
   L.push(diagLine("Imagery labels (optional)", d.labels));
   L.push("");
   // Per-layer stack snapshot (A5): visible, effective min/max scale (what we set
@@ -5350,11 +5577,12 @@ function renderSiteMapPanel(){
     host.innerHTML = `<div class="smap-empty">No coordinates entered in this table yet. Add a coordinate to a mapped row to see a pin.</div>`;
   }
   siteMap.pins.forEach(p=>{
-    const row = document.createElement("label");
+    const row = document.createElement("div");
     row.className = "smap-pin" + (p.ok ? "" : " smap-pin--invalid");
-    row.dataset.pinKey = p.key;      // for the live drag readout (§B1)
+    row.dataset.pinKey = p.key;      // for the live drag readout (§B1) + text-entry (§C2)
     const cb = document.createElement("input");
     cb.type = "checkbox"; cb.checked = !!p.on; cb.disabled = !p.ok;
+    cb.title = p.ok ? "Show or hide this pin" : "Enter a valid coordinate to show this pin";
     cb.addEventListener("change", ()=>{
       p.on = cb.checked;
       drawPins();
@@ -5364,11 +5592,46 @@ function renderSiteMapPanel(){
     });
     const dot = document.createElement("span");
     dot.className = "smap-dot"; dot.style.background = "rgb(" + pinRgb(p.colour).join(",") + ")";
-    const txt = document.createElement("span");
+    const txt = document.createElement("div");
     txt.className = "smap-pin-text";
-    txt.innerHTML = `<span class="smap-pin-label">${escapeHtml(p.label)}${p.anchor ? ' <span class="smap-anchor">centre</span>' : ""}</span>` +
-      (p.ok ? `<span class="smap-pin-coord">${escapeHtml(formatCoord(p.lat, p.lon))}${p.warn ? ' — ' + escapeHtml(p.warn) : ""}</span>`
-            : `<span class="smap-pin-coord smap-pin-err">${escapeHtml(p.raw)} — ${escapeHtml(p.error)}</span>`);
+    txt.innerHTML = `<span class="smap-pin-label">${escapeHtml(p.label)}${p.anchor ? ' <span class="smap-anchor">centre</span>' : ""}</span>`;
+
+    // Editable coordinate field (§C2): type a coordinate to move the pin. Prefilled
+    // with the canonical value for a valid pin, or the raw (unparseable) text so a
+    // bad coordinate can be corrected in place. Commits on Enter, on blur, or the Set
+    // button, through the same parseCoord path as every other coordinate in the app.
+    const editRow = document.createElement("div");
+    editRow.className = "smap-pin-editrow";
+    const input = document.createElement("input");
+    input.type = "text"; input.className = "smap-pin-input";
+    input.value = p.ok ? formatCoord(p.lat, p.lon) : p.raw;
+    input.setAttribute("aria-label", p.label + " coordinate (latitude, longitude)");
+    input.setAttribute("inputmode", "decimal");
+    input.spellcheck = false;
+    const applyBtn = document.createElement("button");
+    applyBtn.type = "button"; applyBtn.className = "smap-pin-apply"; applyBtn.textContent = "Set";
+    applyBtn.title = "Apply this coordinate to the pin (and the scope table)";
+    // isConnected guard: a successful commit re-renders the panel (replacing this
+    // input), so the button's mousedown-blur-then-click can't fire a second commit.
+    const commit = ()=>{ if(!input.isConnected) return; commitPinCoordEntry(p.key, input.value); };
+    input.addEventListener("keydown", (e)=>{
+      if(e.key === "Enter"){ e.preventDefault(); commit(); }
+      else if(e.key === "Escape"){ input.value = p.ok ? formatCoord(p.lat, p.lon) : p.raw; input.blur(); }
+    });
+    input.addEventListener("blur", commit);
+    // Clear a stale inline error as soon as the user starts correcting the value.
+    input.addEventListener("input", ()=>{ const m = row.querySelector(".smap-pin-msg"); if(m && m.textContent){ m.textContent = ""; m.className = "smap-pin-msg"; } });
+    applyBtn.addEventListener("click", commit);
+    editRow.appendChild(input); editRow.appendChild(applyBtn);
+    txt.appendChild(editRow);
+
+    // Inline message: parse error for an invalid pin, a range warning for a
+    // valid-but-suspect one (e.g. looks swapped for a Queensland site).
+    const msg = document.createElement("span");
+    msg.className = "smap-pin-msg" + (p.ok ? (p.warn ? " smap-pin-msg--warn" : "") : " smap-pin-msg--err");
+    msg.textContent = p.ok ? (p.warn || "") : (p.error || "Invalid coordinate");
+    txt.appendChild(msg);
+
     row.appendChild(cb); row.appendChild(dot); row.appendChild(txt);
     host.appendChild(row);
   });
