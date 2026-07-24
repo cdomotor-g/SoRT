@@ -143,13 +143,14 @@ Same invocation as the others.
 Guards two Site Map defects that only bite on the live WebGL view but whose logic
 can be driven with a **stand-in view** (no WebGL, no QLD services, no Esri CDN):
 
-- **Copy — no up-scale.** The copied/pasted map image must be captured at the
-  view's **own** size. Asking `takeScreenshot` for a width larger than the view
-  re-renders the scene at that size and the raster base layers (imagery +
-  contours) come back **blank** for the tiles that aren't ready yet, while the
-  vector pins draw instantly — the "copied map is just pins on white" defect. The
-  test asserts `takeViewScreenshot` requests `view.width`/`view.height` (never the
-  old forced `1600`), and that the off-screen copy view is built at the export
+- **Copy — native-size capture.** The copied/pasted map image must be captured at
+  the view's **native framebuffer** size. Passing `takeScreenshot` an explicit
+  width/height makes it **resample**: a size larger than the view re-renders the
+  scene and the raster base layers (imagery + contours) come back **blank** for
+  the tiles that aren't ready yet — the "copied map is just pins on white" defect
+  — while passing the CSS-pixel `view.width` down-samples on a high-DPI display.
+  The test asserts `takeViewScreenshot` passes **no** size at all (a 1:1
+  framebuffer read), and that the off-screen copy view is built at the export
   width so its native capture is already high-res.
 - **Re-centre on re-open.** When the modal re-opens, its map container goes
   `display:none` → visible, so the re-show resize can interrupt the framing
@@ -165,4 +166,46 @@ stubbing `siteMap.view` + `siteMap.esri`, and is fully hermetic. Same invocation
 PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
 PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/map-copy-recenter.test.mjs
+```
+
+## `map-copy-suspended-view.test.mjs` — blank-map-on-copy (suspended view) regression
+
+Guards the "Site Map copy exports pins + legend but **no map**" defect. The Site
+Map modal is hidden with `.hidden { display:none }`, and per the Esri docs a
+`MapView` whose container is `display:none` is **suspended** — it stops rendering
+and updating. So when the common workflow (open the map, frame it, **close it**,
+tick *Include map*, *Copy table for Word*) reaches the copy, the view is
+suspended: the base layers (imagery, contours, road, rail, labels) have stopped
+drawing, while `view.graphics` (the pins) still paint from geometry in memory and
+the legend/stamp are composited on afterwards — pins + legend + no map. It stayed
+silent because a suspended view reports `updating === false` (it has simply
+stopped), so the old `whenOnce(() => !view.updating)` gate resolved instantly on
+an empty frame, and the old all-black probe never fired on a **transparent** frame
+that a white base fill then turned into a plausible pale "map".
+
+This is a DOM/CSS problem, not a service problem, so it **is** reproducible
+without `js.arcgis.com` or the QLD hosts. The test drives the real functions
+against stand-in views and asserts:
+
+- **`beginCaptureVisibility`** parks the overlay in the one hidden state
+  (`visibility:hidden` via `.smap-capturing`) that keeps `suspended === false` —
+  laid out at full size, invisible, click-through — and restores `.hidden` after;
+- **`whenCaptureReady`** does **not** resolve while the view is suspended (unlike
+  the old `!updating` gate), resolves once it un-suspends and every layer view is
+  idle, and is **bounded** so a stuck-retrying layer can never hang the copy;
+- **`takeViewScreenshot`** reads the native framebuffer (no resample);
+- **`rasterStats`** measures the **raw** raster — a full-coverage many-colour
+  frame passes; a pins-on-transparent frame reads low coverage / few colours;
+- **`compositeScreenshot`** exports a real capture but **throws** on a near-empty
+  one rather than paste pins-on-white into a scope document;
+- the **diagnostics** name the frame coverage and the suspension state (the only
+  debugging surface on the target machine — there is no DevTools);
+- **Escape** is ignored while a capture has briefly un-hidden the overlay.
+
+Fully hermetic — no WebGL view, no QLD services, no Esri CDN. Same invocation:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/map-copy-suspended-view.test.mjs
 ```
