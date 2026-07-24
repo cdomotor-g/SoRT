@@ -323,8 +323,9 @@ bake those defaults (or your own) into the central store.
 ## Site Map
 
 The **Site Map** button (next to *Copy table for Word*) opens a modal showing the
-current table's coordinates over Queensland Government aerial imagery, 1 m LiDAR
-contours, and the road reserve (cadastral parcels filtered to road). Pins come
+current table's coordinates over Queensland Government aerial imagery, LiDAR
+contours (5 m by default), and the road reserve (cadastral parcels filtered to
+road, filled a translucent sandy colour like the QLD Globe view). Pins come
 from every row with a `mapPin` (above): `coords` always, `relocation` when it is
 not "No", and — on the Water Level table — `riverCoords` / `riverRelocation`.
 
@@ -344,10 +345,20 @@ not "No", and — on the Water Level table — `riverCoords` / `riverRelocation`
 - **Row-selection panel** — tick/untick which pins show; the view re-fits as you
   do (until you pan or zoom, after which **Reset view** restores auto-fit). Each
   pin's coordinate is shown next to its label, and travels into the exported image.
-- **Contour interval** — 1 m / 5 m / 10 m, defaulting to 1 m, with an on/off
-  toggle for a fast imagery-and-pins map. Outside LiDAR coverage the map falls
-  back to a coarser interval and says which one it is showing (1 m LiDAR only
-  exists over the eastern/SEQ coverage area).
+- **Contour interval** — 1 m / 5 m / 10 m, **defaulting to 5 m** (5 m paints
+  much faster; 1 m is the slowest to load and is there when you need the detail),
+  with an on/off toggle for a fast imagery-and-pins map. The contour line is a
+  warm burnt-orange and slightly thickened so it reads over the aerial base map
+  rather than disappearing into it. Outside LiDAR coverage the map falls back to a
+  coarser interval and says which one it is showing (1 m LiDAR only exists over
+  the eastern/SEQ coverage area).
+- **Build progress** — a thin progress bar along the bottom edge of the map (with
+  a small "Building map…" label) shows how much of the *whole* map is still being
+  generated: imagery, the LiDAR contours (the slow part), the road reserve and the
+  labels. It resets to zero whenever you change what the map shows (a pan/zoom or a
+  contour-resolution change) and completes when the map settles. It never locks the
+  map — it captures no pointer events and disables nothing, so you can keep panning,
+  zooming or dragging pins while it fills.
 - **Move pins** — a toolbar toggle (off by default). While on, drag a pin to a
   new location: the coordinate is rounded to 6 dp, written back to the scope
   row's field, and a toast shows how far it moved with a one-click **Undo**. The
@@ -400,14 +411,20 @@ path**: the map opens and frames the pins while it is still outstanding.
 >   `SITE_MAP_CONFIG.roadFieldCandidates`. The diagnostics *Cadastre* line states
 >   which field resolved and whether it matched near the site or only state-wide.
 > - **Contour sublayer IDs — resolved.** 1 m = **30**, 5 m = **20**, 10 m = **10**
->   on the `Elevation/Contours` MapServer. (These are also probed by name at
->   runtime; the values above are what the live service returns.)
+>   on the `Elevation/Contours` MapServer. These are now carried as the fallback
+>   values in `SITE_MAP_CONFIG.contourSublayers` (still probed by name at runtime),
+>   so the 5 m default resolves an id even if the name probe misses — the probe now
+>   also matches the "N metre" spellings the service actually uses.
 > - **Imagery — confirmed.** Loads as an **`ImageryTileLayer`** in ~0.0 s (Esri
 >   CDN ~0.9 s); all QLD hosts reachable.
 >
 > Road reserve is drawn as a **client-side `FeatureLayer`** with a high-contrast
-> **magenta 2 px outline and no fill**, and **no zoomed-in scale ceiling**
-> (`maxScale: 0`): the cadastre service's own hairline outline is invisible over
+> **magenta 2 px outline over a 50%-transparent sandy fill**
+> (`SITE_MAP_CONFIG.roadFill`), and **no zoomed-in scale ceiling**
+> (`maxScale: 0`): the fill makes the bounded reserve read like the usual QLD
+> Globe view (a client-side render choice — the cadastre service ships no
+> pre-styled "sandy reserve" layer), while the cadastre's own hairline outline is
+> invisible over
 > aerial imagery, and a server-side `maxScale` would hide the parcels at close
 > zoom — the diagnostics panel prints the service's declared min/max scale for
 > sublayer 4 so that suppression is visible if it ever recurs. Contours are drawn
@@ -427,7 +444,7 @@ path**: the map opens and frames the pins while it is still outstanding.
 > signature of the invisible-road-reserve defect).
 
 > **Note for maintainers:** the live map now renders correctly at real sites
-> (imagery, 1 m contours, pins, framing and diagnostics all confirmed). The QLD
+> (imagery, contours, pins, framing and diagnostics all confirmed). The QLD
 > ArcGIS endpoints and the Esri CDN remain **unreachable from the build sandbox**
 > (network egress policy), so changes touching the live render, the road-filter
 > resolution, the `takeScreenshot` CORS behaviour, or the paste into desktop Word
@@ -438,6 +455,11 @@ path**: the map opens and frames the pins while it is still outstanding.
 >   table edit re-resolves the pins from app state and re-centres on the anchor
 >   when it moved (see `tests/README.md` to run it). It drives the real app code
 >   in headless Chromium and stubs no QLD service.
+> - `tests/map-visuals.test.mjs` — the sandy road-reserve fill, the 5 m contour
+>   default, the warmer/thicker contour line, the "N metre" sublayer-name probe,
+>   and the bottom-of-map build-progress bar (start → milestone → trickle →
+>   settle/hide → reset, and that it never captures pointer events). Hermetic:
+>   the store, the Esri CDN and every QLD host are blocked.
 > - The `verify` skill covers coordinate parsing/validation, pin resolution and
 >   gating, the panel, offline degradation, and the byte-identical copy when the
 >   map tickbox is off.
