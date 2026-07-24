@@ -107,6 +107,37 @@ PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/map-visuals.test.mjs
 ```
 
+## `pin-coord-entry.test.mjs` — §C2 coordinate text-entry
+
+Guards editing a pin's coordinate from the **text field** in the Site Map panel
+(the keyboard counterpart to the B1 drag): typing a coordinate and committing it
+(Enter / blur / the **Set** button) writes the canonical value back to the
+originating scope row's field, offers undo, and validates through the SAME
+`parseCoord` path as every other coordinate — so DMS and swapped-pair fixes work,
+a bad value is refused with an inline message (nothing written, the typed text
+kept for correction), *invalid* pins are editable, and clearing the field removes
+the pin (undoably).
+
+Fully hermetic like `pin-writeback.test.mjs` — no WebGL view, no QLD services, no
+Esri CDN. Same invocation as the others.
+
+## `rail-road-source.test.mjs` — §C1 rail + §A7 road-parcel parity
+
+Guards two schema-driven resolvers, with only the external ArcGIS REST endpoints
+stubbed (as in `road-filter.test.mjs`; the page code runs unmodified):
+
+- **Rail (`resolveRailLayers`)** reads the *Transportation/OtherTransport* layer
+  list and keeps only the railway sublayers — heavy rail, light rail, sidings,
+  sugar-cane — never the aviation / port sublayers that share the service, and
+  never the group layers; it falls back to the metadata ids if the probe can't run.
+- **Road source (`resolveRoadSource`)** prefers the cadastre's own dedicated road
+  **polygon** sublayer, drawn whole (the same selection QLD Globe's *Road parcel*
+  layer shows), validated site-locally and never a "road labels" layer — and falls
+  back to the previous parcel + `LIKE '%ROAD%'` heuristic when no such sublayer
+  exists (so it can only ever match QLD Globe better, never worse).
+
+Same invocation as the others.
+
 ## `map-copy-recenter.test.mjs` — blank-copy + re-centre-on-reopen regression
 
 Guards two Site Map defects that only bite on the live WebGL view but whose logic
