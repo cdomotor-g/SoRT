@@ -3,11 +3,12 @@
  * whose logic can be driven headlessly with a stand-in view (no WebGL, no QLD
  * services, no Esri CDN, nothing stubbed on the QLD side):
  *
- *   Copy (A2) — the copied/pasted map image must NOT be up-scaled past the view.
- *     Asking takeScreenshot for a width larger than the view re-renders the scene
- *     at that size and the raster base layers (imagery + contours) come back blank
- *     while the vector pins draw instantly — the "copied map is just pins on white"
- *     defect. `takeViewScreenshot` must request the view's OWN size.
+ *   Copy (A2) — the copied/pasted map image must be captured at the view's NATIVE
+ *     framebuffer size. Passing takeScreenshot an explicit width/height RESAMPLES:
+ *     larger than the view re-renders the scene (blanking not-yet-fetched raster
+ *     tiles — the "copied map is just pins on white" defect), and passing the CSS-
+ *     pixel view.width down-samples on a high-DPI display. `takeViewScreenshot`
+ *     must pass NO size at all.
  *
  *   Re-centre (A3) — when the modal is re-opened the map container goes
  *     display:none → visible, so the re-show resize can interrupt the framing goTo,
@@ -74,20 +75,23 @@ try {
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#rowsContainer [data-preview-for="coords"]', { timeout: 15000 });
 
-  // ---- Copy (A2): screenshot is captured at the view's OWN size, never 1600. ----
+  // ---- Copy (A2): screenshot is captured at the view's NATIVE framebuffer size.
+  //      takeViewScreenshot must pass NO width/height — an explicit size makes
+  //      takeScreenshot RESAMPLE the scene (blanking not-yet-fetched raster tiles,
+  //      and down-sampling on a high-DPI display where view.width is CSS pixels). --
   const cap = await page.evaluate(async ()=>{
     const calls = [];
-    const view = { width: 812, height: 447, takeScreenshot: (opts)=>{ calls.push(opts); return Promise.resolve({ dataUrl:'data:image/png;base64,AAAA' }); } };
+    const view = { width: 812, height: 447, takeScreenshot: function(){ calls.push({ argc: arguments.length, first: arguments[0] }); return Promise.resolve({ dataUrl:'data:image/png;base64,AAAA' }); } };
     await takeViewScreenshot(view);
-    // A view with no size must fall back to the library default (no forced width).
-    const calls2 = [];
-    const noSize = { width: 0, height: 0, takeScreenshot: (opts)=>{ calls2.push(opts); return Promise.resolve({}); } };
-    await takeViewScreenshot(noSize);
-    return { opts: calls[0], opts2: calls2[0], exportWidth: SITE_MAP_CONFIG.screenshotWidth, offscreen: SITE_MAP_CONFIG.offscreenSize };
+    return {
+      argc: calls[0].argc,
+      firstIsUndefined: calls[0].first === undefined,
+      exportWidth: SITE_MAP_CONFIG.screenshotWidth,
+      offscreen: SITE_MAP_CONFIG.offscreenSize
+    };
   });
-  check('copy: screenshot requested at the view size', cap.opts && cap.opts.width === 812 && cap.opts.height === 447);
-  check('copy: never up-scales to the old forced 1600 width', cap.opts && cap.opts.width !== 1600);
-  check('copy: no-size view falls back to the default (no width key)', cap.opts2 && cap.opts2.width === undefined && cap.opts2.height === undefined);
+  check('copy: takeScreenshot called with NO arguments (1:1 native framebuffer read)', cap.argc === 0);
+  check('copy: no forced width/height reaches takeScreenshot (no resample, no down-sample)', cap.firstIsUndefined);
   // The off-screen copy view is built at the export width so its native capture is
   // already high-res without any up-scale.
   check('copy: off-screen copy view is built at the export width', cap.offscreen && cap.offscreen.width === cap.exportWidth);

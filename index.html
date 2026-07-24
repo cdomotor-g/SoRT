@@ -609,6 +609,15 @@
   .smap-banner--error{ color:var(--danger); background:var(--danger-soft); }
   .smap-banner-x{ appearance:none; border:none; background:transparent; color:inherit; cursor:pointer; font-size:.9rem; }
 
+  /* Screenshot capture visibility (§7, A2). `.hidden` is display:none, which
+     SUSPENDS the MapView — a suspended view stops rendering, so a screenshot
+     taken then is just the vector pins on white with no map underneath (the
+     reported "copy has pins + legend but no map" defect). For the brief moment
+     of a capture we swap `.hidden` for this state instead: visibility:hidden
+     keeps `view.suspended === false`, so the view stays laid out at its full
+     size and keeps rendering, while being invisible and click-through. */
+  .smap-overlay.smap-capturing{ visibility:hidden; pointer-events:none; }
+
   .smap-body{ flex:1; display:flex; padding:0; min-height:0; overflow:hidden; }
   .smap-map{ flex:1; position:relative; min-height:360px; background:#e9eef0; }
   .smap-map .esri-view{ height:100%; width:100%; }
@@ -4050,8 +4059,11 @@ function freshDiag(){
     road:     { status:"pending", ms:null, note:"", mode:"", drawn:"" },
     rail:     { status:"pending", ms:null, note:"", sublayers:"", drawn:"" },
     labels:   { status:"pending", ms:null, note:"" },
-    // Screenshot capture (A5): did takeScreenshot land a raster on the canvas?
-    screenshot: { status:"idle", note:"", dims:"", decoded:null },
+    // Screenshot capture (A5): did takeScreenshot land a REAL raster on the
+    // canvas? coverage/distinct describe the raw frame (a suspended view captures
+    // pins-on-transparent — low coverage, few colours); suspended records whether
+    // the view was display:none-suspended at the moment of capture.
+    screenshot: { status:"idle", note:"", dims:"", decoded:null, coverage:null, distinct:null, suspended:null },
     // Per-layer snapshot rebuilt from map.layers on demand (A5): visible,
     // effective min/max scale, and index in the stack.
     layers: [],
@@ -5465,7 +5477,13 @@ function buildSiteMapModal(){
   return overlay;
 }
 function siteMapKeydown(e){
-  if(e.key === "Escape" && siteMap.overlay && !siteMap.overlay.classList.contains("hidden")) closeSiteMap();
+  // Ignore Escape while a capture has briefly un-hidden the overlay into the
+  // invisible, click-through `.smap-capturing` state (§7, A2) — an Escape then
+  // would close a modal the user can't even see, and the capture restores the
+  // hidden state itself.
+  if(e.key === "Escape" && siteMap.overlay &&
+     !siteMap.overlay.classList.contains("hidden") &&
+     !siteMap.overlay.classList.contains("smap-capturing")) closeSiteMap();
 }
 function updateIntervalStamp(){
   if(!siteMap.overlay) return;
@@ -5556,8 +5574,26 @@ function diagnosticsText(){
   const ss = d.screenshot || {};
   L.push("Screenshot capture: " + (ss.status || "idle") +
     (ss.dims ? " — " + ss.dims : "") +
-    (ss.decoded === true ? " — raster decoded" : ss.decoded === false ? " — raster did NOT decode" : "") +
-    (ss.note ? " — " + ss.note : ""));
+    (ss.note ? " — " + ss.note : "") +
+    (typeof ss.coverage === "number" ? " — ~" + Math.round(ss.coverage*100) + "% covered, " + (ss.distinct != null ? ss.distinct : "?") + " distinct colours" : "") +
+    (ss.decoded === false ? " — raster did NOT decode" : ""));
+  if(ss.suspended != null) L.push("View suspended at capture: " + (ss.suspended ? "YES — the view was display:none and had stopped rendering (this is the blank-map failure)" : "no"));
+  L.push("");
+  // Live render state (A2/A5): the view's suspend/ready/updating flags right now
+  // and how many layer views are still drawing — the first thing to read when a
+  // copied map comes out blank, since there is no DevTools on the target machine.
+  // A SUSPENDED view is the blank-map cause: display:none stops it rendering.
+  L.push("Live render state:");
+  if(view){
+    const lvArr = (view.allLayerViews && view.allLayerViews.toArray) ? view.allLayerViews.toArray() : [];
+    const drawing = lvArr.filter(lv=> lv && lv.updating).length;
+    L.push("  suspended:" + (!!view.suspended) + "  ready:" + (view.ready !== false) +
+      "  updating:" + (!!view.updating) + "  size:" + (view.width||0) + "×" + (view.height||0));
+    L.push("  layer views: " + lvArr.length + " total, " + drawing + " still drawing");
+    if(view.suspended) L.push("  ** the view is SUSPENDED right now — not rendering; a copy taken now would be blank **");
+  } else {
+    L.push("  (no live view — a copy builds a throwaway off-screen view)");
+  }
   L.push("");
   L.push("Activity log:");
   (d.log.length ? d.log : ["(nothing logged yet)"]).forEach(l => L.push("  " + l));
@@ -5774,12 +5810,26 @@ async function openSiteMap(triggerEl){
   }
 }
 
-function closeSiteMap(){
+async function closeSiteMap(){
   if(!siteMap.overlay) return;
   // Leave Move-pins and Measure off so the next open starts in a neutral state.
   if(siteMap.moveMode) setMoveMode(false);
   if(siteMap.measureWidget) setMeasureOn(false);
   mapBuildReset();           // stop and clear the build progress bar
+  // Warm the screenshot cache while the view is STILL on screen (§7, A2). Once
+  // the overlay goes display:none the MapView SUSPENDS and stops rendering, so
+  // any later capture would be pins-on-white. Caching the frame the user is
+  // looking at right now means the common path — open, frame, close, tick
+  // "Include map", Copy — pastes exactly what they saw. Bounded and
+  // failure-swallowing so the close is never blocked or thrown out of.
+  if(siteMap.view){
+    try{
+      await Promise.race([
+        getMapImageForCopy(),
+        new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.layer))
+      ]);
+    }catch(_){ /* a copy failure must never block closing the map */ }
+  }
   siteMap.overlay.classList.add("hidden");
   if(siteMap.triggerEl && siteMap.triggerEl.focus){ try{ siteMap.triggerEl.focus(); }catch(_){} }
 }
@@ -5787,36 +5837,72 @@ function closeSiteMap(){
 /* ---- screenshot for the Word copy (§7) ---- */
 function invalidateScreenshot(){ siteMap.screenshot.valid = false; siteMap.screenshot.dataUrl = null; }
 
-// Sample a grid of pixels; return true only if EVERY sample is pure black or
-// fully transparent (A2). Real aerial imagery is never uniformly (0,0,0), so this
-// catches the "map raster never landed on the canvas" failure without tripping on
-// legitimately dark ground (water, shadow). Returns false if it can't read the
-// canvas (e.g. tainted) — the caller handles the SecurityError separately.
-function looksAllBlack(ctx, W, H){
+// Park the Site Map overlay in the one hidden state that does NOT suspend the
+// MapView, for the duration of a capture (§7, A2). The modal is normally hidden
+// with `.hidden` (display:none) — but a view whose container is display:none is
+// SUSPENDED: it stops rendering and every base layer (imagery, contours, road,
+// rail, labels) goes blank, while the in-memory vector pins still paint. A shot
+// taken then is pins-on-white with no map. visibility:hidden instead keeps
+// `view.suspended === false`, so the view stays laid out at full size and keeps
+// drawing while being invisible and click-through. Returns a restore function.
+// No-op (and a no-op restore) when the overlay is already on screen (the modal
+// is open, e.g. capture-on-close) or does not exist (the off-screen path).
+function beginCaptureVisibility(){
+  const overlay = siteMap.overlay;
+  if(!overlay || !overlay.classList.contains("hidden")) return ()=>{};
+  overlay.classList.remove("hidden");
+  overlay.classList.add("smap-capturing");
+  return ()=>{
+    overlay.classList.remove("smap-capturing");
+    overlay.classList.add("hidden");
+  };
+}
+
+// Probe the RAW captured raster (before any base fill) and describe it (A2). The
+// old check only looked for all-black; the real failure is a mostly-TRANSPARENT
+// frame — a suspended view draws nothing but the in-memory vector pins — which a
+// white base fill then turns into a plausible pale "map". So measure two things
+// on the raw pixels, before the white fill hides the transparency:
+//   coverage — the fraction of samples that are not (essentially) transparent.
+//     A real capture (imagery + contours filling the frame) is ~100% covered; a
+//     suspended-view capture is a few percent (just the pins).
+//   distinct — how many distinct COARSE colour buckets appear (each channel
+//     quantised to 5 bits, tolerant of raster noise). Real aerial imagery spreads
+//     across hundreds of buckets; a pins-only/flat frame has only a handful.
+// Returns { coverage, distinct } or null if the canvas can't be read (tainted;
+// the caller then hits the SecurityError on toDataURL and reports it, §7.1).
+function rasterStats(ctx, W, H){
   try{
-    const N = 6;
-    for(let i=1;i<N;i++){ for(let j=1;j<N;j++){
-      const d = ctx.getImageData(Math.round(W*i/N), Math.round(H*j/N), 1, 1).data;
-      const black = (d[0]===0 && d[1]===0 && d[2]===0);
-      const transparent = (d[3]===0);
-      if(!black && !transparent) return false;   // found real colour → not black
+    const data = ctx.getImageData(0, 0, W, H).data;
+    const N = 48;                       // 48×48 = 2304 samples across the frame
+    let covered = 0, total = 0;
+    const buckets = new Set();
+    for(let i=0;i<N;i++){ for(let j=0;j<N;j++){
+      const x = Math.min(W-1, Math.floor((i+0.5)*W/N));
+      const y = Math.min(H-1, Math.floor((j+0.5)*H/N));
+      const o = (y*W + x)*4;
+      total++;
+      if(data[o+3] > 8){                // not (essentially) transparent
+        covered++;
+        buckets.add((data[o]>>3) + "," + (data[o+1]>>3) + "," + (data[o+2]>>3));
+      }
     }}
-    return true;
-  }catch(_){ return false; }
+    return { coverage: total ? covered/total : 0, distinct: buckets.size };
+  }catch(_){ return null; }
 }
 
 // Composite legend + interval stamp + attribution onto the raw screenshot.
 // Throws (SecurityError) if the canvas is tainted by a non-CORS layer (§7.1), or a
-// plain Error if the screenshot raster is missing/black (A2) — the caller must
-// never export a black rectangle.
+// plain Error if the screenshot raster is missing or nearly empty — a frame the
+// map never rendered into (A2) — so the caller never exports a blank rectangle.
 async function compositeScreenshot(shot, interval){
   if(!shot || !shot.dataUrl){
     setDiag("screenshot", { status:"failed", note:"takeScreenshot returned no dataUrl" }, "Screenshot capture returned nothing (no dataUrl) — not exporting a blank image.");
     throw new Error("screenshot returned no image data");
   }
   // Decode the screenshot BEFORE drawing it. drawImage on an undecoded image draws
-  // nothing, leaving the canvas base fill — the exact black-map failure (A2). Use
-  // img.decode() where available, falling back to onload.
+  // nothing, leaving the canvas empty — which rasterStats below would (correctly)
+  // reject as a blank frame (A2). Use img.decode() where available, else onload.
   const img = new Image();
   img.src = shot.dataUrl;
   let decoded = false;
@@ -5838,24 +5924,41 @@ async function compositeScreenshot(shot, interval){
     throw new Error("screenshot had no dimensions");
   }
   const ctx = canvas.getContext("2d");
-  // White base (A2): if any future draw failure leaves the raster missing, the
-  // result is obviously blank white — not a deliberate-looking black rectangle.
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, W, H);
   if(!decoded){
     setDiag("screenshot", { status:"failed", note:"raster did not decode", dims: W + "×" + H, decoded:false }, "Screenshot raster did not decode — not exporting a blank image.");
     throw new Error("screenshot raster did not decode");
   }
+  // Draw the RAW screenshot first, on a still-transparent canvas, so rasterStats
+  // can measure the capture's TRUE alpha coverage and colour spread before any
+  // base fill paints over the transparency (A2). Was the map actually rendered,
+  // or is this a suspended-view frame that carries only the vector pins?
   ctx.drawImage(img, 0, 0, W, H);
-
-  // Never export a canvas the raster didn't land on (A2). If sampling shows a
-  // uniformly black/empty frame, fail loudly rather than paste black into a scope
-  // document. (A tainted canvas throws here on read and is handled by the caller.)
-  if(looksAllBlack(ctx, W, H)){
-    setDiag("screenshot", { status:"failed", note:"raster sampled all-black (capture did not land)", dims: W + "×" + H, decoded:true }, "Screenshot sampled all-black — the map raster did not capture; not exporting a black image.");
-    throw new Error("screenshot raster is black");
+  const capSuspended = !!(siteMap.view && siteMap.view.suspended);
+  const stats = rasterStats(ctx, W, H);
+  // Never export a frame the map didn't render into (A2). Coverage below half,
+  // or only a handful of distinct colours, means the base layers did not draw
+  // (typically a suspended view) — fail loudly rather than paste pins-on-white
+  // into a scope document. (A tainted canvas returns null here and instead trips
+  // the SecurityError on toDataURL below, handled by the caller, §7.1.)
+  if(stats && (stats.coverage < 0.5 || stats.distinct <= 4)){
+    const covPct = Math.round(stats.coverage*100);
+    setDiag("screenshot", {
+      status:"failed", dims: W + "×" + H, decoded:true, coverage: stats.coverage, distinct: stats.distinct, suspended: capSuspended,
+      note:"raster nearly empty (~" + covPct + "% covered, " + stats.distinct + " distinct colours) — the map did not render" + (capSuspended ? " (view was SUSPENDED)" : "")
+    }, "Screenshot raster nearly empty (~" + covPct + "% covered, " + stats.distinct + " distinct colours) — the map did not render" + (capSuspended ? " because the view was suspended" : "") + "; not exporting a blank image.");
+    throw new Error("screenshot raster is nearly empty");
   }
-  setDiag("screenshot", { status:"ok", note:"raster captured", dims: W + "×" + H, decoded:true }, "Screenshot raster captured (" + W + "×" + H + ").");
+  // Paint a white base UNDERNEATH the captured raster (destination-over) so any
+  // transparent margin exports white, not black — without disturbing the pixels
+  // rasterStats just measured.
+  ctx.globalCompositeOperation = "destination-over";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = "source-over";
+  setDiag("screenshot", {
+    status:"ok", note:"raster captured", dims: W + "×" + H, decoded:true,
+    coverage: stats ? stats.coverage : null, distinct: stats ? stats.distinct : null, suspended: capSuspended
+  }, "Screenshot raster captured (" + W + "×" + H + (stats ? ", ~" + Math.round(stats.coverage*100) + "% covered, " + stats.distinct + " distinct colours" : "") + ").");
 
   const pad = Math.round(W*0.012), fs = Math.max(13, Math.round(W*0.013));
   ctx.textBaseline = "top";
@@ -5932,6 +6035,40 @@ function pinsInView(view){
   return { total: pins.length, inside };
 }
 
+// Wait until the view is genuinely ready to be captured (§7, A2). The old gate
+// was `whenOnce(() => !view.updating)`, but a SUSPENDED view (container
+// display:none) reports `updating === false` because it has simply STOPPED — so
+// that gate resolved instantly and captured an empty frame believing it was
+// settled. This waits, in order, with every leg bounded so nothing can hang the
+// copy (§7.4):
+//   1. !suspended && ready && width/height > 0 — the view is un-suspended and
+//      has a real size, i.e. it is actually rendering again;
+//   2. a 60 ms beat — a view that has JUST resumed hasn't restarted its redraw
+//      yet, so it still reports the stale `updating === false` from while it was
+//      suspended; the beat lets it flip `updating` back to true first;
+//   3. !view.updating AND every layer view idle — the base layers (imagery,
+//      contours, road, rail, labels) have finished fetching/drawing, not just
+//      the view shell;
+//   4. two requestAnimationFrames — the finished frame is actually painted into
+//      the framebuffer that takeScreenshot reads.
+async function whenCaptureReady(view){
+  if(!view || !siteMap.esri) return;
+  const E = siteMap.esri, budget = SITE_MAP_CONFIG.timeouts.layer;
+  const settle = (pred)=> Promise.race([
+    E.reactiveUtils.whenOnce(pred),
+    new Promise(res=> setTimeout(res, budget))
+  ]).catch(()=>{});
+  // 1. Un-suspended, ready, real size.
+  await settle(()=> !view.suspended && view.ready && view.width > 0 && view.height > 0);
+  // 2. Let a just-resumed view begin redrawing before we read `updating`.
+  await new Promise(res=> setTimeout(res, 60));
+  // 3. The view shell AND every layer view have finished drawing.
+  await settle(()=> !view.updating &&
+    (!view.allLayerViews || view.allLayerViews.toArray().every(lv=> !lv.updating)));
+  // 4. Two frames so the finished render is painted before we read the buffer.
+  await new Promise(res=> requestAnimationFrame(()=> requestAnimationFrame(res)));
+}
+
 // Produce the map image for the copy. Uses the live view (honouring the user's
 // framing) when one exists; otherwise builds an off-screen view with the default
 // auto-fit framing (§7.3). Returns { dataUrl, meta } or null on any failure —
@@ -5954,19 +6091,25 @@ async function getMapImageForCopy(){
       // Live view exists — screenshot AT ITS CURRENT EXTENT (no refit) so the
       // user's framing is what gets pasted (§7.3).
       const view = siteMap.view;
-      // Capture a fully-drawn frame: if the user just changed the contour interval
-      // or panned, the base layers may still be streaming. Bounded so a layer stuck
-      // "updating" (retrying) can never hang the copy (§7.4).
-      await Promise.race([
-        siteMap.esri.reactiveUtils.whenOnce(()=> !view.updating),
-        new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.layer))
-      ]);
-      const pv = pinsInView(view);
-      const shot = await takeViewScreenshot(view);
-      const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
-      const meta = { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside };
-      siteMap.screenshot = { dataUrl, valid: true, meta };
-      return { dataUrl, meta };
+      // Park the overlay in the non-suspending hidden state for the capture (A2).
+      // On the common path the modal is display:none by now — the user closed it,
+      // THEN ticked "Include map" and pressed Copy — which would suspend the view
+      // and capture pins-on-white; visibility:hidden keeps it rendering. Always
+      // restored in `finally`, so the modal can never get stuck invisible.
+      const restoreVisibility = beginCaptureVisibility();
+      try{
+        // Wait for a genuinely settled, un-suspended frame — never the stale
+        // `updating === false` a suspended view reports (A2). Bounded (§7.4).
+        await whenCaptureReady(view);
+        const pv = pinsInView(view);
+        const shot = await takeViewScreenshot(view);
+        const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
+        const meta = { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside };
+        siteMap.screenshot = { dataUrl, valid: true, meta };
+        return { dataUrl, meta };
+      } finally {
+        restoreVisibility();
+      }
     }
     // No live view — build off-screen with default framing (§7.3).
     return await captureOffscreen(table);
@@ -5985,22 +6128,21 @@ async function getMapImageForCopy(){
   }
 }
 
-// Capture the map at the view's OWN size (A2). Passing a width/height LARGER than
-// the view makes takeScreenshot re-render the scene at that size, and the raster
-// base layers (imagery + contours) return blank for the not-yet-fetched tiles while
-// the vector pins draw instantly — the "copied map is just pins on white" defect.
-// Capturing at the view size is a 1:1 read of the framebuffer already on screen
-// (imagery + contours + pins), so "what you see is what gets pasted", and it keeps
-// the view's aspect so the composited legend/stamp stay in place. The off-screen
-// copy view is built at the export width, so it is already high-res here.
+// Capture the map at its NATIVE framebuffer resolution (A2). Passing an explicit
+// width/height makes takeScreenshot RESAMPLE the scene: a size LARGER than the
+// view re-renders it and the raster base layers (imagery + contours) come back
+// blank for the not-yet-fetched tiles while the vector pins draw instantly — the
+// "copied map is just pins on white" defect; and on a high-DPI display
+// `view.width` is CSS pixels, so passing it DOWN-samples, throwing real
+// resolution away on a Windows machine at 125%/150% scaling. Reading with no size
+// is a straight 1:1 grab of the framebuffer already composited on screen —
+// imagery + contours + pins — at the display's true pixel density, and it keeps
+// the view's aspect so the composited legend/stamp stay in place.
 async function takeViewScreenshot(view){
-  const w = (view && view.width) || 0, h = (view && view.height) || 0;
-  const opts = (w && h) ? { width: w, height: h } : {};
-  return view.takeScreenshot(opts);
+  return view.takeScreenshot();
 }
 
 async function captureOffscreen(table){
-  const E = siteMap.esri;
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;left:-10000px;top:0;width:" + SITE_MAP_CONFIG.offscreenSize.width + "px;height:" + SITE_MAP_CONFIG.offscreenSize.height + "px;";
   document.body.appendChild(host);
@@ -6016,13 +6158,11 @@ async function captureOffscreen(table){
     await fitView();
     siteMap.userHasAdjustedView = savedAdjust;
     const view = siteMap.view;
-    // Wait for the render to settle, but never indefinitely: `view.updating` can
-    // stay true forever while a layer retries (§4.4), so cap the wait and shoot
-    // whatever is on screen rather than hang the copy.
-    await Promise.race([
-      new Promise(res=> E.reactiveUtils.whenOnce(()=> !view.updating).then(res)),
-      new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.layer))
-    ]);
+    // Wait for a settled, un-suspended frame before shooting (A2). The off-screen
+    // host is laid out (position:fixed, off-screen) not display:none, so the view
+    // is not suspended here — but whenCaptureReady still bounds the wait so a layer
+    // stuck retrying (§4.4) can't hang the copy.
+    await whenCaptureReady(view);
     const pv = pinsInView(view);
     const shot = await takeViewScreenshot(view);
     const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
