@@ -455,6 +455,11 @@ path**: the map opens and frames the pins while it is still outstanding.
 >   table edit re-resolves the pins from app state and re-centres on the anchor
 >   when it moved (see `tests/README.md` to run it). It drives the real app code
 >   in headless Chromium and stubs no QLD service.
+> - `tests/map-copy-recenter.test.mjs` — two live-view defects driven with a
+>   stand-in view: the copied map image is captured at the view's **own** size
+>   (never up-scaled, which used to return a blank base map with only pins over
+>   white), and `fitView` **retries** a framing `goTo` that the modal-re-show
+>   resize interrupts (which used to leave the old centre on screen). Hermetic.
 > - `tests/map-visuals.test.mjs` — the sandy road-reserve fill, the 5 m contour
 >   default, the warmer/thicker contour line, the "N metre" sublayer-name probe,
 >   and the bottom-of-map build-progress bar (start → milestone → trickle →

@@ -106,3 +106,32 @@ PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
 PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/map-visuals.test.mjs
 ```
+
+## `map-copy-recenter.test.mjs` — blank-copy + re-centre-on-reopen regression
+
+Guards two Site Map defects that only bite on the live WebGL view but whose logic
+can be driven with a **stand-in view** (no WebGL, no QLD services, no Esri CDN):
+
+- **Copy — no up-scale.** The copied/pasted map image must be captured at the
+  view's **own** size. Asking `takeScreenshot` for a width larger than the view
+  re-renders the scene at that size and the raster base layers (imagery +
+  contours) come back **blank** for the tiles that aren't ready yet, while the
+  vector pins draw instantly — the "copied map is just pins on white" defect. The
+  test asserts `takeViewScreenshot` requests `view.width`/`view.height` (never the
+  old forced `1600`), and that the off-screen copy view is built at the export
+  width so its native capture is already high-res.
+- **Re-centre on re-open.** When the modal re-opens, its map container goes
+  `display:none` → visible, so the re-show resize can interrupt the framing
+  `goTo`, which used to be swallowed — leaving the **old** centre on screen. The
+  test asserts `whenViewDisplayed` waits until the container has a real size, and
+  that `fitView` **retries** a `goTo` that was interrupted so the new anchor
+  lands (while still leaving a user-adjusted view alone).
+
+It drives the real `takeViewScreenshot` / `whenViewDisplayed` / `fitView` code by
+stubbing `siteMap.view` + `siteMap.esri`, and is fully hermetic. Same invocation:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/map-copy-recenter.test.mjs
+```
