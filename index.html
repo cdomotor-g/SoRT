@@ -3901,8 +3901,16 @@ const SITE_MAP_CONFIG = {
   // Half-width (km) of the site envelope used to validate road-filter candidates.
   roadProbeKm: 2,
   attribution: "© State of Queensland (Department of Natural Resources and Mines) — CC BY 4.0",
+  // Export/copy resolution (§7, A2). The screenshot is captured at the view's OWN
+  // size and NEVER up-scaled: asking takeScreenshot for a width larger than the view
+  // re-renders the scene at that size, and the raster base layers (imagery + LiDAR
+  // contours) come back blank for the tiles that aren't ready yet while the vector
+  // pins draw instantly — the "copied map is just pins on white" defect. So the copy
+  // resolution IS the view size. The off-screen copy view (used only when the modal
+  // was never opened) is therefore built at this width so its native capture is
+  // already high-res without any up-scale.
   screenshotWidth: 1600,
-  offscreenSize: { width: 1000, height: 720 },
+  offscreenSize: { width: 1600, height: 1120 },
   // Initial constructor extent (§4.5): the view is built AT the anchor pin's
   // coordinate at this zoom, so it never renders a CBD-wide default extent and
   // never issues heavy exportImage requests before framing. goTo only refines it.
@@ -4810,16 +4818,32 @@ function drawPins(){
   });
 }
 
+// Wait (bounded) for a view to actually be on screen with a real size before we
+// frame it. When the modal is re-opened its map container goes display:none →
+// visible, so ArcGIS needs a tick to re-measure; a goTo issued before that either
+// computes against a stale/zero size or is interrupted by the re-show resize —
+// the "map does not re-centre on the new coordinates when re-opened" defect (A3).
+// Never blocks the open: resolves on the first real size or when the bound elapses.
+async function whenViewDisplayed(view){
+  if(!view || !siteMap.esri) return;
+  if(view.ready && view.width > 0 && view.height > 0) return;
+  await Promise.race([
+    siteMap.esri.reactiveUtils.whenOnce(()=> view.ready && view.width > 0 && view.height > 0),
+    new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.view))
+  ]).catch(()=>{});
+}
+
 // Fit the view to the active pins, centred on the anchor pin, unless the user
 // has taken manual control of the view (§6.1, §6.2).
 async function fitView(){
   const view = siteMap.view;
   if(!view || siteMap.userHasAdjustedView) return;
+  await whenViewDisplayed(view);      // a just-re-shown container has re-measured
   const pins = activeSitePins();
   if(!pins.length) return;
   const anchor = pins.find(p=>p.anchor) || pins[0];
   const anchorPoint = { type:"point", longitude:anchor.lon, latitude:anchor.lat };
-  try{
+  const frame = async ()=>{
     if(pins.length === 1){
       await view.goTo({ target: anchorPoint, zoom: 17 }, { animate:false });
     } else {
@@ -4831,7 +4855,22 @@ async function fitView(){
         await view.goTo({ target: anchorPoint, scale: 12000 }, { animate:false });
       }
     }
-  }catch(e){ /* goTo can reject if interrupted; ignore */ }
+  };
+  try{
+    await frame();
+  }catch(e){
+    // A goTo issued as the modal un-hides can be interrupted by the re-show resize:
+    // it aborts leaving the OLD centre on screen (the "does not re-centre on reopen"
+    // defect, A3). Wait for the view to stop moving, then frame once more so the new
+    // anchor actually lands. Bounded, and never throws out of framing.
+    try{
+      await Promise.race([
+        siteMap.esri.reactiveUtils.whenOnce(()=> view.stationary),
+        new Promise(res=> setTimeout(res, 3000))
+      ]);
+      await frame();
+    }catch(_){ /* give up quietly — a stale frame is better than a thrown open */ }
+  }
   invalidateScreenshot();
 }
 
@@ -5652,6 +5691,13 @@ async function getMapImageForCopy(){
       // Live view exists — screenshot AT ITS CURRENT EXTENT (no refit) so the
       // user's framing is what gets pasted (§7.3).
       const view = siteMap.view;
+      // Capture a fully-drawn frame: if the user just changed the contour interval
+      // or panned, the base layers may still be streaming. Bounded so a layer stuck
+      // "updating" (retrying) can never hang the copy (§7.4).
+      await Promise.race([
+        siteMap.esri.reactiveUtils.whenOnce(()=> !view.updating),
+        new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.layer))
+      ]);
       const pv = pinsInView(view);
       const shot = await takeViewScreenshot(view);
       const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
@@ -5676,14 +5722,17 @@ async function getMapImageForCopy(){
   }
 }
 
-// Take a view screenshot at the screenshot width, keeping the view's own aspect
-// ratio (A2): passing width alone can letterbox/square the output on some
-// versions, which then misplaces the composited legend/stamp. Compute height from
-// the live view aspect so the exported image matches what is on screen.
+// Capture the map at the view's OWN size (A2). Passing a width/height LARGER than
+// the view makes takeScreenshot re-render the scene at that size, and the raster
+// base layers (imagery + contours) return blank for the not-yet-fetched tiles while
+// the vector pins draw instantly — the "copied map is just pins on white" defect.
+// Capturing at the view size is a 1:1 read of the framebuffer already on screen
+// (imagery + contours + pins), so "what you see is what gets pasted", and it keeps
+// the view's aspect so the composited legend/stamp stay in place. The off-screen
+// copy view is built at the export width, so it is already high-res here.
 async function takeViewScreenshot(view){
-  const opts = { width: SITE_MAP_CONFIG.screenshotWidth };
-  const vw = view && view.width, vh = view && view.height;
-  if(vw && vh){ opts.height = Math.round(SITE_MAP_CONFIG.screenshotWidth * (vh / vw)); }
+  const w = (view && view.width) || 0, h = (view && view.height) || 0;
+  const opts = (w && h) ? { width: w, height: h } : {};
   return view.takeScreenshot(opts);
 }
 
