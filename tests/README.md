@@ -77,3 +77,32 @@ PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
 PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/road-filter.test.mjs
 ```
+
+## `map-visuals.test.mjs` — Site Map appearance + build-progress regression
+
+Guards the Site Map's visual behaviour:
+
+- the road reserve carries a **50%-transparent sandy fill** (emulating the QLD
+  Globe view), not the old outline-only symbology;
+- contours **default to 5 m** (1 m still selectable), and the contour line is
+  **warmer and slightly thicker** so it reads over the aerial base map;
+- the live contour-sublayer name probe resolves the **"N metre"** spellings the
+  QLD service uses (the old `\bN\s*m\b` probe missed them, which would have left
+  the new 5 m default with no id);
+- the **build-progress bar** at the bottom of the map starts at zero, advances
+  through its milestones, trickles while the map is drawing, completes and hides
+  when it settles, resets to zero on a change, and **never captures pointer
+  events** (so the map is never locked while it loads).
+
+It drives the real page globals (`SITE_MAP_CONFIG`, `contourRenderer`,
+`buildSiteMapModal`, `mapBuild*`) and is fully hermetic — the central store, the
+Esri CDN and every QLD host are blocked, and the progress lifecycle is exercised
+directly, so no WebGL view or network is needed. The timing-sensitive assertions
+poll (`waitForFunction`) rather than sleep, so the run is not flaky. Same
+invocation as above:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/map-visuals.test.mjs
+```

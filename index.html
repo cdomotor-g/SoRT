@@ -703,6 +703,28 @@
   }
   .smap-toast-undo:hover{ background:rgba(255,255,255,.15); }
 
+  /* Bottom-of-map build progress (contours + imagery + road + labels). A thin
+     bar pinned to the very bottom edge, plus a small "Building map…" pill. It is
+     pointer-events:none and disables nothing, so the map is never locked while it
+     fills. Shown/faded via the --on class (opacity), width driven from JS. */
+  .smap-progress{
+    position:absolute; left:0; right:0; bottom:0; z-index:8; pointer-events:none;
+    opacity:0; transition:opacity .3s ease;
+  }
+  .smap-progress.smap-progress--on{ opacity:1; }
+  .smap-progress[hidden]{ display:none; }
+  .smap-progress-bar{
+    position:absolute; left:0; bottom:0; height:4px; width:0%;
+    background:linear-gradient(90deg,var(--accent-dark),var(--accent));
+    box-shadow:0 0 8px rgba(15,110,106,.55);
+    border-top-right-radius:2px; border-bottom-right-radius:2px;
+  }
+  .smap-progress-note{
+    position:absolute; left:10px; bottom:11px; font-size:.72rem; font-weight:600;
+    color:#fff; background:rgba(21,37,49,.82); padding:3px 10px; border-radius:11px;
+    box-shadow:0 1px 4px rgba(0,0,0,.25); white-space:nowrap;
+  }
+
   /* Legend coordinate on screen (§B3). */
   .smap-legend-row{ align-items:flex-start; }
   .smap-legend-text{ display:flex; flex-direction:column; gap:0; min-width:0; }
@@ -3838,18 +3860,31 @@ const SITE_MAP_CONFIG = {
   imagery:  "https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer",
   imageryLabels: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Basemaps/QldImageryLabel/MapServer",
   contours: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/Contours/MapServer",
-  // Sublayer 30 = "Contour LiDAR 1m" (fallback default — NOT verified against the
-  // live service in this sandbox, egress to the QLD hosts is blocked here). The
-  // live IDs are probed by name at runtime (resolveContourLayers) and whatever it
-  // resolves is reported in the Map diagnostics panel so we can confirm them.
-  contourSublayers: { "1": 30, "5": null, "10": null },
+  // Sublayer IDs on the Elevation/Contours MapServer, confirmed from live
+  // diagnostics sessions: 1 m = 30, 5 m = 20, 10 m = 10. These are the FALLBACK
+  // ids — the live IDs are still probed by name at runtime (resolveContourLayers)
+  // and reported in the Map diagnostics panel — but carrying the confirmed values
+  // here means the 5 m default (below) resolves even if the name probe misses.
+  contourSublayers: { "1": 30, "5": 20, "10": 10 },
+  // Contour line symbology (A4). Warmed + slightly thickened so the LiDAR
+  // contours read clearly over the aerial base map — they used to be a thin,
+  // muddy brown that vanished into vegetation. Kept restrained (a warm burnt
+  // orange, ~1.1 px) so they stay legible without dominating the imagery.
+  contourLine: { color: [214, 104, 26, 1], width: 1.1 },
+  contourLayerOpacity: 0.95,
   cadastre: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer",
   cadastreParcelsSublayer: 4,
   // Road-reserve boundaries are drawn client-side as a FeatureLayer so we control
   // symbology + scale ourselves (A1 §5): the service's own hairline outline is
   // invisible over aerial imagery, and we never want a server-side maxScale to
-  // hide it when zoomed in. High-contrast magenta outline, NO fill.
+  // hide it when zoomed in. High-contrast magenta outline over a 50%-transparent
+  // sandy fill, so the bounded reserve reads like the usual QLD Globe view.
   roadOutline: { color: [255, 0, 200, 1], width: 2 },
+  // Sandy fill for the area bounded by the road reserve (A1). Alpha 0.5 so the
+  // aerial imagery still reads through it — this is a client-side render choice
+  // (the cadastre service ships no pre-styled "sandy reserve" layer), which is
+  // exactly how QLD Globe paints the corridor.
+  roadFill: [224, 196, 132, 0.5],
   // Explicit draw order (A1 §2): layers stream in as they resolve, so map.layers
   // must be ordered by design, not by completion time. Lower index = bottom.
   // Pins live in view.graphics and are always on top of every layer here.
@@ -3900,11 +3935,12 @@ const siteMap = {
   esriPromise: null, esri: null,
   overlay: null, mapHost: null, panelHost: null, bannerHost: null, statusHost: null,
   diagHost: null, scaleHintHost: null, scaleWatchHandle: null,
+  progressHost: null, progressBar: null,   // bottom-of-map build progress bar
   view: null, esriMap: null,
   layers: {},               // { imagery, road, contour, labels }
   contourIds: null,         // { "1":id, "5":id, "10":id } resolved from service
-  contourInterval: "1",     // requested interval
-  renderedInterval: "1",    // interval actually shown after coverage fallback
+  contourInterval: "5",     // requested interval — 5 m by default (fast); 1 m on request
+  renderedInterval: "5",    // interval actually shown after coverage fallback
   contourMode: "",          // "feature" | "mapimage" — how contours are drawn (A4)
   contoursOn: true,         // contours on/off toggle (A4 §4)
   userHasAdjustedView: false,
@@ -4255,14 +4291,22 @@ async function resolveRoadWhere(){
 /* ---- probe contour sublayer IDs by name (1 m / 5 m / 10 m), bounded (§4.3) ---- */
 async function resolveContourLayers(){
   const ids = { "1": SITE_MAP_CONFIG.contourSublayers["1"], "5": SITE_MAP_CONFIG.contourSublayers["5"], "10": SITE_MAP_CONFIG.contourSublayers["10"] };
+  // "1 m", "1m", "1 metre", "1 meter", "1 metres" all denote the same interval.
+  // The QLD service names these sublayers "N metre Contours (LiDAR)", which the
+  // old \bN\s*m\b probe missed (the word boundary after "m" fails inside "metre"),
+  // leaving 5 m / 10 m unresolved — a problem now that 5 m is the default. Match
+  // the spelled-out forms too, longest interval first so "10" wins over "1".
+  const intervalFromName = (n)=>{
+    const m = n.match(/(?:^|[^0-9])(10|5|1)\s*(?:m\b|met(?:re|er)s?\b)/);
+    return m ? m[1] : null;
+  };
   try{
     const { json } = await timedFetchJson(SITE_MAP_CONFIG.contours + "?f=json", "Contours schema (contours ?f=json)", SITE_MAP_CONFIG.timeouts.meta);
     (json.layers || []).forEach(l=>{
       const n = String(l.name||"").toLowerCase();
       if(/lidar/.test(n) || /contour/.test(n)){
-        if(/\b1\s*m\b/.test(n))  ids["1"]  = l.id;
-        if(/\b5\s*m\b/.test(n))  ids["5"]  = l.id;
-        if(/\b10\s*m\b/.test(n)) ids["10"] = l.id;
+        const k = intervalFromName(n);
+        if(k) ids[k] = l.id;
       }
     });
     diagLog("Contours schema resolved sublayer IDs — 1 m:" + ids["1"] + " 5 m:" + ids["5"] + " 10 m:" + ids["10"] + ".");
@@ -4385,7 +4429,8 @@ function detectElevationField(layer){
   return anyNum ? anyNum.name : "";
 }
 function contourRenderer(){
-  return { type:"simple", symbol:{ type:"simple-line", color:[150,90,30,0.9], width:0.7 } };
+  const c = SITE_MAP_CONFIG.contourLine;
+  return { type:"simple", symbol:{ type:"simple-line", color: c.color, width: c.width } };
 }
 
 /* The one place a contour FeatureLayer is built (initial load AND interval
@@ -4401,7 +4446,7 @@ function contourRenderer(){
 function makeContourFeatureLayer(id){
   return new siteMap.esri.FeatureLayer({
     url: SITE_MAP_CONFIG.contours + "/" + id,
-    opacity: 0.9,
+    opacity: SITE_MAP_CONFIG.contourLayerOpacity,
     minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0,
     renderer: contourRenderer()
   });
@@ -4446,7 +4491,22 @@ async function loadContourLayer(map, silent){
   if(!siteMap.contoursOn){ if(!silent) setDiag("contours", { status:"off", ms:0, note:"contours toggled off" }, "Contours are toggled off."); return; }
   try{
     await resolveContourLayers();   // sets siteMap.contourIds (bounded fetch inside)
-    const id = siteMap.contourIds && siteMap.contourIds[siteMap.contourInterval];
+    let interval = siteMap.contourInterval;
+    let id = siteMap.contourIds && siteMap.contourIds[interval];
+    // If the requested interval's sublayer id didn't resolve (e.g. the live probe
+    // couldn't match its name), fall back to the nearest available interval so the
+    // default never renders a blank contour layer. The interval stamp shows what's
+    // actually drawn when it differs from the request.
+    if(id == null){
+      for(const k of [interval, "5", "1", "10"]){
+        const kid = siteMap.contourIds && siteMap.contourIds[k];
+        if(kid != null){ interval = k; id = kid; break; }
+      }
+      if(id != null && interval !== siteMap.contourInterval){
+        siteMap.renderedInterval = interval;
+        diagLog("Requested " + siteMap.contourInterval + " m contour sublayer id did not resolve — showing " + interval + " m (nearest available).");
+      }
+    }
     if(id == null){ if(!silent) setDiag("contours", { status:"failed", ms: Math.round(smNow()-start), note:"no contour sublayer resolved for " + siteMap.contourInterval + " m" }, "No contour sublayer resolved for " + siteMap.contourInterval + " m."); return; }
     // Primary: FeatureLayer on the single requested-interval sublayer (A4 §1).
     try{
@@ -4463,7 +4523,7 @@ async function loadContourLayer(map, silent){
       siteMap.contourElevField = elevField;
       siteMap.layers.contour = fl; siteMap.contourMode = "feature"; insertLayerOrdered(map, fl, "contour");
       if(!silent){
-        setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + id + ")", mode:"FeatureLayer (client-side WebGL, lean fetch)" }, "Contours loaded as FeatureLayer (client-side, label field only, no per-pan round-trip) — " + siteMap.contourInterval + " m, sublayer id " + id + ".");
+        setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: interval + " m (id " + id + ")", mode:"FeatureLayer (client-side WebGL, lean fetch)" }, "Contours loaded as FeatureLayer (client-side, label field only, no per-pan round-trip) — " + interval + " m, sublayer id " + id + ".");
         reportLayerFirstDraw(fl, "contours", "Contours", start);
       }
       return;
@@ -4472,14 +4532,14 @@ async function loadContourLayer(map, silent){
     }
     // Fallback: MapImageLayer, png8 + dpi 96 to cut the exportImage payload (A4 §2).
     const subs = [];
-    ["1","5","10"].forEach(k=>{ if(siteMap.contourIds[k] != null) subs.push({ id: siteMap.contourIds[k], visible: k === siteMap.contourInterval }); });
+    ["1","5","10"].forEach(k=>{ if(siteMap.contourIds[k] != null) subs.push({ id: siteMap.contourIds[k], visible: k === interval }); });
     if(!subs.length){ if(!silent) setDiag("contours", { status:"failed", ms: Math.round(smNow()-start), note:"no contour sublayers resolved" }, "No contour sublayers could be resolved."); return; }
     const contour = new siteMap.esri.MapImageLayer({ url: SITE_MAP_CONFIG.contours, opacity: 0.7, minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0, imageFormat:"png8", dpi:96, sublayers: subs });
     await withTimeout(contour.load(), SITE_MAP_CONFIG.timeouts.layer, "Contours service (MapServer)");
     siteMap.layers.contour = contour; siteMap.contourMode = "mapimage"; insertLayerOrdered(map, contour, "contour");
-    const shownId = siteMap.contourIds[siteMap.contourInterval];
+    const shownId = siteMap.contourIds[interval];
     if(!silent){
-      setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: siteMap.contourInterval + " m (id " + shownId + ")", mode:"MapImageLayer png8 (server render)" }, "Contours loaded (MapImageLayer png8/dpi96, showing " + siteMap.contourInterval + " m, sublayer id " + shownId + ").");
+      setDiag("contours", { status:"loaded", ms: Math.round(smNow()-start), sublayer: interval + " m (id " + shownId + ")", mode:"MapImageLayer png8 (server render)" }, "Contours loaded (MapImageLayer png8/dpi96, showing " + interval + " m, sublayer id " + shownId + ").");
       reportLayerFirstDraw(contour, "contours", "Contours", start);
     }
   }catch(e){
@@ -4507,7 +4567,7 @@ async function loadRoadLayer(map, silent){
       return;
     }
     const outline = SITE_MAP_CONFIG.roadOutline;
-    const roadRenderer = { type:"simple", symbol:{ type:"simple-fill", color:[0,0,0,0], outline:{ color: outline.color, width: outline.width } } };
+    const roadRenderer = { type:"simple", symbol:{ type:"simple-fill", color: SITE_MAP_CONFIG.roadFill, outline:{ color: outline.color, width: outline.width } } };
     // Primary: FeatureLayer — client-side symbology we control, no server
     // maxScale. No outFields: the outline renderer needs no attributes, so the
     // feature tiles carry geometry only.
@@ -4561,6 +4621,102 @@ async function loadLabelsLayer(map, silent){
   }
 }
 
+/* ============================================================================
+   MAP BUILD PROGRESS (§A6) — the thin bar at the bottom of the map
+   ----------------------------------------------------------------------------
+   Reflects how much of the map is still being generated: imagery tiles, the
+   LiDAR contours (the slow part), the road reserve and the labels. It represents
+   the WHOLE build, not just contours, and resets to zero whenever the user
+   changes what the map shows (a real pan/zoom, or a contour-resolution change).
+   It never locks the map — the bar is pointer-events:none and disables nothing.
+
+   Two signals drive it, so it moves honestly rather than faking a timer:
+   - explicit milestones (Esri bundle in, view ready) advance a floor so the bar
+     visibly progresses during the pre-layer phase, and
+   - view.updating (true while ANY layer view is fetching/rendering) trickles it
+     the rest of the way and completes it when the map finally settles — which is
+     exactly when the slow contours have finished drawing.
+   ========================================================================== */
+const mapBuild = {
+  active: false,     // a cycle is running (bar visible)
+  busy: false,       // mirrors view.updating — the map is still drawing
+  shown: 0,          // 0..1 currently painted
+  target: 0,         // 0..1 the bar is easing toward
+  raf: null, finishTimer: null, hideTimer: null
+};
+function mapBuildEls(){ return { host: siteMap.progressHost, bar: siteMap.progressBar }; }
+// Keep the eased-value loop alive only while there is something to animate.
+function mapBuildKick(){ if(mapBuild.active && !mapBuild.raf) mapBuild.raf = requestAnimationFrame(mapBuildRenderLoop); }
+// Begin (or restart) a build cycle at zero. Called on open, on a user pan/zoom,
+// and on a contour on/off or resolution change.
+function mapBuildStart(){
+  const { host } = mapBuildEls();
+  if(!host) return;
+  if(mapBuild.finishTimer){ clearTimeout(mapBuild.finishTimer); mapBuild.finishTimer = null; }
+  if(mapBuild.hideTimer){ clearTimeout(mapBuild.hideTimer); mapBuild.hideTimer = null; }
+  mapBuild.active = true; mapBuild.shown = 0; mapBuild.target = 0.08;
+  host.hidden = false; host.classList.add("smap-progress--on"); host.setAttribute("aria-hidden","false");
+  mapBuildKick();
+}
+// Milestones only ever move the bar forward; cap below 100% until it truly settles.
+function mapBuildFloor(v){ if(mapBuild.active && v > mapBuild.target){ mapBuild.target = Math.min(v, 0.92); mapBuildKick(); } }
+// Track view.updating: true keeps the cycle going (starting one if needed), false
+// finishes it after a short quiet period so tile-to-tile blips don't complete early.
+function mapBuildSetBusy(updating){
+  mapBuild.busy = !!updating;
+  if(updating){
+    if(mapBuild.finishTimer){ clearTimeout(mapBuild.finishTimer); mapBuild.finishTimer = null; }
+    if(!mapBuild.active) mapBuildStart(); else mapBuildKick();
+  } else if(mapBuild.active){
+    if(mapBuild.finishTimer) clearTimeout(mapBuild.finishTimer);
+    mapBuild.finishTimer = setTimeout(mapBuildFinish, 300);
+  }
+}
+// Fill to 100% (the render loop then fades the bar out).
+function mapBuildFinish(){
+  if(mapBuild.finishTimer){ clearTimeout(mapBuild.finishTimer); mapBuild.finishTimer = null; }
+  if(!mapBuild.active) return;
+  mapBuild.target = 1; mapBuildKick();
+}
+// Safety net for a re-open where nothing ends up (re)drawing: complete the bar if
+// the map is idle shortly after the open finishes.
+function mapBuildSettleSoon(){ setTimeout(()=>{ if(mapBuild.active && !mapBuild.busy) mapBuildFinish(); }, 700); }
+// Stop and clear everything (modal close).
+function mapBuildReset(){
+  if(mapBuild.raf){ cancelAnimationFrame(mapBuild.raf); mapBuild.raf = null; }
+  if(mapBuild.finishTimer){ clearTimeout(mapBuild.finishTimer); mapBuild.finishTimer = null; }
+  if(mapBuild.hideTimer){ clearTimeout(mapBuild.hideTimer); mapBuild.hideTimer = null; }
+  mapBuild.active = false; mapBuild.busy = false; mapBuild.shown = 0; mapBuild.target = 0;
+  const { host, bar } = mapBuildEls();
+  if(host){ host.classList.remove("smap-progress--on"); host.setAttribute("aria-hidden","true"); host.hidden = true; }
+  if(bar) bar.style.width = "0%";
+}
+function mapBuildRenderLoop(){
+  const { host, bar } = mapBuildEls();
+  if(!host || !bar || !mapBuild.active){ mapBuild.raf = null; return; }
+  // Trickle toward 0.9 while the map is still drawing — asymptotic, so it
+  // decelerates and never reaches 100% until the map actually settles.
+  if(mapBuild.busy && mapBuild.target < 0.9){ mapBuild.target += (0.9 - mapBuild.target) * 0.03; }
+  mapBuild.shown += (mapBuild.target - mapBuild.shown) * 0.18;
+  if(mapBuild.target >= 1 && mapBuild.shown > 0.995) mapBuild.shown = 1;
+  bar.style.width = (mapBuild.shown * 100).toFixed(1) + "%";
+  host.setAttribute("aria-valuenow", String(Math.round(mapBuild.shown * 100)));
+  if(mapBuild.shown >= 1){
+    // Fully drawn — hold briefly, fade out, then reset for the next cycle.
+    mapBuild.active = false; mapBuild.raf = null;
+    if(mapBuild.hideTimer) clearTimeout(mapBuild.hideTimer);
+    mapBuild.hideTimer = setTimeout(()=>{
+      host.classList.remove("smap-progress--on"); host.setAttribute("aria-hidden","true");
+      setTimeout(()=>{ if(!mapBuild.active){ host.hidden = true; mapBuild.shown = 0; mapBuild.target = 0; bar.style.width = "0%"; } }, 340);
+    }, 240);
+    return;
+  }
+  // Pause the loop while idle (not busy and already settled at the current floor)
+  // to avoid RAF churn; a floor bump, a busy transition, or finish re-kicks it.
+  if(!mapBuild.busy && mapBuild.target < 1 && Math.abs(mapBuild.shown - mapBuild.target) < 0.002){ mapBuild.raf = null; return; }
+  mapBuild.raf = requestAnimationFrame(mapBuildRenderLoop);
+}
+
 /* ---- build the MapView + layers once, into a container ----
    Critical restructure (§4.1, §4.4, §4.5): construct the view AT the anchor pin,
    clear the "Loading map…" overlay on view.when() and nothing else, then stream
@@ -4601,6 +4757,7 @@ async function buildView(container, opts){
 
   if(!offscreen){
     hideSiteMapOverlay();
+    mapBuildFloor(0.35);   // the view is ready; the operational layers stream in below
 
     // First *manual* pan/zoom latches userHasAdjustedView and stops auto-refit;
     // it also invalidates the cached screenshot (§6.1, §7.3). Watch `interacting`
@@ -4610,6 +4767,10 @@ async function buildView(container, opts){
       invalidateScreenshot();
     });
     E.reactiveUtils.watch(()=> view.stationary, (stationary)=>{ if(stationary){ invalidateScreenshot(); renderDiagnostics(); } });
+    // Bottom-of-map build progress (§A6). view.updating drives the fill and the
+    // completion; a real user pan/zoom restarts it from zero. Neither blocks input.
+    E.reactiveUtils.watch(()=> view.updating, (updating)=> mapBuildSetBusy(updating));
+    E.reactiveUtils.watch(()=> view.interacting, (interacting)=>{ if(interacting) mapBuildStart(); });
     startScaleHintWatch(view);
     attachPinDragHandlers(view);      // draggable pins in Move-pins mode (§B1)
     renderDiagnostics();
@@ -4864,6 +5025,7 @@ async function setContoursOn(on){
     return;
   }
   // Turning back on: rebuild the layer for the current interval.
+  mapBuildStart();           // rebuilding contours — reset the bar
   await loadContourLayer(map, false);
 }
 
@@ -4875,6 +5037,7 @@ async function applyContourInterval(interval){
   siteMap.contourInterval = interval;
   siteMap.renderedInterval = interval;
   invalidateScreenshot();
+  mapBuildStart();           // changing resolution rebuilds contours — reset the bar
   if(!siteMap.contoursOn){ updateIntervalStamp(); return; }
   if(!siteMap.layers.contour || !siteMap.contourIds){ updateIntervalStamp(); return; }
 
@@ -4942,8 +5105,8 @@ function buildSiteMapModal(){
         <h3>Site Map</h3>
         <div class="smap-interval">
           <label class="smap-contours-on" title="Show or hide the contour layer — a fast map without contours is sometimes all you need"><input type="checkbox" class="smap-contours-chk" checked> Contours:</label>
-          <label><input type="radio" name="smapInterval" value="1" checked> 1 m</label>
-          <label><input type="radio" name="smapInterval" value="5"> 5 m</label>
+          <label><input type="radio" name="smapInterval" value="1"> 1 m</label>
+          <label><input type="radio" name="smapInterval" value="5" checked> 5 m</label>
           <label><input type="radio" name="smapInterval" value="10"> 10 m</label>
           <span class="smap-interval-stamp"></span>
         </div>
@@ -4959,6 +5122,10 @@ function buildSiteMapModal(){
           <div class="smap-status"></div>
           <div class="smap-scalehint" hidden></div>
           <div class="smap-toast-host"></div>
+          <div class="smap-progress" role="progressbar" aria-label="Map build progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-hidden="true" hidden>
+            <span class="smap-progress-note">Building map…</span>
+            <div class="smap-progress-bar"></div>
+          </div>
         </div>
         <aside class="smap-panel">
           <div class="smap-panel-head">Pins on the map</div>
@@ -4984,6 +5151,8 @@ function buildSiteMapModal(){
   siteMap.bannerHost= overlay.querySelector(".smap-banners");
   siteMap.diagHost  = overlay.querySelector(".smap-diag");
   siteMap.scaleHintHost = overlay.querySelector(".smap-scalehint");
+  siteMap.progressHost = overlay.querySelector(".smap-progress");
+  siteMap.progressBar  = overlay.querySelector(".smap-progress-bar");
 
   const diagCopyBtn = overlay.querySelector(".smap-diag-copy");
   if(diagCopyBtn) diagCopyBtn.addEventListener("click", async ()=>{
@@ -5275,7 +5444,9 @@ async function openSiteMap(triggerEl){
   renderDiagnostics();
 
   try{
+    mapBuildStart();       // show the bottom-of-map build progress from zero
     await loadEsri();
+    mapBuildFloor(0.2);    // Esri bundle is in — the view build is next
     if(!siteMap.view){
       // buildView clears the overlay on view.when() and streams layers in (§4.4).
       await buildView(siteMap.mapHost);
@@ -5289,10 +5460,12 @@ async function openSiteMap(triggerEl){
     hideSiteMapOverlay();
     updateIntervalStamp();
     renderDiagnostics();
+    mapBuildSettleSoon();   // complete the bar if nothing ends up (re)drawing
   }catch(err){
     // Only the CDN load or the view itself failing lands here (layer failures are
     // handled inline and never reach this point). Surface it in words and keep
     // the diagnostics available so the user can copy them to us.
+    mapBuildReset();        // the map didn't start — clear the progress bar
     siteMap.statusHost.hidden = false;
     siteMap.statusHost.innerHTML = `<div class="smap-offline">🗺️ The site map could not start.<br><span>${escapeHtml(err.message||"Could not load the map.")}</span><br><span>Open “Map diagnostics” in the panel for details.</span></div>`;
     renderDiagnostics();
@@ -5304,6 +5477,7 @@ function closeSiteMap(){
   // Leave Move-pins and Measure off so the next open starts in a neutral state.
   if(siteMap.moveMode) setMoveMode(false);
   if(siteMap.measureWidget) setMeasureOn(false);
+  mapBuildReset();           // stop and clear the build progress bar
   siteMap.overlay.classList.add("hidden");
   if(siteMap.triggerEl && siteMap.triggerEl.focus){ try{ siteMap.triggerEl.focus(); }catch(_){} }
 }
