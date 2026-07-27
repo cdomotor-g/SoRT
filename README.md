@@ -377,12 +377,16 @@ and — on the Water Level table — `riverCoords` / `riverRelocation`.
   coordinate can be fixed straight from the map. Clearing the field removes the pin
   (undoably). This is the keyboard counterpart to *Move pins*.
 - **Build progress** — a thin progress bar along the bottom edge of the map (with
-  a small "Building map…" label) shows how much of the *whole* map is still being
-  generated: imagery, the LiDAR contours (the slow part), the road reserve and the
-  labels. It resets to zero whenever you change what the map shows (a pan/zoom or a
-  contour-resolution change) and completes when the map settles. It never locks the
-  map — it captures no pointer events and disables nothing, so you can keep panning,
-  zooming or dragging pins while it fills.
+  a small label that names what is still drawing — "Building map…", "Drawing
+  contours…") shows how much of the *whole* map is still being generated: imagery,
+  the LiDAR contours (the slow part), the road reserve, the rail lines and the
+  labels. It resets to zero whenever you change what the map shows (a pan/zoom, a
+  contour or rail toggle, a resolution change) and **only finishes once every layer
+  has actually finished drawing** — each layer is registered before its load starts
+  and held until its layer view reports the drawing done, so the bar can't complete
+  in the gap before the contours arrive or while they are still painting. It never
+  locks the map — it captures no pointer events and disables nothing, so you can
+  keep panning, zooming or dragging pins while it fills.
 - **Move pins** — a toolbar toggle (off by default). While on, drag a pin to a
   new location: the coordinate is rounded to 6 dp, written back to the scope
   row's field, and a toast shows how far it moved with a one-click **Undo**. The
@@ -555,6 +559,13 @@ frames the pins while it is still outstanding.
 >   and the bottom-of-map build-progress bar (start → milestone → trickle →
 >   settle/hide → reset, and that it never captures pointer events). Hermetic:
 >   the store, the Esri CDN and every QLD host are blocked.
+> - `tests/map-build-progress.test.mjs` — §A6.1: the build-progress bar must not
+>   finish before the contours have drawn. A tracked layer that hasn't drawn holds
+>   the bar even when the view has gone quiet; the hold follows the layer's *layer
+>   view* (re-arming between fetch batches); a layer that never arrives releases
+>   immediately so it can't wedge the bar; a pan or a re-open tracks the live
+>   layers' redraw; and the real `buildView` registers all five operational layers
+>   before their loads start. Hermetic (stand-in view and layer views).
 > - `tests/pin-coord-entry.test.mjs` — §C2: editing a pin's coordinate from the
 >   panel **text field** writes back to the scope row (undoable), refuses a bad
 >   value with an inline message and a swap hint, keeps *invalid* pins editable,

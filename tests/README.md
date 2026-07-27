@@ -107,6 +107,45 @@ PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/map-visuals.test.mjs
 ```
 
+## `map-build-progress.test.mjs` — §A6.1 "the bar finished before the contours"
+
+Guards the defect where the bottom-of-map build-progress bar ran to 100% and hid
+itself while the LiDAR contours were still drawing. `view.updating` was the only
+completion signal, and it is **false** during the gap between "the view is ready"
+and "the contour layer reaches the map" — every layer loader resolves its service
+metadata over the network before it adds anything — so the bar saw a quiet view,
+waited its 300 ms and completed over a map whose slowest layer had not started.
+The same gap sits after a pan (the re-fetch for the new extent starts a beat after
+the view stops moving) and after a re-open (the modal's `display:none` **suspends**
+the view, so every layer has to redraw).
+
+Completion is now gated on outstanding **work** as well as on quiet. The test
+drives the real `mapBuild*` globals and asserts:
+
+- a tracked layer that hasn't drawn **holds** the bar even though the view has
+  gone quiet — the reported symptom — and releasing it completes and hides it;
+- the hold follows the layer's **layer view**, not its load: released only after
+  `lv.updating` has been false for a beat, and **re-armed** if the layer starts
+  fetching again (contours arriving in batches);
+- a layer that never arrives (failed load, pulled from the map, no layer view)
+  releases immediately, and every wait is bounded, so nothing can wedge the bar;
+- a pan/re-open registers the live layers (`mapBuildTrackRedraw`) so the bar waits
+  for the redraw; restarting a cycle mid-load **keeps** the layer that hasn't
+  drawn; a superseded load can't release the load that replaced it;
+- each finished layer advances the bar, contours by the largest step;
+- the real **`buildView`** registers all five operational layers with the progress
+  bar *before* their loads start.
+
+Hermetic — the store, the Esri CDN and every QLD host are blocked, and the view
+and its layer views are stand-ins, so no WebGL and no network are needed. Same
+invocation as the others:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/map-build-progress.test.mjs
+```
+
 ## `pin-coord-entry.test.mjs` — §C2 coordinate text-entry
 
 Guards editing a pin's coordinate from the **text field** in the Site Map panel

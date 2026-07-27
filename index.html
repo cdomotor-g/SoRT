@@ -796,8 +796,9 @@
   }
   .smap-toast-undo:hover{ background:rgba(255,255,255,.15); }
 
-  /* Bottom-of-map build progress (contours + imagery + road + labels). A thin
-     bar pinned to the very bottom edge, plus a small "Building map…" pill. It is
+  /* Bottom-of-map build progress (imagery + contours + road + rail + labels). A
+     thin bar pinned to the very bottom edge, plus a small pill that names what is
+     still drawing ("Building map…" / "Drawing contours…"). It is
      pointer-events:none and disables nothing, so the map is never locked while it
      fills. Shown/faded via the --on class (opacity), width driven from JS. */
   .smap-progress{
@@ -4154,7 +4155,7 @@ const siteMap = {
   overlay: null, mapHost: null, panelHost: null, bannerHost: null, statusHost: null,
   diagHost: null, scaleHintHost: null, scaleWatchHandle: null,
   legendHost: null, stampHost: null, captureCard: null,   // on-map furniture + capture card (§7.5)
-  progressHost: null, progressBar: null,   // bottom-of-map build progress bar
+  progressHost: null, progressBar: null, progressNote: null,   // bottom-of-map build progress bar
   view: null, esriMap: null,
   layers: {},               // { imagery, road, contour, labels }
   contourIds: null,         // { "1":id, "5":id, "10":id } resolved from service
@@ -4968,71 +4969,289 @@ async function loadLabelsLayer(map, silent){
    MAP BUILD PROGRESS (§A6) — the thin bar at the bottom of the map
    ----------------------------------------------------------------------------
    Reflects how much of the map is still being generated: imagery tiles, the
-   LiDAR contours (the slow part), the road reserve and the labels. It represents
-   the WHOLE build, not just contours, and resets to zero whenever the user
-   changes what the map shows (a real pan/zoom, or a contour-resolution change).
-   It never locks the map — the bar is pointer-events:none and disables nothing.
+   LiDAR contours (the slow part), the road reserve, the rail lines and the
+   labels. It represents the WHOLE build, not just the fast parts, and resets to
+   zero whenever the user changes what the map shows (a real pan/zoom, a contour
+   or rail toggle, a resolution change). It never locks the map — the bar is
+   pointer-events:none and disables nothing.
 
-   Two signals drive it, so it moves honestly rather than faking a timer:
-   - explicit milestones (Esri bundle in, view ready) advance a floor so the bar
-     visibly progresses during the pre-layer phase, and
-   - view.updating (true while ANY layer view is fetching/rendering) trickles it
-     the rest of the way and completes it when the map finally settles — which is
-     exactly when the slow contours have finished drawing.
+   §A6.1 — the bar used to finish while the contours were still drawing.
+   `view.updating` was the ONLY completion signal, and it is false during the gap
+   between "the view is ready" and "the contour layer reaches the map": the layer
+   loaders are fire-and-forget and each resolves its service metadata over the
+   network (and loads the layer) before adding anything to the map. The bar saw a
+   quiet view, waited its 300 ms, and ran to 100% over a map whose slowest layer
+   had not begun. The same gap sat after a pan, where the re-fetch for the new
+   extent starts a beat after the view stops moving.
+
+   So completion is gated on WORK, not just on quiet:
+   - every layer this build will draw is registered as an outstanding TASK before
+     its load starts, and stays outstanding until that layer's LAYER VIEW reports
+     it has finished drawing (`lv.updating === false`, held for a beat so a layer
+     fetching in batches isn't released between two of them) — or until the layer
+     is known not to be coming (failed, or toggled off);
+   - the bar only completes when nothing is outstanding AND the map is quiet: the
+     view not updating, no layer view updating, no interaction, no animation.
+   Milestones (Esri bundle in, view ready) and finished tasks advance a floor so
+   the bar moves honestly rather than faking a timer, and a hard cap completes a
+   cycle that somehow never settles so the bar can never be stuck on screen.
    ========================================================================== */
+// The map must be quiet for this long before a cycle may complete. It is now the
+// LAST check rather than the only one, so it only has to cover a redraw blip.
+const MAP_BUILD_QUIET_MS = 400;
+// A layer view counts as drawn once it has been idle this long. It re-arms every
+// time the layer starts fetching again, so a layer that arrives in batches (1 m
+// contours over a wide extent) is only released after its final batch.
+const MAP_BUILD_LAYER_QUIET_MS = 600;
+// Relative cost of each tracked layer, used to advance the bar as layers land.
+// Contours dominate — theirs is the wait this bar exists to describe.
+const MAP_BUILD_WEIGHTS = { imagery: 1, contours: 3, road: 1.5, rail: 1, labels: 1 };
+// The floor the tracked layers move the bar between: the view-ready milestone up
+// to the top of the trickle. All layers drawn ⇒ 0.9, then completion takes it to 1.
+const MAP_BUILD_LAYER_FLOOR = { from: 0.35, to: 0.9 };
+// No cycle may outlive this. A layer view that never reports itself finished
+// completes the bar instead of leaving it on the map indefinitely.
+const MAP_BUILD_MAX_MS = 60000;
 const mapBuild = {
   active: false,     // a cycle is running (bar visible)
   busy: false,       // mirrors view.updating — the map is still drawing
   shown: 0,          // 0..1 currently painted
   target: 0,         // 0..1 the bar is easing toward
-  raf: null, finishTimer: null, hideTimer: null
+  tasks: new Map(),  // key -> { weight, done } — the layers this cycle still waits on
+  token: 0,          // monotonic id for one piece of tracked work
+  owner: {},         // key -> token of the work responsible for that layer right now
+  raf: null, finishTimer: null, hideTimer: null, capTimer: null
 };
-function mapBuildEls(){ return { host: siteMap.progressHost, bar: siteMap.progressBar }; }
+function mapBuildEls(){ return { host: siteMap.progressHost, bar: siteMap.progressBar, note: siteMap.progressNote }; }
 // Keep the eased-value loop alive only while there is something to animate.
 function mapBuildKick(){ if(mapBuild.active && !mapBuild.raf) mapBuild.raf = requestAnimationFrame(mapBuildRenderLoop); }
 // Begin (or restart) a build cycle at zero. Called on open, on a user pan/zoom,
-// and on a contour on/off or resolution change.
+// and on a contour/rail on-off or resolution change. Work that is STILL
+// outstanding carries into the new cycle — a layer that hasn't drawn for the old
+// view hasn't drawn for the new one either, and dropping it here is how a pan
+// mid-load used to hand the bar a clean slate over a half-drawn map.
 function mapBuildStart(){
   const { host } = mapBuildEls();
   if(!host) return;
+  mapBuildClearTimers();
+  const carry = [];
+  mapBuild.tasks.forEach((t, key)=>{ if(!t.done) carry.push(key); });
+  mapBuild.tasks.clear();
+  carry.forEach(key=> mapBuild.tasks.set(key, { weight: MAP_BUILD_WEIGHTS[key] || 1, done: false }));
+  mapBuild.active = true; mapBuild.shown = 0; mapBuild.target = 0.08;
+  mapBuild.capTimer = setTimeout(mapBuildComplete, MAP_BUILD_MAX_MS);
+  host.hidden = false; host.classList.add("smap-progress--on"); host.setAttribute("aria-hidden","false");
+  mapBuildNote();
+  mapBuildKick();
+}
+function mapBuildClearTimers(){
   if(mapBuild.finishTimer){ clearTimeout(mapBuild.finishTimer); mapBuild.finishTimer = null; }
   if(mapBuild.hideTimer){ clearTimeout(mapBuild.hideTimer); mapBuild.hideTimer = null; }
-  mapBuild.active = true; mapBuild.shown = 0; mapBuild.target = 0.08;
-  host.hidden = false; host.classList.add("smap-progress--on"); host.setAttribute("aria-hidden","false");
-  mapBuildKick();
+  if(mapBuild.capTimer){ clearTimeout(mapBuild.capTimer); mapBuild.capTimer = null; }
 }
 // Milestones only ever move the bar forward; cap below 100% until it truly settles.
 function mapBuildFloor(v){ if(mapBuild.active && v > mapBuild.target){ mapBuild.target = Math.min(v, 0.92); mapBuildKick(); } }
-// Track view.updating: true keeps the cycle going (starting one if needed), false
-// finishes it after a short quiet period so tile-to-tile blips don't complete early.
+
+/* ---- outstanding work (§A6.1) ----------------------------------------------
+   A task is a layer this build is going to draw. It is registered BEFORE the
+   load starts — the layer object usually doesn't exist yet — and released only
+   once that layer has actually finished drawing. The window between the two is
+   exactly where the bar used to complete early.
+
+   Each piece of work takes a TOKEN and only the token that currently owns a
+   layer may release it. That is what keeps an abandoned load quiet: switch the
+   contour resolution mid-load and the superseded load's layer, which is no
+   longer on the map, cannot complete the new one's task when it finally lands. */
+function mapBuildTrack(key){
+  if(!mapBuild.active) return;
+  if(!mapBuild.tasks.has(key)) mapBuild.tasks.set(key, { weight: MAP_BUILD_WEIGHTS[key] || 1, done: false });
+  mapBuildNote();
+}
+// Register `key` and take ownership of it for this piece of work.
+function mapBuildClaim(key){
+  const token = ++mapBuild.token;
+  mapBuild.owner[key] = token;
+  mapBuildTrack(key);
+  return token;
+}
+function mapBuildTaskDone(key, token){
+  if(token != null && mapBuild.owner[key] !== token) return;   // superseded or abandoned work
+  const t = mapBuild.tasks.get(key);
+  if(!t || t.done) return;
+  t.done = true;
+  // A layer landing is real progress, so the floor moves with it.
+  const f = MAP_BUILD_LAYER_FLOOR;
+  mapBuildFloor(f.from + (f.to - f.from) * mapBuildDoneFraction());
+  mapBuildNote();
+  mapBuildMaybeFinish();
+}
+function mapBuildDoneFraction(){
+  let total = 0, done = 0;
+  mapBuild.tasks.forEach(t=>{ total += t.weight; if(t.done) done += t.weight; });
+  return total ? done / total : 0;
+}
+function mapBuildPending(){
+  let n = 0;
+  mapBuild.tasks.forEach(t=>{ if(!t.done) n++; });
+  return n;
+}
+// Say what the bar is actually waiting for. The contours get named because they
+// are the wait people notice — and the one the bar used to lie about.
+function mapBuildNote(){
+  const { note } = mapBuildEls();
+  if(!note) return;
+  let text = "Building map…";
+  if(mapBuild.active && mapBuild.tasks.size){
+    const waiting = [];
+    mapBuild.tasks.forEach((t, key)=>{ if(!t.done) waiting.push(key); });
+    if(waiting.indexOf("contours") !== -1) text = "Drawing contours…";
+    else if(waiting.length) text = "Drawing map layers…";
+    else text = "Finishing map…";
+  }
+  if(note.textContent !== text) note.textContent = text;
+}
+/* Hold `key` until `layer` has finished drawing IN THE VIEW. A layer view's own
+   `updating` is Esri's signal for "this layer has finished fetching and
+   rendering" — the same one reportLayerFirstDraw trusts — so it is watched (not
+   read once) and released only after a quiet beat, so a contour layer is never
+   released between two batches. A layer view that never materialises (a failed
+   layer, one that never reached the map) is released immediately or by the
+   bound, so a broken layer can't wedge the bar. */
+function mapBuildWatchLayer(key, layer, token){
+  const view = siteMap.view, E = siteMap.esri;
+  if(token == null) token = mapBuild.owner[key];
+  // Nothing to hold: this work has been superseded, or the key was never
+  // registered — don't leave a watcher behind for a task it can't release.
+  if(mapBuild.owner[key] !== token || !mapBuild.tasks.has(key)) return;
+  let quiet = null, handle = null, bound = null, released = false;
+  const release = ()=>{
+    if(released) return;
+    released = true;
+    if(quiet){ clearTimeout(quiet); quiet = null; }
+    if(bound){ clearTimeout(bound); bound = null; }
+    if(handle && handle.remove){ try{ handle.remove(); }catch(_){} }
+    mapBuildTaskDone(key, token);
+  };
+  if(!layer || !view || !view.whenLayerView || !E || !E.reactiveUtils){ release(); return; }
+  // A layer that failed, or that was pulled from the map, never gets a layer
+  // view — whenLayerView would simply never resolve.
+  try{
+    if(layer.loadStatus === "failed"){ release(); return; }
+    if(siteMap.esriMap && siteMap.esriMap.layers && siteMap.esriMap.layers.includes &&
+       !siteMap.esriMap.layers.includes(layer)){ release(); return; }
+  }catch(_){}
+  bound = setTimeout(release, MAP_BUILD_MAX_MS);
+  view.whenLayerView(layer).then(lv=>{
+    if(released) return;
+    const arm = ()=>{ if(quiet) clearTimeout(quiet); quiet = setTimeout(release, MAP_BUILD_LAYER_QUIET_MS); };
+    handle = E.reactiveUtils.watch(()=> lv.updating, (updating)=>{
+      if(updating){ if(quiet){ clearTimeout(quiet); quiet = null; } }
+      else arm();
+    });
+    if(!lv.updating) arm();
+  }).catch(()=> release());
+}
+// Release a task now, or hold it until the layer that was loaded has drawn.
+function mapBuildSettleTask(key, layer, token){
+  if(layer) mapBuildWatchLayer(key, layer, token);
+  else mapBuildTaskDone(key, token);
+}
+/* Register a layer the build is about to load and hold the bar until it has
+   drawn. `getLayer` is read when the LOADER settles, not before, because the
+   loaders decide late what ends up on the map — the imagery has a dynamic
+   fallback, the contours a MapImageLayer fallback, and a layer that failed
+   outright is never set at all (⇒ nothing to wait for). */
+function mapBuildTrackLoad(key, promise, getLayer){
+  const token = mapBuildClaim(key);
+  Promise.resolve(promise).catch(()=>{}).then(()=>{
+    let layer = null;
+    try{ layer = getLayer ? getLayer() : null; }catch(_){}
+    mapBuildSettleTask(key, layer, token);
+  });
+}
+/* After a pan/zoom the layers already on the map must fetch and draw the new
+   extent. Nothing "loads", so there is no loader promise to hang a task on —
+   register the live layers themselves, so the bar waits for the contours to
+   redraw instead of completing the moment the view stops moving. */
+function mapBuildTrackRedraw(){
+  if(!mapBuild.active) return;
+  Object.keys(MAP_BUILD_WEIGHTS).forEach(key=>{
+    const layer = siteMap.layers[key === "contours" ? "contour" : key];
+    if(!layer) return;             // still loading — its own load already holds the bar
+    mapBuildWatchLayer(key, layer, mapBuildClaim(key));
+  });
+  mapBuildMaybeFinish();
+}
+
+// Track view.updating: true keeps the cycle going (starting one if needed);
+// false only opens the question of finishing, which mapBuildMaybeFinish answers.
 function mapBuildSetBusy(updating){
   mapBuild.busy = !!updating;
   if(updating){
     if(mapBuild.finishTimer){ clearTimeout(mapBuild.finishTimer); mapBuild.finishTimer = null; }
     if(!mapBuild.active) mapBuildStart(); else mapBuildKick();
   } else if(mapBuild.active){
-    if(mapBuild.finishTimer) clearTimeout(mapBuild.finishTimer);
-    mapBuild.finishTimer = setTimeout(mapBuildFinish, 300);
+    mapBuildMaybeFinish();
   }
 }
-// Fill to 100% (the render loop then fades the bar out).
-function mapBuildFinish(){
-  if(mapBuild.finishTimer){ clearTimeout(mapBuild.finishTimer); mapBuild.finishTimer = null; }
-  if(!mapBuild.active) return;
-  mapBuild.target = 1; mapBuildKick();
+// Is anything still being generated or drawn? Every honest signal available, not
+// just view.updating: outstanding layer work, the view shell, each layer view
+// (view.updating has been caught reporting a stale false — see whenCaptureReady)
+// and the user's own navigation.
+function mapBuildStillDrawing(){
+  if(mapBuildPending()) return true;
+  if(mapBuild.busy) return true;
+  const view = siteMap.view;
+  if(!view || !view.ready) return false;
+  if(view.updating || view.interacting) return true;
+  if(view.stationary === false) return true;        // mid pan / zoom / goTo animation
+  try{
+    if(view.allLayerViews && view.allLayerViews.toArray().some(lv=> lv.updating)) return true;
+  }catch(_){}
+  return false;
 }
-// Safety net for a re-open where nothing ends up (re)drawing: complete the bar if
-// the map is idle shortly after the open finishes.
-function mapBuildSettleSoon(){ setTimeout(()=>{ if(mapBuild.active && !mapBuild.busy) mapBuildFinish(); }, 700); }
+// Complete only once nothing is drawing any more, and only after a quiet beat so
+// a tile-to-tile blip doesn't read as "finished". While something IS still
+// drawing this re-checks itself: a layer view finishing its last batch doesn't
+// always move view.updating, so the cycle polls rather than trusting one event.
+function mapBuildMaybeFinish(){
+  if(!mapBuild.active) return;
+  if(mapBuild.finishTimer){ clearTimeout(mapBuild.finishTimer); mapBuild.finishTimer = null; }
+  if(mapBuildStillDrawing()){
+    mapBuild.finishTimer = setTimeout(mapBuildMaybeFinish, MAP_BUILD_QUIET_MS);
+    mapBuildKick();
+    return;
+  }
+  mapBuild.finishTimer = setTimeout(()=>{
+    mapBuild.finishTimer = null;
+    if(!mapBuild.active) return;
+    if(mapBuildStillDrawing()){ mapBuildMaybeFinish(); return; }   // started again — keep going
+    mapBuildComplete();
+  }, MAP_BUILD_QUIET_MS);
+}
+// Fill to 100% (the render loop then fades the bar out). Only reached when the
+// map has settled, or when the hard cap gives up on a cycle that never did.
+function mapBuildComplete(){
+  mapBuildClearTimers();
+  if(!mapBuild.active) return;
+  mapBuild.tasks.forEach(t=>{ t.done = true; });
+  mapBuild.target = 1; mapBuildNote(); mapBuildKick();
+}
+// Safety net for a re-open where nothing ends up (re)drawing: ask the cycle to
+// complete shortly after the open finishes. It refuses while any layer is still
+// on its way, so this only rescues the case where nothing redraws at all.
+function mapBuildSettleSoon(){ setTimeout(()=>{ if(mapBuild.active) mapBuildMaybeFinish(); }, 700); }
 // Stop and clear everything (modal close).
 function mapBuildReset(){
   if(mapBuild.raf){ cancelAnimationFrame(mapBuild.raf); mapBuild.raf = null; }
-  if(mapBuild.finishTimer){ clearTimeout(mapBuild.finishTimer); mapBuild.finishTimer = null; }
-  if(mapBuild.hideTimer){ clearTimeout(mapBuild.hideTimer); mapBuild.hideTimer = null; }
+  mapBuildClearTimers();
+  mapBuild.owner = {};       // orphan every load/watch still in flight
+  mapBuild.tasks.clear();
   mapBuild.active = false; mapBuild.busy = false; mapBuild.shown = 0; mapBuild.target = 0;
   const { host, bar } = mapBuildEls();
   if(host){ host.classList.remove("smap-progress--on"); host.setAttribute("aria-hidden","true"); host.hidden = true; }
   if(bar) bar.style.width = "0%";
+  mapBuildNote();
 }
 function mapBuildRenderLoop(){
   const { host, bar } = mapBuildEls();
@@ -5047,15 +5266,15 @@ function mapBuildRenderLoop(){
   if(mapBuild.shown >= 1){
     // Fully drawn — hold briefly, fade out, then reset for the next cycle.
     mapBuild.active = false; mapBuild.raf = null;
-    if(mapBuild.hideTimer) clearTimeout(mapBuild.hideTimer);
+    mapBuildClearTimers();
     mapBuild.hideTimer = setTimeout(()=>{
       host.classList.remove("smap-progress--on"); host.setAttribute("aria-hidden","true");
-      setTimeout(()=>{ if(!mapBuild.active){ host.hidden = true; mapBuild.shown = 0; mapBuild.target = 0; bar.style.width = "0%"; } }, 340);
+      setTimeout(()=>{ if(!mapBuild.active){ host.hidden = true; mapBuild.shown = 0; mapBuild.target = 0; bar.style.width = "0%"; mapBuildNote(); } }, 340);
     }, 240);
     return;
   }
   // Pause the loop while idle (not busy and already settled at the current floor)
-  // to avoid RAF churn; a floor bump, a busy transition, or finish re-kicks it.
+  // to avoid RAF churn; a floor bump, a busy transition, or a finish re-kicks it.
   if(!mapBuild.busy && mapBuild.target < 1 && Math.abs(mapBuild.shown - mapBuild.target) < 0.002){ mapBuild.raf = null; return; }
   mapBuild.raf = requestAnimationFrame(mapBuildRenderLoop);
 }
@@ -5115,20 +5334,28 @@ async function buildView(container, opts){
       invalidateScreenshot();
     });
     E.reactiveUtils.watch(()=> view.stationary, (stationary)=>{ if(stationary){ invalidateScreenshot(); renderDiagnostics(); } });
-    // Bottom-of-map build progress (§A6). view.updating drives the fill and the
-    // completion; a real user pan/zoom restarts it from zero. Neither blocks input.
+    // Bottom-of-map build progress (§A6). view.updating drives the fill; a real
+    // user pan/zoom restarts it from zero and, when the drag ENDS, registers the
+    // live layers so the bar waits for the new extent to actually draw (§A6.1)
+    // rather than completing in the beat before the re-fetch starts. Neither
+    // blocks input.
     E.reactiveUtils.watch(()=> view.updating, (updating)=> mapBuildSetBusy(updating));
-    E.reactiveUtils.watch(()=> view.interacting, (interacting)=>{ if(interacting) mapBuildStart(); });
+    E.reactiveUtils.watch(()=> view.interacting, (interacting)=>{
+      if(interacting) mapBuildStart(); else mapBuildTrackRedraw();
+    });
     startScaleHintWatch(view);
     attachPinDragHandlers(view);      // draggable pins in Move-pins mode (§B1)
     renderDiagnostics();
 
     // Stream the operational layers in WITHOUT blocking the already-open modal.
-    loadImageryLayer(imagery, map, false);
-    loadContourLayer(map, false);
-    loadRoadLayer(map, false);       // road resolution is OFF the critical path (§4.1)
-    loadRailLayer(map, false);       // rail sublayers resolved off the critical path too
-    loadLabelsLayer(map, false);
+    // Each is registered with the build progress BEFORE its load starts and held
+    // until it has finished drawing (§A6.1) — the bar used to complete inside the
+    // gap between the view being ready here and the contours reaching the map.
+    mapBuildTrackLoad("imagery",  loadImageryLayer(imagery, map, false), ()=> siteMap.layers.imagery);
+    mapBuildTrackLoad("contours", loadContourLayer(map, false),          ()=> siteMap.layers.contour);
+    mapBuildTrackLoad("road",     loadRoadLayer(map, false),             ()=> siteMap.layers.road);   // road resolution is OFF the critical path (§4.1)
+    mapBuildTrackLoad("rail",     loadRailLayer(map, false),             ()=> siteMap.layers.rail);   // rail sublayers resolved off the critical path too
+    mapBuildTrackLoad("labels",   loadLabelsLayer(map, false),           ()=> siteMap.layers.labels);
   } else {
     // Off-screen copy view — the screenshot needs the layers present, so await
     // them (still bounded, so this path can't hang either).
@@ -5462,8 +5689,10 @@ async function setContoursOn(on){
     return;
   }
   // Turning back on: rebuild the layer for the current interval.
-  mapBuildStart();           // rebuilding contours — reset the bar
+  mapBuildStart();                            // rebuilding contours — reset the bar
+  const token = mapBuildClaim("contours");    // ...and hold it until they have drawn (§A6.1)
   await loadContourLayer(map, false);
+  mapBuildSettleTask("contours", siteMap.layers.contour, token);
 }
 
 /* ---- rail lines on/off (C1) — mirrors the contours toggle ---- */
@@ -5477,8 +5706,10 @@ async function setRailOn(on){
     setDiag("rail", { status:"off", ms:0, note:"rail toggled off" }, "Rail lines toggled off.");
     return;
   }
-  mapBuildStart();           // rebuilding rail — reset the bar
+  mapBuildStart();                        // rebuilding rail — reset the bar
+  const token = mapBuildClaim("rail");    // ...and hold it until the lines have drawn (§A6.1)
   await loadRailLayer(map, false);
+  mapBuildSettleTask("rail", siteMap.layers.rail, token);
 }
 
 /* ---- switch contour interval, with coverage auto-fallback (§5) ----
@@ -5489,7 +5720,16 @@ async function applyContourInterval(interval){
   siteMap.contourInterval = interval;
   siteMap.renderedInterval = interval;
   invalidateScreenshot();
-  mapBuildStart();           // changing resolution rebuilds contours — reset the bar
+  mapBuildStart();                          // changing resolution rebuilds contours — reset the bar
+  const token = mapBuildClaim("contours");  // ...and hold it until the NEW interval has drawn (§A6.1),
+                                            // including any coverage fallback the swap makes
+  try{ await swapContourInterval(interval); }
+  finally{ mapBuildSettleTask("contours", siteMap.layers.contour, token); }
+}
+// The swap itself. Split out from applyContourInterval so the progress bar can
+// hold its contour task across EVERY exit from it, including the early returns
+// and the coverage fallback that may swap the layer a second time.
+async function swapContourInterval(interval){
   if(!siteMap.contoursOn){ updateIntervalStamp(); return; }
   if(!siteMap.layers.contour || !siteMap.contourIds){ updateIntervalStamp(); return; }
 
@@ -5622,6 +5862,7 @@ function buildSiteMapModal(){
   siteMap.scaleHintHost = overlay.querySelector(".smap-scalehint");
   siteMap.progressHost = overlay.querySelector(".smap-progress");
   siteMap.progressBar  = overlay.querySelector(".smap-progress-bar");
+  siteMap.progressNote = overlay.querySelector(".smap-progress-note");
   siteMap.legendHost   = overlay.querySelector(".smap-onmap-legend");
   siteMap.stampHost    = overlay.querySelector(".smap-onmap-stamp");
   siteMap.captureCard  = overlay.querySelector(".smap-capture-card");
@@ -6035,6 +6276,11 @@ async function openSiteMap(triggerEl){
       // Re-use the existing view: re-draw pins, re-fit unless user-adjusted (§6).
       drawPins();
       await fitView();
+      // While the modal was hidden its container was display:none, so the view
+      // was SUSPENDED and its layers stopped drawing (A2) — they all have to come
+      // back now. Track them, or the bar completes over a map that is still
+      // redrawing, which is the same lie as finishing before the contours (§A6.1).
+      mapBuildTrackRedraw();
     }
     hideSiteMapOverlay();
     updateIntervalStamp();
