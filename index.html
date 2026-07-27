@@ -121,12 +121,38 @@
   .source-chip .dot.local{ background:var(--amber); }
   .source-chip .dot.none{ background:var(--danger); }
 
+  /* ---- sticky top block ----
+     Header, mode nav and the builder's meta/tabs/progress strip share one
+     sticky container so the whole lot stays pinned to the top of the window
+     once the page scrolls. It must be opaque (rows scroll underneath it) and
+     sit above page content but below the modal overlay (z-index 60). */
+  .sticky-top{
+    position:sticky; top:0; z-index:40;
+    background:var(--paper);
+    /* Safety valve for short windows: the block is ~350px tall in builder
+       mode, so let it scroll internally rather than pin content off-screen. */
+    max-height:100vh;
+    max-height:100dvh;
+    overflow-y:auto;
+  }
+  .sticky-top.is-stuck{ box-shadow:0 6px 16px rgba(0,0,0,.12); }
+  :root[data-theme="dark"] .sticky-top.is-stuck{ box-shadow:0 6px 18px rgba(0,0,0,.5); }
+  /* Lines up with .wrap's content column; its bottom padding is the gap above
+     the first row, which is why .wrap carries no top padding in builder mode. */
+  .sticky-builder{
+    max-width:1080px;
+    margin:0 auto;
+    padding:20px 20px 16px;
+  }
+  /* Keep scrollIntoView() and anchor jumps clear of the pinned block. */
+  html{ scroll-padding-top:var(--sticky-top-h, 0px); }
+
   .wrap{
     max-width:1080px;
     margin:0 auto;
-    padding:20px 20px 140px;
+    padding:0 20px 140px;
   }
-  .wrap.manage{ padding-bottom:40px; }
+  .wrap.manage{ padding-top:20px; padding-bottom:40px; }
 
   .meta-card{
     background:var(--card);
@@ -167,8 +193,11 @@
     transform:translateY(1px);
   }
 
+  /* Last child of the sticky strip — the container's padding supplies the gap
+     below it, so no margin here (a margin would collapse out of the sticky
+     block and leave a transparent slot for rows to scroll through). */
   .progress{
-    display:flex; align-items:center; gap:10px; margin-bottom:16px;
+    display:flex; align-items:center; gap:10px; margin-bottom:0;
     font-size:.82rem; color:var(--ink-soft);
   }
   .progress-bar{ flex:1; height:6px; background:var(--line); border-radius:3px; overflow:hidden; }
@@ -230,6 +259,9 @@
 
   .toolbar{
     position:fixed; bottom:0; left:0; right:0;
+    /* Above the sticky top block (40) but below the modal overlay (60), so a
+       very short window can't leave the copy buttons buried. */
+    z-index:50;
     background:var(--card); border-top:1px solid var(--line);
     padding:14px 20px; display:flex; align-items:center; justify-content:center; gap:12px;
     box-shadow:0 -4px 14px rgba(0,0,0,.06);
@@ -553,6 +585,21 @@
     .meta-card{ grid-template-columns:1fr; }
     .ed-grid{ grid-template-columns:1fr; }
     .field-editor .fe-row{ grid-template-columns:1fr 1fr; }
+
+    /* The sticky block carries the header, nav, meta card, tabs and progress
+       bar; at phone widths every one of those wraps onto extra lines, so trim
+       it back — otherwise the pinned block leaves no room for the rows under
+       it. The subtitle is the one purely decorative line, so it goes first. */
+    header.app-header{ padding:11px 16px; }
+    header.app-header h1{ font-size:1.05rem; }
+    header.app-header .sub{ display:none; }
+    .theme-toggle{ padding:5px 11px; font-size:.78rem; }
+    .mode-nav{ padding:0 12px; gap:0; }
+    .mode-btn{ padding:9px 10px; font-size:.84rem; }
+    .sticky-builder{ padding:12px 16px 10px; }
+    .meta-card{ padding:11px 13px; gap:9px; margin-bottom:11px; }
+    .tabs{ margin-bottom:10px; }
+    .tab-btn{ padding:8px 12px; font-size:.85rem; }
   }
 
   /* ===================== COORDINATE VALIDATION HINTS (§3) ===================== */
@@ -850,6 +897,11 @@
 </head>
 <body>
 
+<!-- Everything from the page title down to and including the fill progress bar
+     rides in one sticky block, so it stays pinned to the top of the window once
+     the page scrolls (§ sticky top block in the stylesheet). -->
+<div class="sticky-top" id="stickyTop">
+
 <header class="app-header">
   <div class="header-titles">
     <h1>SoRT Forum Scope Builder</h1>
@@ -869,10 +921,9 @@
   <span class="source-chip" id="sourceChip"><span class="dot"></span><span id="sourceLabel">Loading…</span></span>
 </nav>
 
-<div class="wrap" id="wrap">
-
-  <!-- ===================== BUILDER VIEW ===================== -->
-  <div id="builderView">
+  <!-- Builder-only strip. It lives here rather than inside #builderView so it
+       pins with the header and nav; setMode() hides it outside builder mode. -->
+  <div class="sticky-builder" id="builderSticky">
     <div class="meta-card">
       <div class="field">
         <label for="forumDate">SoRT Forum Date</label>
@@ -894,7 +945,14 @@
       <span id="progressText">0 of 0 rows filled</span>
       <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
     </div>
+  </div>
 
+</div><!-- /.sticky-top -->
+
+<div class="wrap" id="wrap">
+
+  <!-- ===================== BUILDER VIEW ===================== -->
+  <div id="builderView">
     <div id="rowsContainer"></div>
 
     <!-- Property Services — a separate, visually distinct table copied into Word
@@ -1294,6 +1352,8 @@ function activeTable(){ return defs ? defs.tables.find(t=>t.id === activeTableId
 
 /* ===================== DOM REFS ===================== */
 const wrapEl = document.getElementById("wrap");
+const stickyTopEl = document.getElementById("stickyTop");
+const builderSticky = document.getElementById("builderSticky");
 const builderView = document.getElementById("builderView");
 const manageView = document.getElementById("manageView");
 const mapView = document.getElementById("mapView");
@@ -1306,6 +1366,24 @@ const progressFillEl = document.getElementById("progressFill");
 const builderToolbar = document.getElementById("builderToolbar");
 const sourceLabelEl = document.getElementById("sourceLabel");
 const sourceChipEl = document.getElementById("sourceChip");
+
+/* ===================== STICKY TOP BLOCK =====================
+   The header/nav/meta/tabs/progress block is CSS-sticky on its own; this only
+   adds the two things CSS can't work out for itself: a drop shadow once the
+   block is actually covering content, and its measured height, published as
+   --sticky-top-h so scroll-padding-top keeps scrolled-to elements clear of it.
+   Neither effect changes the block's own height, so the observer can't loop. */
+function syncStickyShadow(){
+  stickyTopEl.classList.toggle("is-stuck", window.scrollY > 0);
+}
+function syncStickyHeight(){
+  document.documentElement.style.setProperty("--sticky-top-h", stickyTopEl.offsetHeight + "px");
+}
+window.addEventListener("scroll", syncStickyShadow, { passive:true });
+window.addEventListener("resize", syncStickyHeight);
+if(window.ResizeObserver) new ResizeObserver(syncStickyHeight).observe(stickyTopEl);
+syncStickyShadow();
+syncStickyHeight();
 
 /* ===================== BUILDER RENDER ===================== */
 function renderTabs(){
@@ -3828,6 +3906,7 @@ function setMode(next){
   document.querySelectorAll(".mode-btn").forEach(b=>b.classList.toggle("active", b.dataset.mode === mode));
   const isBuilder = mode === "builder";
   builderView.classList.toggle("hidden", !isBuilder);
+  builderSticky.classList.toggle("hidden", !isBuilder);
   manageView.classList.toggle("hidden", mode !== "manage");
   mapView.classList.toggle("hidden", mode !== "map");
   psManageView.classList.toggle("hidden", mode !== "ps");
