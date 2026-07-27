@@ -344,8 +344,16 @@ and — on the Water Level table — `riverCoords` / `riverRelocation`.
   misbehaves, open it, copy, and paste it back. Every external call is bounded by
   a timeout (see `SITE_MAP_CONFIG.timeouts`), so no service can ever hang the modal.
 - **Row-selection panel** — tick/untick which pins show; the view re-fits as you
-  do (until you pan or zoom, after which **Reset view** restores auto-fit). Each
-  pin's coordinate is shown next to its label, and travels into the exported image.
+  do (until you pan or zoom, after which **Reset view** restores auto-fit).
+- **Legend on the map** — the legend (each pin's label *and* its coordinate) and
+  the contour caption are drawn **on the map itself**, in the same corners the
+  exported picture puts them, rather than in the side panel. That is what makes
+  the capture button honest: the map area you are looking at *is* the picture that
+  gets pasted, legend included. The side panel keeps the *controls* — which pins
+  show, their coordinates, the capture, the diagnostics. (The bottom attribution
+  band is the one piece drawn only into the picture, because the live map already
+  carries Esri's own attribution bar in that exact spot.) Turn the contours off
+  and the caption goes with them, on screen and in the picture alike.
 - **Contour interval** — 1 m / 5 m / 10 m, **defaulting to 5 m** (5 m paints
   much faster; 1 m is the slowest to load and is there when you need the detail),
   with an on/off toggle for a fast imagery-and-pins map. The contour line is a
@@ -390,14 +398,55 @@ and — on the Water Level table — `riverCoords` / `riverRelocation`.
   river-line relocation distance is intentionally **not** auto-calculated: there
   is no matching field in `definitions.json`, so it is left alone rather than
   guessed at.
-- **Include in the Word copy** — tick *"Include site map in copied output"* to
-  paste a screenshot of the map (with pins, legend, contour interval and the
-  QLD/Esri attribution) into Word alongside the tables. The **Copy map image**
-  button is a one-step fallback if Word strips the inline image. What you see —
-  including any manual panning — is what gets pasted.
+- **Getting the map into Word — press 📸 Copy map image** (in the Site Map
+  header). It takes a picture of the map area **exactly as it is on screen**, puts
+  that picture on the clipboard (paste anywhere with Ctrl+V) *and* attaches it to
+  **Copy table for Word**, ticking *"Include site map in copied output"* for you.
+
+  What you have to do is deliberately short: **frame the map, let it finish
+  drawing, press the button.** The panel then shows a **thumbnail of the exact
+  picture** — so if a capture ever comes out blank you see it there, in the
+  modal, with the map still on screen beside it, instead of discovering it after
+  pasting into a scope document. A capture that didn't render is refused outright
+  and says what to wait for; nothing blank is ever put on the clipboard.
+
+  Pan, zoom, retick a pin or change the contours and the picture no longer matches
+  the map, so it is dropped and both the panel and the toolbar chip say *"the map
+  has changed since you captured it"* — press the button again. The toolbar chip
+  (next to the tick box) always answers the one question that matters before you
+  copy: **is a map picture actually ready, and is it still the one I framed?**
+
+  If you never open the Site Map at all, ticking the box still makes the copy
+  build a picture unattended, exactly as before — it is just labelled as such in
+  the diagnostics, because nobody has looked at it.
 - **Offline / no network** — the Esri library and the QLD services are external.
   With no connection the modal says so and the Word copy still produces the
   tables (the map is an enhancement to the copy, never a dependency of it).
+
+> **Why the copied map used to paste blank.** Every earlier route into the Word
+> copy captured the map at a moment *nobody was looking at it*, and each had its
+> own way of failing silently. Capturing from the toolbar with the modal shut left
+> the MapView **suspended** (`.hidden` is `display:none`, and a view whose
+> container is `display:none` stops rendering): the base layers had stopped
+> drawing while `view.graphics` still painted the pins from memory and the legend
+> was composited on afterwards — pins + legend + no map. Asking
+> `takeScreenshot` for an explicit `width`/`height` did the same damage a
+> different way: `view.width` is in **CSS pixels**, so on a Windows machine at
+> 125%/150% display scaling it never matches the framebuffer, and Esri
+> **re-renders** the scene at the requested size — where the tiled imagery and
+> contours come back empty for tiles that aren't resident yet while the vector
+> pins draw instantly. Both are now fixed (`whenCaptureReady` waits for an
+> un-suspended, settled, painted frame; `takeViewScreenshot` reads the native
+> framebuffer with no arguments; `rasterStats` refuses a frame the map never
+> rendered into). But the deeper problem was that **the user was never shown the
+> result**, so a silent failure could only surface in Word. Hence the capture
+> button, the on-map legend and the thumbnail: the picture is made from the map in
+> front of you, and handed straight back for you to look at.
+>
+> If a map still pastes blank, open **Map diagnostics** and read the
+> *"Picture for the Word copy"* line. `captured by the user` means the picture in
+> the document is one that was checked on screen; `built automatically` means
+> nobody saw it and the capture button hasn't been used.
 
 The map *services* (imagery / contour / cadastre endpoints) live in a documented
 `SITE_MAP_CONFIG` constant near the top of the script in `index.html`, so an

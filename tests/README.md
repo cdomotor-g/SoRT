@@ -209,3 +209,44 @@ PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
 PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/map-copy-suspended-view.test.mjs
 ```
+
+## `map-capture-button.test.mjs` — §7.5 "capture what you can actually see"
+
+The two tests above fix the *mechanics* of a blank copied map (a suspended view;
+a resampling `takeScreenshot`). This one guards the change that stops a blank map
+reaching a document at all: the capture is made **from the map the user is looking
+at**, and handed straight back to them to look at.
+
+Drives the real `captureVisibleMap` / `renderCaptureCard` / `renderOnMapFurniture`
+/ `renderMapStateChip` against a stand-in view whose `takeScreenshot` returns
+either a rich (full-coverage, many-colour) raster or the pins-on-transparent
+failure signature, and asserts:
+
+- **a real capture** returns a PNG, caches it tagged `source:"capture"` with a
+  timestamp, arms *"Include site map in copied output"*, and shows the **exact
+  PNG as a thumbnail** — the whole point: a blank one is visible in the modal;
+- **a blank frame** is refused — nothing returned, nothing cached, nothing put on
+  the clipboard — with a message naming what to wait for, and the button left
+  usable for a retry;
+- **the legend lives on the map**, not the side panel, one row per shown pin with
+  its coordinate (B3), and the contour caption tracks the contours toggle **on
+  screen and in the export** (`contourStampText` is the single source for both);
+- **staleness is its own state**: after an invalidation the cache is dropped but
+  `source` is kept, so the card and the toolbar chip say *"the map has changed
+  since you captured it"* — a different message from *"nothing captured"* — and
+  the stale thumbnail is removed;
+- **the guards** refuse a capture with no view and with no pins showing, in plain
+  language;
+- **the tidied toolbar**: the chip is hidden while the tick box is off, reports
+  readiness when on, the old toolbar *Copy map image* button is gone, and the
+  capture button is inside the modal;
+- **the diagnostics** name which picture the copy would use and how it was made
+  (`captured by the user` vs `built automatically`).
+
+Fully hermetic — no WebGL view, no QLD services, no Esri CDN. Same invocation:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/map-capture-button.test.mjs
+```
