@@ -672,9 +672,30 @@
     font-size:.6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--accent-dark);
     background:var(--accent-soft); border-radius:8px; padding:1px 5px; margin-left:4px; font-weight:700;
   }
-  .smap-legend{ margin-top:6px; border-top:1px solid var(--line); padding-top:8px; display:flex; flex-direction:column; gap:4px; }
-  .smap-legend-row{ display:flex; align-items:center; gap:7px; font-size:.8rem; }
-  .smap-credit{ padding-top:10px; font-size:.68rem; color:var(--ink-soft); line-height:1.4; }
+  /* ---- ON-MAP EXPORT FURNITURE (§7.5) --------------------------------------
+     The legend and the contour caption are drawn ON THE MAP, at the same corners
+     `compositeScreenshot` draws them into the exported PNG. That is the whole
+     point of the capture button: the map area on screen IS the picture that gets
+     pasted, so nothing about the export is a surprise. They sit BELOW the status
+     overlay (z-index 5) and are click-through, so they never get in the way of
+     panning, dragging a pin, or measuring. The bottom attribution band is the one
+     piece the export draws alone — the live view already carries Esri's own
+     attribution bar across that exact strip. */
+  .smap-onmap{
+    position:absolute; z-index:4; pointer-events:none;
+    font-size:.78rem; line-height:1.35; color:#152531;
+  }
+  .smap-onmap-legend{
+    top:10px; left:10px; max-width:55%;
+    background:rgba(255,255,255,.86); border-radius:6px; padding:7px 10px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .smap-onmap-legend:empty{ display:none; }
+  .smap-onmap-stamp{
+    top:10px; right:10px;
+    background:rgba(255,255,255,.86); border-radius:6px; padding:5px 10px; font-weight:600;
+  }
+  .smap-legend-row{ display:flex; align-items:flex-start; gap:7px; }
 
   /* "Zoom in to see contours / road reserve" hint, over the map (§4.6). */
   .smap-scalehint{
@@ -750,11 +771,50 @@
     box-shadow:0 1px 4px rgba(0,0,0,.25); white-space:nowrap;
   }
 
-  /* Legend coordinate on screen (§B3). */
-  .smap-legend-row{ align-items:flex-start; }
+  /* Legend coordinate on screen (§B3) — same two lines the export draws. */
   .smap-legend-text{ display:flex; flex-direction:column; gap:0; min-width:0; }
-  .smap-legend-label{ font-weight:600; }
-  .smap-legend-coord{ font-size:.72rem; color:var(--ink-soft); word-break:break-word; }
+  .smap-legend-label{ font-weight:700; }
+  .smap-legend-coord{ font-size:.72rem; color:#3a4a56; word-break:break-word; }
+  .smap-onmap .smap-dot{ margin-top:2px; box-shadow:0 0 0 1px rgba(0,0,0,.25); }
+
+  /* ---- CAPTURE CARD (§7.5) --------------------------------------------------
+     The side panel now carries the *action* — capture what you can see — and the
+     proof: a thumbnail of the exact PNG that will be pasted. A blank capture is
+     therefore visible here, in the modal, instead of turning up in Word. */
+  .smap-capture-card{
+    margin-top:6px; border-top:1px solid var(--line); padding-top:9px;
+    display:flex; flex-direction:column; gap:7px;
+  }
+  .smap-capture-how{ font-size:.75rem; color:var(--ink-soft); line-height:1.45; margin:0; }
+  .smap-capture-state{
+    display:flex; align-items:flex-start; gap:7px; font-size:.76rem; line-height:1.4;
+    border-radius:6px; padding:6px 8px; background:var(--paper);
+  }
+  .smap-capture-state--ok{ background:var(--accent-soft); color:var(--accent-dark); font-weight:600; }
+  .smap-capture-state--stale{ background:var(--amber-soft); color:var(--amber); font-weight:600; }
+  .smap-capture-state--err{ background:var(--danger-soft); color:var(--danger); font-weight:600; }
+  .smap-capture-thumb{
+    display:block; width:100%; height:auto; border:1px solid var(--line); border-radius:6px;
+    background:#fff;
+  }
+  .smap-capture-thumbnote{ font-size:.7rem; color:var(--ink-soft); line-height:1.35; }
+  .smap-capture--busy{ opacity:.65; pointer-events:none; }
+
+  /* ---- MAIN-TOOLBAR MAP STATE CHIP (§7.5) -----------------------------------
+     Shown only while "Include site map" is ticked. It answers the one question
+     the old toolbar left unanswered: is there actually a map image ready to
+     paste, and is it still the one I framed? */
+  .map-state{
+    display:inline-flex; align-items:center; gap:8px; font-size:.76rem; font-weight:600;
+    border-radius:999px; padding:4px 11px; white-space:nowrap;
+  }
+  .map-state[hidden]{ display:none; }
+  .map-state--ok{ background:var(--accent-soft); color:var(--accent-dark); }
+  .map-state--todo{ background:var(--amber-soft); color:var(--amber); }
+  .map-state-act{
+    appearance:none; border:none; background:transparent; color:inherit; font:inherit;
+    text-decoration:underline; cursor:pointer; padding:0;
+  }
 
   /* Auto-calculated relocation distance suggestion in the pin panel (§B4). */
   .smap-distsuggest{
@@ -857,10 +917,12 @@
   <div class="toolbar-inner">
     <button class="btn btn-primary" id="copyBtn">Copy table for Word</button>
     <button class="btn btn-secondary" id="siteMapBtn" title="Open the site map for this table's coordinates">🗺 Site Map</button>
-    <label class="map-copy-toggle" title="Include a screenshot of the site map (with pins) in the copied Word output">
+    <label class="map-copy-toggle" title="Include the site map picture you captured in the Site Map window in the copied Word output">
       <input type="checkbox" id="includeMapChk"> Include site map in copied output
     </label>
-    <button class="btn btn-secondary hidden" id="copyMapImgBtn" title="Copy just the map image to the clipboard (paste it into Word in one extra step)">Copy map image</button>
+    <!-- Says whether a map picture is actually ready to paste, and whether it is
+         still the one the user framed (§7.5). Only shown while the tick box is on. -->
+    <span class="map-state" id="mapStateChip" hidden></span>
     <span class="status-msg" id="statusMsg"></span>
     <span class="toolbar-spacer"></span>
     <button class="btn btn-secondary" id="undoResetBtn">Undo Clear Table</button>
@@ -1769,14 +1831,15 @@ async function copyTable(){
         `<div><img src="${res.dataUrl}" alt="Site map" style="width:16cm;max-width:100%;height:auto;border:1px solid #999;"></div>`;
       text += "\n\n[Site map image included — contours: " + res.meta.interval + " m]\n";
       const outside = res.meta.pinsTotal - res.meta.pinsInView;
-      if(outside > 0) mapNote = " — " + outside + " of " + res.meta.pinsTotal + " pins are outside the current view";
-      else mapNote = " (map included)";
+      if(outside > 0) mapNote = " — " + outside + " of " + res.meta.pinsTotal + " pins are outside the map picture";
+      else if(siteMap.screenshot.source === "capture") mapNote = " (with the map picture you captured)";
+      else mapNote = " (map included — it was built unattended; capture one in the Site Map to be sure of it)";
     } else if(!hadPins){
       mapNote = " (map not included — no coordinates entered)";
     } else {
-      // Pins exist but the raster didn't capture: never paste black — omit the
-      // image and point the user at the diagnostics (A2 "fail loudly").
-      mapNote = " (map not included — capture failed; open the Site Map ▸ Map diagnostics)";
+      // Pins exist but no usable picture: never paste a blank rectangle — omit
+      // the image and say what to do about it (A2 "fail loudly", §7.5).
+      mapNote = " (map not included — open 🗺 Site Map and press “📸 Copy map image”)";
     }
   }
 
@@ -1837,29 +1900,54 @@ function showStatus(msg){
 copyBtn.addEventListener("click", copyTable);
 
 // Site Map button (opens the modal) + the "include map in copy" tickbox and the
-// two-step "Copy map image" fallback (§7.2), all sitting by the copy button.
+// chip that reports whether a map picture is ready (§7.5). The old toolbar
+// "Copy map image" button has moved INTO the modal, where the map is actually on
+// screen: capturing from out here meant capturing a map nobody could see, which
+// is how blank maps kept reaching Word.
 const siteMapBtn = document.getElementById("siteMapBtn");
 if(siteMapBtn) siteMapBtn.addEventListener("click", ()=> openSiteMap(siteMapBtn));
 const includeMapChk = document.getElementById("includeMapChk");
-const copyMapImgBtn = document.getElementById("copyMapImgBtn");
+const mapStateChip = document.getElementById("mapStateChip");
 if(includeMapChk) includeMapChk.addEventListener("change", ()=>{
   includeMapCopy = includeMapChk.checked;
-  if(copyMapImgBtn) copyMapImgBtn.classList.toggle("hidden", !includeMapCopy);
+  renderMapStateChip();
 });
-if(copyMapImgBtn) copyMapImgBtn.addEventListener("click", copyMapImageOnly);
 
-// Fallback path (§7.2): copy just the PNG to the clipboard as an image, so the
-// user can paste it in one extra step if Word strips the inline data URI.
-async function copyMapImageOnly(){
-  showStatus("Preparing map…");
-  const res = await getMapImageForCopy();
-  if(!res || !res.dataUrl){ showStatus("Map not available (offline or no coordinates)"); return; }
-  try{
-    const blob = await (await fetch(res.dataUrl)).blob();
-    if(!(navigator.clipboard && window.ClipboardItem)) throw new Error("no image clipboard support");
-    await navigator.clipboard.write([ new ClipboardItem({ [blob.type]: blob }) ]);
-    showStatus("Map image copied — paste into Word");
-  }catch(e){ showStatus("Could not copy the map image — see console"); console.error(e); }
+// The toolbar's answer to "will a map actually come out of this?" (§7.5). Three
+// states, and the two that need the user to do something say what that is and
+// offer the button that does it:
+//   • a captured picture that still matches the map → ready, with the time;
+//   • nothing captured (or the map has moved since) → "Capture it" → Site Map;
+//   • hidden entirely while the tick box is off, so the toolbar stays quiet.
+function renderMapStateChip(){
+  if(!mapStateChip) return;
+  if(!includeMapCopy){ mapStateChip.hidden = true; mapStateChip.textContent = ""; return; }
+  mapStateChip.hidden = false;
+  mapStateChip.textContent = "";
+  const shot = siteMap.screenshot;
+  const ready = shot.valid && shot.dataUrl && shot.source === "capture";
+  mapStateChip.classList.toggle("map-state--ok", ready);
+  mapStateChip.classList.toggle("map-state--todo", !ready);
+  if(ready){
+    mapStateChip.textContent = "✓ Map picture ready (captured " + fmtClock(shot.at) + ")";
+    return;
+  }
+  const label = document.createElement("span");
+  label.textContent = shot.source === "capture"
+    ? "Map moved since you captured it — "     // captured, then panned/zoomed/edited
+    : "No map picture captured yet — ";
+  const act = document.createElement("button");
+  act.type = "button"; act.className = "map-state-act";
+  act.textContent = "capture it";
+  act.title = "Open the Site Map, then press “Copy map image”";
+  act.addEventListener("click", ()=> openSiteMap(act));
+  mapStateChip.appendChild(label);
+  mapStateChip.appendChild(act);
+}
+function fmtClock(ts){
+  if(!ts) return "";
+  try{ return new Date(ts).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }); }
+  catch(_){ return ""; }
 }
 
 // Show the "Undo Clear Table" button only while there is a snapshot to restore
@@ -3986,6 +4074,7 @@ const siteMap = {
   esriPromise: null, esri: null,
   overlay: null, mapHost: null, panelHost: null, bannerHost: null, statusHost: null,
   diagHost: null, scaleHintHost: null, scaleWatchHandle: null,
+  legendHost: null, stampHost: null, captureCard: null,   // on-map furniture + capture card (§7.5)
   progressHost: null, progressBar: null,   // bottom-of-map build progress bar
   view: null, esriMap: null,
   layers: {},               // { imagery, road, contour, labels }
@@ -4004,7 +4093,10 @@ const siteMap = {
   measureWidget: null,      // DistanceMeasurement2D widget instance (B2)
   pins: [],                 // resolved pin descriptors for the current table
   triggerEl: null,
-  screenshot: { dataUrl: null, valid: false, meta: null },
+  // The picture destined for the Word copy (§7.3, §7.5). `source` records HOW it
+  // was made — "capture" means the user pressed the button while looking at the
+  // map (the trustworthy path), "auto" means the copy built it unattended.
+  screenshot: { dataUrl: null, valid: false, meta: null, source: null, at: null },
   building: false,
   // In-app diagnostics (§6). The user has no DevTools, so every external
   // dependency reports its own outcome here and nothing is console-only.
@@ -4931,6 +5023,11 @@ async function buildView(container, opts){
     hideSiteMapOverlay();
     mapBuildFloor(0.35);   // the view is ready; the operational layers stream in below
 
+    // Top-left belongs to the legend now (§7.5) — the same corner the exported
+    // picture puts it in — so Esri's zoom buttons move out of its way. Cosmetic:
+    // a failure here must never stop the map opening.
+    try{ view.ui.move("zoom", "bottom-right"); }catch(_){}
+
     // First *manual* pan/zoom latches userHasAdjustedView and stops auto-refit;
     // it also invalidates the cached screenshot (§6.1, §7.3). Watch `interacting`
     // (true only on real user input) — NOT `navigating`, which our own goTo sets.
@@ -5259,7 +5356,9 @@ function setMeasureOn(on){
       // "metric" auto-switches m → km above 1 km; DistanceMeasurement2D is geodesic
       // in a Web Mercator/geographic view. The widget carries its own New/Clear UI.
       siteMap.measureWidget = new siteMap.esri.DistanceMeasurement2D({ view, unit: "metric" });
-      view.ui.add(siteMap.measureWidget, "top-right");
+      // Bottom-left: top-right is the contour caption's corner now (§7.5), and the
+      // widget panel would sit straight on top of it.
+      view.ui.add(siteMap.measureWidget, "bottom-left");
       try{ siteMap.measureWidget.viewModel.start(); }catch(_){}
     }
   } else if(siteMap.measureWidget){
@@ -5275,6 +5374,7 @@ function setMeasureOn(on){
 async function setContoursOn(on){
   siteMap.contoursOn = on;
   invalidateScreenshot();
+  updateIntervalStamp();     // the on-map caption goes with the layer (§7.5)
   const map = siteMap.esriMap;
   if(!map) return;
   if(!on){
@@ -5388,11 +5488,18 @@ function buildSiteMapModal(){
         <button type="button" class="btn btn-secondary smap-reset" style="padding:6px 12px;">Reset view</button>
         <button type="button" class="btn btn-secondary smap-move" title="Turn on to drag pins to a new location — the coordinate is written back to the table" aria-pressed="false" style="padding:6px 12px;">Move pins: off</button>
         <button type="button" class="btn btn-secondary smap-measure" title="Measure geodesic distance between points on the map" aria-pressed="false" style="padding:6px 12px;">Measure</button>
+        <button type="button" class="btn btn-primary smap-capture" title="Take a picture of the map exactly as you see it here — copies it to the clipboard and attaches it to “Copy table for Word”" style="padding:6px 12px;">📸 Copy map image</button>
         <button type="button" class="icon-btn smap-close" title="Close" aria-label="Close">✕</button>
       </div>
       <div class="smap-banners"></div>
       <div class="modal-body smap-body">
         <div class="smap-map">
+          <!-- The export furniture, drawn ON the map at the same corners the
+               exported PNG puts it (§7.5), so this map area is a true preview of
+               the picture. Click-through, and NOT part of the WebGL canvas — the
+               capture composites its own copy of them (compositeScreenshot). -->
+          <div class="smap-onmap smap-onmap-legend" aria-hidden="true"></div>
+          <div class="smap-onmap smap-onmap-stamp" aria-hidden="true"></div>
           <div class="smap-status"></div>
           <div class="smap-scalehint" hidden></div>
           <div class="smap-toast-host"></div>
@@ -5404,8 +5511,17 @@ function buildSiteMapModal(){
         <aside class="smap-panel">
           <div class="smap-panel-head">Pins on the map</div>
           <div class="smap-pin-list"></div>
-          <div class="smap-legend"></div>
-          <div class="smap-credit"></div>
+          <div class="smap-extras"></div>
+          <!-- Capture card (§7.5): the action, what it needs from the user, and a
+               thumbnail of the exact PNG it produced — so a blank capture is seen
+               HERE rather than discovered after pasting into Word. -->
+          <div class="smap-capture-card">
+            <div class="smap-panel-head">Picture for the Word copy</div>
+            <p class="smap-capture-how">Frame the map how you want it, wait for it to finish drawing, then press <strong>📸 Copy map image</strong> above. That takes a picture of <em>this map area, exactly as you see it</em> — legend and all.</p>
+            <div class="smap-capture-state">Nothing captured yet.</div>
+            <img class="smap-capture-thumb hidden" alt="Preview of the captured map picture">
+            <div class="smap-capture-thumbnote hidden">This is exactly what gets pasted. If it looks wrong, re-frame the map and capture again.</div>
+          </div>
           <details class="smap-diag">
             <summary>Map diagnostics</summary>
             <div class="smap-diag-body">
@@ -5427,6 +5543,14 @@ function buildSiteMapModal(){
   siteMap.scaleHintHost = overlay.querySelector(".smap-scalehint");
   siteMap.progressHost = overlay.querySelector(".smap-progress");
   siteMap.progressBar  = overlay.querySelector(".smap-progress-bar");
+  siteMap.legendHost   = overlay.querySelector(".smap-onmap-legend");
+  siteMap.stampHost    = overlay.querySelector(".smap-onmap-stamp");
+  siteMap.captureCard  = overlay.querySelector(".smap-capture-card");
+
+  // The capture button (§7.5). This is now the ONLY way a picture the user has
+  // actually looked at reaches the Word copy.
+  const captureBtn = overlay.querySelector(".smap-capture");
+  if(captureBtn) captureBtn.addEventListener("click", ()=> captureVisibleMap(captureBtn));
 
   const diagCopyBtn = overlay.querySelector(".smap-diag-copy");
   if(diagCopyBtn) diagCopyBtn.addEventListener("click", async ()=>{
@@ -5490,6 +5614,7 @@ function updateIntervalStamp(){
   const el = siteMap.overlay.querySelector(".smap-interval-stamp");
   if(el) el.textContent = siteMap.renderedInterval && siteMap.renderedInterval !== siteMap.contourInterval
     ? "(showing " + siteMap.renderedInterval + " m)" : "";
+  renderOnMapFurniture();     // the on-map caption must track the interval too (§7.5)
 }
 
 /* ---- diagnostics rendering (§6) ------------------------------------------
@@ -5578,6 +5703,16 @@ function diagnosticsText(){
     (typeof ss.coverage === "number" ? " — ~" + Math.round(ss.coverage*100) + "% covered, " + (ss.distinct != null ? ss.distinct : "?") + " distinct colours" : "") +
     (ss.decoded === false ? " — raster did NOT decode" : ""));
   if(ss.suspended != null) L.push("View suspended at capture: " + (ss.suspended ? "YES — the view was display:none and had stopped rendering (this is the blank-map failure)" : "no"));
+  // Which picture the Word copy would actually use, and how it was made (§7.5).
+  // "captured" is the trustworthy one: the user pressed the button with the map
+  // open in front of them and saw the resulting thumbnail.
+  const shot = siteMap.screenshot;
+  L.push("Picture for the Word copy: " + (
+    !shot.valid || !shot.dataUrl
+      ? (shot.source === "capture" ? "none — one was captured but the map has changed since" : "none captured")
+      : (shot.source === "capture" ? "captured by the user from the open map at " + fmtClock(shot.at) + " (checked on screen)"
+                                   : "built automatically at " + fmtClock(shot.at) + " (nobody saw it)")
+  ));
   L.push("");
   // Live render state (A2/A5): the view's suspend/ready/updating flags right now
   // and how many layer views are still drawing — the first thing to read when a
@@ -5624,6 +5759,7 @@ function renderSiteMapPanel(){
       drawPins();
       fitView();           // re-fit on selection change (unless user-adjusted)
       invalidateScreenshot();
+      renderOnMapFurniture();   // the on-map legend lists the SHOWN pins (§7.5)
       renderDistanceSuggestion();
     });
     const dot = document.createElement("span");
@@ -5672,23 +5808,46 @@ function renderSiteMapPanel(){
     host.appendChild(row);
   });
 
-  // Legend + credit. B3: show each pin's coordinate alongside its label on screen
-  // (the exported image carries them too, see compositeScreenshot). Iterate active
-  // pins directly so every pin's coordinate shows, not one per colour.
-  const legend = siteMap.overlay.querySelector(".smap-legend");
+  renderOnMapFurniture();            // legend + contour stamp, ON the map (§7.5)
+  renderDistanceSuggestion();        // §B4 relocation-distance suggestion
+  renderCaptureCard();               // capture state + preview (§7.5)
+
+  const resetBtn = siteMap.overlay.querySelector(".smap-reset");
+  if(resetBtn) resetBtn.classList.toggle("smap-reset--active", siteMap.userHasAdjustedView);
+}
+
+/* ---- on-map export furniture (§7.5) ---------------------------------------
+   The legend used to live in the side panel while the EXPORT drew its own copy
+   onto the picture — so the thing the user was looking at and the thing they
+   pasted were assembled from different places, and only the pasted one could be
+   wrong. Now both are drawn from the same pin list, at the same corners: legend
+   top-left, contour interval top-right (compositeScreenshot mirrors this). The
+   bottom attribution band is the one piece drawn only into the export, because
+   the live view already carries Esri's own attribution bar in that exact spot.
+
+   B3: each pin's label AND its coordinate appear, on screen and in the picture —
+   the scope document may be the only record of where the site is. Active pins are
+   iterated directly so every pin shows, not one row per colour. */
+function renderOnMapFurniture(){
+  if(!siteMap.legendHost) return;
   const active = activeSitePins();
-  legend.innerHTML = `<div class="smap-legend-head">Legend</div>` + active.map(p=>
+  siteMap.legendHost.innerHTML = active.map(p=>
     `<div class="smap-legend-row"><span class="smap-dot" style="background:rgb(${pinRgb(p.colour).join(",")})"></span>` +
     `<span class="smap-legend-text"><span class="smap-legend-label">${escapeHtml(p.label)}</span>` +
     `<span class="smap-legend-coord">${escapeHtml(formatCoord(p.lat, p.lon))}</span></span></div>`
   ).join("");
-  const credit = siteMap.overlay.querySelector(".smap-credit");
-  credit.textContent = SITE_MAP_CONFIG.attribution;
-
-  renderDistanceSuggestion();        // §B4 relocation-distance suggestion
-
-  const resetBtn = siteMap.overlay.querySelector(".smap-reset");
-  if(resetBtn) resetBtn.classList.toggle("smap-reset--active", siteMap.userHasAdjustedView);
+  if(siteMap.stampHost){
+    // With contours switched off the stamp would be claiming a layer that isn't
+    // drawn, so it goes — on screen and in the picture alike (contourStampText).
+    const stamp = contourStampText();
+    siteMap.stampHost.textContent = stamp || "";
+    siteMap.stampHost.hidden = !stamp;
+  }
+}
+// The one source of truth for the contour caption, used by the on-map stamp AND
+// by the exported picture. Empty when contours are off — nothing to caption.
+function contourStampText(){
+  return siteMap.contoursOn ? ("Contours: " + siteMap.renderedInterval + " m LiDAR") : "";
 }
 
 /* ---- B4: auto-calculated relocation distance (STRETCH, non-destructive) -----
@@ -5703,8 +5862,8 @@ const B4_DISTANCE = { row: "relocation", field: "distance", fromRow: "coords", t
 function findPinByRow(rowId){ return siteMap.pins.find(p=>p.rowId === rowId && p.ok); }
 function renderDistanceSuggestion(){
   if(!siteMap.overlay) return;
-  const legend = siteMap.overlay.querySelector(".smap-legend");
-  if(!legend) return;
+  const host = siteMap.overlay.querySelector(".smap-extras");
+  if(!host) return;
   let box = siteMap.overlay.querySelector(".smap-distsuggest");
   if(box) box.remove();
 
@@ -5754,7 +5913,7 @@ function renderDistanceSuggestion(){
     : "Fills the empty Distance field on the Relocation row. Won't overwrite anything you type.";
   box.appendChild(note);
 
-  legend.parentNode.insertBefore(box, legend.nextSibling);
+  host.appendChild(box);
 }
 
 async function openSiteMap(triggerEl){
@@ -5768,6 +5927,9 @@ async function openSiteMap(triggerEl){
   // effect). If the anchor coordinate moved, syncPinsForReopen clears the manual
   // framing so the view re-centres on the new location below.
   syncPinsForReopen(table);
+  // Take the overlay's visibility back off any capture still running in the
+  // background (§7.5) — its restore is a no-op once `.smap-capturing` is gone.
+  siteMap.overlay.classList.remove("smap-capturing");
   siteMap.overlay.classList.remove("hidden");
   renderSiteMapPanel();
   const closeBtn = siteMap.overlay.querySelector(".smap-close");
@@ -5797,6 +5959,7 @@ async function openSiteMap(triggerEl){
     }
     hideSiteMapOverlay();
     updateIntervalStamp();
+    renderCaptureCard();    // say where the picture stands as soon as the map is up
     renderDiagnostics();
     mapBuildSettleSoon();   // complete the bar if nothing ends up (re)drawing
   }catch(err){
@@ -5816,26 +5979,169 @@ async function closeSiteMap(){
   if(siteMap.moveMode) setMoveMode(false);
   if(siteMap.measureWidget) setMeasureOn(false);
   mapBuildReset();           // stop and clear the build progress bar
-  // Warm the screenshot cache while the view is STILL on screen (§7, A2). Once
-  // the overlay goes display:none the MapView SUSPENDS and stops rendering, so
-  // any later capture would be pins-on-white. Caching the frame the user is
-  // looking at right now means the common path — open, frame, close, tick
-  // "Include map", Copy — pastes exactly what they saw. Bounded and
-  // failure-swallowing so the close is never blocked or thrown out of.
-  if(siteMap.view){
-    try{
-      await Promise.race([
-        getMapImageForCopy(),
-        new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.layer))
-      ]);
-    }catch(_){ /* a copy failure must never block closing the map */ }
-  }
   siteMap.overlay.classList.add("hidden");
   if(siteMap.triggerEl && siteMap.triggerEl.focus){ try{ siteMap.triggerEl.focus(); }catch(_){} }
+
+  // Safety net for users who never press the capture button (§7.5): warm the
+  // cache with the frame that was on screen a moment ago, so "open, frame, close,
+  // tick Include, Copy" still produces a map. It runs AFTER the modal is hidden —
+  // in the background, never delaying the close — because getMapImageForCopy
+  // re-parks the overlay in the non-suspending `.smap-capturing` state itself
+  // (§7, A2). A capture the user made explicitly is left alone: the cache-valid
+  // check returns it untouched, and this path is tagged "auto" in the
+  // diagnostics so an unattended picture is never mistaken for a checked one.
+  if(siteMap.view && !siteMap.screenshot.valid){
+    Promise.race([
+      getMapImageForCopy(),
+      new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.layer))
+    ]).catch(()=>{});   // a copy failure must never surface as a close failure
+  }
 }
 
 /* ---- screenshot for the Word copy (§7) ---- */
-function invalidateScreenshot(){ siteMap.screenshot.valid = false; siteMap.screenshot.dataUrl = null; }
+// Anything that changes what the map shows (a pan, a zoom, a pin edit, a contour
+// change) makes the cached picture a lie, so it is dropped. `source` is KEPT so
+// the UI can distinguish "you never captured one" from "you captured one and
+// then moved the map" — two different things to tell the user (§7.5).
+function invalidateScreenshot(){
+  siteMap.screenshot.valid = false;
+  siteMap.screenshot.dataUrl = null;
+  renderCaptureCard();
+  renderMapStateChip();
+}
+
+/* ---- §7.5: capture what the user can actually see ---------------------------
+   Every earlier attempt at "put the map in the Word copy" captured the map at a
+   moment nobody was looking at it — from the toolbar with the modal shut, or on
+   close, or in a throwaway off-screen view. When such a capture came back as
+   pins-on-white the user only found out after pasting into Word, and there was
+   nothing on screen to compare it against.
+
+   The button in the modal header inverts that: the map is open, un-suspended and
+   in front of the user; the legend and contour caption are drawn ON it; and the
+   resulting PNG is shown straight back as a thumbnail. Whatever is wrong with a
+   capture is now visible before it reaches a document. */
+async function captureVisibleMap(btn){
+  if(!siteMap.view){
+    renderCaptureCard("The map hasn't loaded yet — wait for it to appear, then press the button again.", "err");
+    return null;
+  }
+  if(!activeSitePins().length){
+    renderCaptureCard("No pins are showing, so there is nothing to capture. Tick a pin (or enter a coordinate) first.", "err");
+    return null;
+  }
+
+  const card = siteMap.captureCard;
+  const restoreLabel = btn ? btn.textContent : null;
+  if(btn){ btn.disabled = true; btn.textContent = "Capturing…"; }
+  if(card) card.classList.add("smap-capture--busy");
+  renderCaptureCard("Waiting for the map to finish drawing…");
+
+  // The capture is async (it waits for every layer to settle), which on some
+  // browsers outlives the click's user activation and gets the clipboard write
+  // refused. So hand the clipboard a PROMISE of the image inside the click
+  // instead of a finished blob — the supported way to keep a gesture alive.
+  const capture = (async ()=>{
+    await whenCaptureReady(siteMap.view);
+    const pv = pinsInView(siteMap.view);
+    const shot = await takeViewScreenshot(siteMap.view);
+    const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
+    const blob = await (await fetch(dataUrl)).blob();
+    return { dataUrl, blob, meta: { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside } };
+  })();
+
+  let clipWrite = null;
+  try{
+    if(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem){
+      clipWrite = navigator.clipboard.write([ new ClipboardItem({ "image/png": capture.then(r=> r.blob) }) ]);
+      clipWrite.catch(()=>{});    // reported below; never an unhandled rejection
+    }
+  }catch(_){ clipWrite = null; }  // an implementation that rejects a promised blob
+
+  try{
+    const res = await capture;
+    siteMap.screenshot = { dataUrl: res.dataUrl, valid: true, meta: res.meta, source: "capture", at: Date.now() };
+
+    // The user just made a picture FOR the Word copy, so arm the copy rather than
+    // leaving them to discover a tick box they also had to find (§7.5).
+    includeMapCopy = true;
+    if(includeMapChk) includeMapChk.checked = true;
+
+    let clipOk = false;
+    if(clipWrite){ try{ await clipWrite; clipOk = true; }catch(_){ clipOk = false; } }
+    else if(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem){
+      // No promised-blob support: try once more now that the blob is real.
+      try{
+        await navigator.clipboard.write([ new ClipboardItem({ [res.blob.type || "image/png"]: res.blob }) ]);
+        clipOk = true;
+      }catch(_){ clipOk = false; }
+    }
+
+    const outside = res.meta.pinsTotal - res.meta.pinsInView;
+    let msg = clipOk
+      ? "Captured and copied. Paste it anywhere with Ctrl+V — and it is attached to “Copy table for Word”."
+      : "Captured and attached to “Copy table for Word”. (This browser wouldn't let us put it on the clipboard, so use the table copy.)";
+    if(outside > 0) msg += " " + outside + " of " + res.meta.pinsTotal + " pins are outside this view — press “Fit all pins” if they should be in the picture.";
+    renderCaptureCard(msg, "ok");
+    diagLog("Map picture captured from the open map (" + (clipOk ? "clipboard + " : "") + "attached to the Word copy).");
+    renderMapStateChip();
+    renderDiagnostics();
+    return res.dataUrl;
+  }catch(err){
+    // compositeScreenshot refuses a frame the map never rendered into, so this is
+    // where a blank capture stops — in the modal, with the map still on screen to
+    // compare against, instead of in somebody's scope document.
+    const why = (err && err.message) || "the capture failed";
+    renderCaptureCard(/nearly empty|no image data|did not decode|no dimensions/i.test(why)
+      ? "The map hadn't finished drawing, so the picture came out blank — nothing was copied. Wait for the progress bar at the bottom of the map to finish, then press the button again."
+      : "Couldn't capture the map (" + why + "). Nothing was copied — open Map diagnostics below for the detail.", "err");
+    renderMapStateChip();
+    renderDiagnostics();
+    return null;
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = restoreLabel; }
+    if(card) card.classList.remove("smap-capture--busy");
+  }
+}
+
+// The capture card: what state the picture is in, and the picture itself (§7.5).
+// `msg` is the outcome of something the user just did and wins while it lasts;
+// with no message the card simply describes where things stand.
+function renderCaptureCard(msg, kind){
+  const card = siteMap.captureCard;
+  if(!card) return;
+  const state = card.querySelector(".smap-capture-state");
+  const thumb = card.querySelector(".smap-capture-thumb");
+  const note  = card.querySelector(".smap-capture-thumbnote");
+  const shot  = siteMap.screenshot;
+  const ready = !!(shot.valid && shot.dataUrl);
+
+  let text = msg, tone = kind || "";
+  if(!text){
+    if(ready && shot.source === "capture"){
+      text = "✓ Captured " + fmtClock(shot.at) + " — attached to “Copy table for Word”.";
+      tone = "ok";
+    }else if(shot.source === "capture"){
+      text = "The map has changed since you captured it. Press “📸 Copy map image” again so the picture matches what you see.";
+      tone = "stale";
+    }else if(ready){
+      text = "A picture was made automatically for the last copy. Press “📸 Copy map image” for one you have actually looked at.";
+    }else{
+      text = "Nothing captured yet.";
+    }
+  }
+  if(state){
+    state.textContent = text;
+    state.classList.toggle("smap-capture-state--ok", tone === "ok");
+    state.classList.toggle("smap-capture-state--stale", tone === "stale");
+    state.classList.toggle("smap-capture-state--err", tone === "err");
+  }
+  if(thumb){
+    if(ready){ thumb.src = shot.dataUrl; thumb.classList.remove("hidden"); }
+    else { thumb.removeAttribute("src"); thumb.classList.add("hidden"); }
+  }
+  if(note) note.classList.toggle("hidden", !ready);
+}
 
 // Park the Site Map overlay in the one hidden state that does NOT suspend the
 // MapView, for the duration of a capture (§7, A2). The modal is normally hidden
@@ -5853,6 +6159,12 @@ function beginCaptureVisibility(){
   overlay.classList.remove("hidden");
   overlay.classList.add("smap-capturing");
   return ()=>{
+    // Only re-hide if this capture still owns the overlay's visibility. The
+    // warm-on-close capture runs in the BACKGROUND (§7.5), so the user can
+    // re-open the Site Map while it is still in flight — openSiteMap clears
+    // `.smap-capturing` when it does, and an unconditional re-hide here would
+    // then slam shut the modal they just opened.
+    if(!overlay.classList.contains("smap-capturing")) return;
     overlay.classList.remove("smap-capturing");
     overlay.classList.add("hidden");
   };
@@ -5997,14 +6309,17 @@ async function compositeScreenshot(shot, interval){
       ctx.fillText(e.coord, textX, y + labelFs + lineGap);
     });
   }
-  // Interval stamp (top-right).
+  // Interval stamp (top-right) — the same caption the on-map stamp shows, and
+  // omitted for the same reason when contours are switched off (§7.5).
   ctx.font = fs + "px Segoe UI, Arial, sans-serif";
-  const stamp = "Contours: " + interval + " m LiDAR";
-  const sw = ctx.measureText(stamp).width;
-  ctx.fillStyle = "rgba(255,255,255,0.86)";
-  roundRect(ctx, W - sw - pad*2.4, pad, sw + pad*1.4, fs + pad, 6); ctx.fill();
-  ctx.fillStyle = "#152531";
-  ctx.fillText(stamp, W - sw - pad*1.7, pad + pad*0.3);
+  const stamp = siteMap.contoursOn ? ("Contours: " + interval + " m LiDAR") : "";
+  if(stamp){
+    const sw = ctx.measureText(stamp).width;
+    ctx.fillStyle = "rgba(255,255,255,0.86)";
+    roundRect(ctx, W - sw - pad*2.4, pad, sw + pad*1.4, fs + pad, 6); ctx.fill();
+    ctx.fillStyle = "#152531";
+    ctx.fillText(stamp, W - sw - pad*1.7, pad + pad*0.3);
+  }
   // Attribution (bottom, full width band).
   const band = fs + pad;
   ctx.fillStyle = "rgba(0,0,0,0.55)";
@@ -6105,7 +6420,8 @@ async function getMapImageForCopy(){
         const shot = await takeViewScreenshot(view);
         const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
         const meta = { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside };
-        siteMap.screenshot = { dataUrl, valid: true, meta };
+        siteMap.screenshot = { dataUrl, valid: true, meta, source: "auto", at: Date.now() };
+        renderCaptureCard(); renderMapStateChip();
         return { dataUrl, meta };
       } finally {
         restoreVisibility();
@@ -6167,7 +6483,8 @@ async function captureOffscreen(table){
     const shot = await takeViewScreenshot(view);
     const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
     const meta = { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside };
-    siteMap.screenshot = { dataUrl, valid: true, meta };
+    siteMap.screenshot = { dataUrl, valid: true, meta, source: "auto", at: Date.now() };
+    renderCaptureCard(); renderMapStateChip();
     return { dataUrl, meta };
   } finally {
     try{ if(siteMap.view) siteMap.view.destroy(); }catch(_){}
