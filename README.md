@@ -57,9 +57,32 @@ The editor lets you:
   the built-in palette, or type/paste any emoji. Icons are a visual aid in the
   app only; they are not included in the table copied into Word.
 - Add free-text **fields** and an amber **approval note**.
+- Give any free-text field **Default text** — boiler-plate that starts in that
+  field in the Scope Builder (see [Default text](#default-text-boiler-plate)).
 
 Options are entered one per line. A line starting with `### ` becomes a
 non-selectable heading/divider.
+
+### Default text (boiler-plate)
+
+Each free-text field can carry **Default text**: standard wording written once,
+here, that lands *in the entry box* in the Scope Builder for the end user to
+edit in place. It is a starting answer, not a hint — unlike a placeholder it is
+real text, so it copies into Word if the user leaves it alone.
+
+- Set it in the row editor under **Fields (free-text inputs)** → *Default text*.
+  Leave it blank for a field that starts empty (the previous behaviour).
+- It can span several lines. Line breaks are kept all the way into Word, so a
+  default can be several paragraphs — but a single-line **Text** field can't
+  hold them, so set the field's type to **Text area** first (the editor says so
+  if you type a multi-line default into a Text field).
+- In the Scope Builder the field starts pre-filled; once it has been edited a
+  **↺ Restore default text** link appears under it to put the supplied wording
+  back. **Clear** on a row does the same.
+- Untouched boiler-plate does **not** count towards the "n of m rows filled"
+  progress bar — only an answer the user has actually changed does.
+- Changing a default in Manage Tables fills it into any Scope Builder field the
+  user has never touched. A field they deliberately emptied stays empty.
 
 ### Common rows (shared across tables)
 
@@ -110,6 +133,18 @@ step for other users. Extras you get for free:
 **With no store configured (offline mode):** edits are saved in your browser
 only. Click **Export JSON**, upload the file to your shared location as
 `definitions.json`, and others use **Reset to published file** to pick it up.
+
+## Copying into Word
+
+**Copy table for Word** puts the finished table on the clipboard as rich HTML
+(with a plain-text fallback), ready to paste straight into a document.
+
+Free-text answers keep the **line breaks the user typed**. A blank line between
+two chunks of text in a field, or in a row's note, stays a blank line in Word —
+the copy emits `<br>` for each newline rather than letting HTML collapse it to a
+space, so multi-paragraph scope text no longer runs together. The plain-text
+fallback puts one table row on one line, so there breaks collapse to `; ` (the
+same separator it already uses between a row's several answers).
 
 ## Property Services (second table)
 
@@ -273,7 +308,9 @@ controls what that key may do.
           // "optionSet": "comms",                // … OR reference a shared set
           "note": "Requires GM approval",         // optional amber note
           "fields": [                             // optional free-text inputs
-            { "key": "detail", "label": "Detail", "type": "text" }  // or "textarea"
+            { "key": "detail", "label": "Detail", "type": "text",   // or "textarea"
+              "placeholder": "grey hint text",     // optional, never copied into Word
+              "default": "Boiler-plate the user edits" }  // optional, see below
           ],
           "mapPin": {                             // optional: this row carries a coordinate for the Site Map
             "field": "detail",                    // which of the row's `fields` holds the lat/long
@@ -295,6 +332,19 @@ A table row is therefore **either** an inline row (the object shape above)
 **or** a reference `{ "shared": "<id>" }` pointing at a `sharedRows` entry with
 that `id`. References are resolved at render time, so one shared definition can
 appear in any number of tables; each table still collects its own answers.
+
+### `fields[].default` — boiler-plate a user edits
+
+`default` is the field's starting **value**: it is written into the input in the
+Scope Builder, where the user edits it in place, and it copies into Word like any
+other answer. That is what separates it from `placeholder`, which is only grey
+hint text and never appears in the output. A `default` may contain newlines —
+they survive into Word — but only on a `"type": "textarea"` field, because a
+single-line `"text"` input cannot hold a line break (the app flattens one to a
+space, and the row editor warns about it).
+
+See [Default text (boiler-plate)](#default-text-boiler-plate) for how it behaves
+in the Scope Builder.
 
 ### `mapPin` — declaring a coordinate row for the Site Map
 

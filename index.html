@@ -235,6 +235,14 @@
     width:100%; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:.87rem; font-family:inherit;
     resize:vertical;
   }
+  /* Shown only once a field carrying boiler-plate ("Default text", set in
+     Manage Tables) has been edited away from it — a way back to the supplied
+     wording without re-typing it. */
+  .fields-list .field-revert{
+    margin-top:3px; font-size:.72rem; color:var(--accent-dark); background:none; border:none;
+    padding:0; cursor:pointer; font-family:inherit; font-weight:600;
+  }
+  .fields-list .field-revert:hover{ text-decoration:underline; }
 
   .note-toggle{
     display:inline-flex; align-items:center; gap:5px; font-size:.76rem; color:var(--accent-dark);
@@ -361,11 +369,22 @@
   .opt-source{ display:flex; gap:16px; font-size:.82rem; margin:2px 0 8px; }
   .opt-source label{ display:flex; align-items:center; gap:5px; cursor:pointer; text-transform:none; letter-spacing:0; font-weight:500; color:var(--ink); }
 
-  .field-editor{ display:flex; flex-direction:column; gap:7px; }
-  .field-editor .fe-row{ display:grid; grid-template-columns:1fr 1.4fr 110px 28px; gap:7px; align-items:center; }
-  .field-editor .fe-row input, .field-editor .fe-row select{
+  .field-editor{ display:flex; flex-direction:column; gap:12px; }
+  .field-editor .fe-row{ display:flex; flex-direction:column; gap:6px; }
+  .field-editor .fe-main{ display:grid; grid-template-columns:1fr 1.4fr 110px 28px; gap:7px; align-items:center; }
+  .field-editor .fe-row input, .field-editor .fe-row select, .field-editor .fe-row textarea{
     border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:.82rem; font-family:inherit;
   }
+  /* Default ("boiler-plate") text for a field. A textarea, not an input, so
+     multi-line boiler-plate can be typed straight in — those line breaks are
+     kept all the way into the Word copy. */
+  .field-editor .fe-default{ display:block; }
+  .field-editor .fe-default > span{
+    display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--ink-soft); font-weight:600; margin-bottom:3px;
+  }
+  .field-editor .fe-default textarea{ width:100%; min-height:50px; resize:vertical; }
+  .field-editor .fe-hint{ font-size:.72rem; color:var(--amber); margin-top:3px; }
 
   .oset{ border:1px solid var(--line); border-radius:7px; padding:10px 12px; margin-bottom:10px; }
   .oset-head{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
@@ -584,7 +603,7 @@
     .row-item{ border-right:none; border-bottom:1px solid var(--line); }
     .meta-card{ grid-template-columns:1fr; }
     .ed-grid{ grid-template-columns:1fr; }
-    .field-editor .fe-row{ grid-template-columns:1fr 1fr; }
+    .field-editor .fe-main{ grid-template-columns:1fr 1fr; }
 
     /* The sticky block carries the header, nav, meta card, tabs and progress
        bar; at phone widths every one of those wraps onto extra lines, so trim
@@ -1014,8 +1033,12 @@
    ROW = {
      id, item, instruction, type:"single"|"multi"|"none",
      icon?,   // emoji shown beside the item name in the Scope Builder
-     note?, optionSet? (name) OR options?[] , fields?:[{key,label,type,placeholder?}]
+     note?, optionSet? (name) OR options?[] ,
+     fields?:[{key,label,type,placeholder?,default?}]
    }
+   A field's `default` is boiler-plate text pre-loaded into that input in the
+   Scope Builder — a starting point the end user edits in place (unlike
+   `placeholder`, which is only grey prompt text and never lands in Word).
    type: single -> radio, multi -> checkbox, none -> fields/text only.
    An option string beginning with "### " renders as a non-selectable divider.
    A table row may instead be { shared:<id> } — a reference to a sharedRows
@@ -1188,6 +1211,10 @@ function normalizeRow(r, ri){
     row.fields = r.fields.map(f=>{
       const field = { key: f.key || "", label: f.label || "", type: (f.type === "textarea" ? "textarea" : "text") };
       if(f.placeholder) field.placeholder = f.placeholder;
+      // Boiler-plate starting text. Kept verbatim, line breaks and all — it is
+      // an answer the user edits, not a hint, so it must survive round-tripping
+      // through the store/export exactly as an editor typed it.
+      if(f.default != null && String(f.default) !== "") field.default = String(f.default);
       return field;
     });
   }
@@ -1314,8 +1341,24 @@ let activeTableId = null;
 // so the clear can be undone. Shape: { tableId, data } or null when nothing to undo.
 let clearedSnapshot = null;
 
+/* Boiler-plate starting text for one field, as configured in Manage Tables.
+   A plain <input> (type "text") cannot hold line breaks — the browser strips
+   them on assignment — so a multi-line default is flattened for those; the row
+   editor steers authors to "Text area" when their default has line breaks. */
+function fieldDefaultText(field){
+  if(!field || field.default == null) return "";
+  const v = String(field.default);
+  return field.type === "textarea" ? v : v.replace(/\s*(?:\r\n|\r|\n)+\s*/g, " ");
+}
+function defaultFieldValues(row){
+  const out = {};
+  (row.fields || []).forEach(f=>{ if(f.key && f.default != null) out[f.key] = fieldDefaultText(f); });
+  return out;
+}
 function emptyRowState(row){
-  return { selected: row.type === "multi" ? [] : null, fields:{}, note:"" };
+  // A fresh (or cleared) row starts holding its fields' boiler-plate, so
+  // "Clear" hands the user back the supplied wording rather than a blank box.
+  return { selected: row.type === "multi" ? [] : null, fields: defaultFieldValues(row), note:"" };
 }
 // Rebuild builder state to match the current definitions, preserving any
 // in-progress answers whose table/row still exist and whose type is compatible.
@@ -1328,9 +1371,17 @@ function reconcileState(){
       if(prev){
         const wantsArray = r.type === "multi";
         const hadArray = Array.isArray(prev.selected);
+        // Boiler-plate added (or changed) in Manage Tables since this row was
+        // last reconciled fills only fields the user has never touched — an
+        // *absent* key. A field they emptied holds "" and stays empty, so the
+        // default can never grow back over a deliberate deletion.
+        const fields = prev.fields || {};
+        (r.fields || []).forEach(f=>{
+          if(f.key && f.default != null && fields[f.key] === undefined) fields[f.key] = fieldDefaultText(f);
+        });
         next[t.id][r.id] = {
           selected: wantsArray ? (hadArray ? prev.selected : []) : (hadArray ? null : prev.selected),
-          fields: prev.fields || {},
+          fields,
           note: prev.note || ""
         };
       } else {
@@ -1401,7 +1452,14 @@ function renderTabs(){
 function rowHasContent(table, row){
   const s = state[table.id][row.id];
   const hasSelection = row.type === "multi" ? s.selected.length > 0 : !!s.selected;
-  const hasFieldValue = row.fields ? row.fields.some(f => (s.fields[f.key]||"").trim().length>0) : false;
+  // A field still holding exactly its configured boiler-plate is not something
+  // the user has filled in, so it leaves the row "empty" for the progress bar
+  // and the row highlight — otherwise a table of defaults reads as half done.
+  // It is still copied into Word (see rowOutputLines); this is only progress.
+  const hasFieldValue = row.fields ? row.fields.some(f => {
+    const v = (s.fields[f.key]||"").trim();
+    return v.length > 0 && v !== fieldDefaultText(f).trim();
+  }) : false;
   const hasNote = s.note.trim().length>0;
   return hasSelection || hasFieldValue || hasNote;
 }
@@ -1576,11 +1634,45 @@ function renderRows(){
         fieldEl.appendChild(lbl);
         const input = document.createElement(f.type === "textarea" ? "textarea" : "input");
         if(f.type !== "textarea") input.type = "text";
-        else input.rows = 2;
+        // The value is already seeded with the field's boiler-plate by
+        // emptyRowState / reconcileState, so the user simply edits what's there.
         input.value = s.fields[f.key] || "";
         input.placeholder = f.placeholder || "";
-        input.addEventListener("input", ()=>{ s.fields[f.key] = input.value; renderPreviewAndProgress(); });
+        // Boiler-plate is there to be read and edited in place, so open the box
+        // far enough to show it rather than clipping it to two lines.
+        if(f.type === "textarea"){
+          const lineCount = input.value.split(/\r\n|\r|\n/).length;
+          input.rows = Math.min(10, Math.max(2, lineCount));
+        }
         fieldEl.appendChild(input);
+
+        // Once the boiler-plate has been edited away, offer it back rather than
+        // making the user re-type it (or hunt for it in Manage Tables).
+        const dflt = fieldDefaultText(f);
+        let revert = null;
+        const syncRevert = ()=>{
+          if(!revert) return;
+          revert.hidden = (input.value === dflt);
+        };
+        if(f.default != null){
+          revert = document.createElement("button");
+          revert.type = "button";
+          revert.className = "field-revert";
+          revert.textContent = "↺ Restore default text";
+          revert.addEventListener("click", ()=>{
+            input.value = dflt;
+            s.fields[f.key] = dflt;
+            syncRevert();
+            renderPreviewAndProgress();
+          });
+          fieldEl.appendChild(revert);
+          syncRevert();
+        }
+        input.addEventListener("input", ()=>{
+          s.fields[f.key] = input.value;
+          syncRevert();
+          renderPreviewAndProgress();
+        });
         // Coordinate fields (those a mapPin points at) get live validation, a
         // swapped-lat/lon fix, and DMS-paste conversion. See §3.
         if(isCoordField(row, f.key)) attachCoordValidation(fieldEl, input, s, f.key);
@@ -1687,6 +1779,20 @@ function escapeHtml(str){
   return String(str)
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
     .replace(/"/g,"&quot;");
+}
+/* Escape a value for the Word copy, KEEPING the line breaks the user typed.
+   Free-text answers (and multi-line boiler-plate defaults) are routinely used to
+   separate chunks of a scope; HTML collapses a bare newline to a space, so those
+   breaks used to disappear on the way into Word and the paragraphs ran together.
+   Use this — not escapeHtml — for anything a user can type a newline into. */
+function escapeHtmlLines(str){
+  return escapeHtml(str).replace(/\r\n|\r|\n/g, "<br>");
+}
+/* The plain-text/TSV fallback puts one table row on one line, so an embedded
+   newline there would split the row in two. Collapse breaks with the same "; "
+   that already joins a row's several output lines. */
+function flattenLines(str){
+  return String(str).replace(/\s*(?:\r\n|\r|\n)+\s*/g, "; ");
 }
 // Escape a value for use inside a CSS attribute selector.
 function cssEscape(str){
@@ -1847,7 +1953,7 @@ function buildHtmlTable(){
   effectiveRows(table).forEach(row=>{
     const lines = rowOutputLines(table, row);
     if(!lines.length && !includeEmpty) return;
-    const detail = lines.length ? lines.map(escapeHtml).join("<br>") : "";
+    const detail = lines.length ? lines.map(escapeHtmlLines).join("<br>") : "";
     rowsHtml += `<tr>
       <td style="font-weight:bold;vertical-align:top;padding:6px 8px;border:1px solid #999;width:28%;">${escapeHtml(row.item)}</td>
       <td style="vertical-align:top;padding:6px 8px;border:1px solid #999;">${detail}</td>
@@ -1881,7 +1987,7 @@ function buildPlainText(){
   effectiveRows(table).forEach(row=>{
     const lines = rowOutputLines(table, row);
     if(!lines.length && !includeEmpty) return;
-    out += `${row.item}\t${lines.join("; ")}\n`;
+    out += `${row.item}\t${lines.map(flattenLines).join("; ")}\n`;
   });
   return out;
 }
@@ -2777,6 +2883,8 @@ function renderFieldEditor(host, row){
   fields.forEach((f, i)=>{
     const r = document.createElement("div");
     r.className = "fe-row";
+    const main = document.createElement("div");
+    main.className = "fe-main";
     const key = document.createElement("input");
     key.type = "text"; key.placeholder = "key"; key.value = f.key;
     key.addEventListener("change", ()=>{ f.key = key.value.trim(); afterTextChange(); });
@@ -2785,9 +2893,44 @@ function renderFieldEditor(host, row){
     label.addEventListener("input", ()=>{ f.label = label.value; afterTextChange(); });
     const type = document.createElement("select");
     type.innerHTML = `<option value="text"${f.type==="text"?" selected":""}>Text</option><option value="textarea"${f.type==="textarea"?" selected":""}>Text area</option>`;
-    type.addEventListener("change", ()=>{ f.type = type.value; afterTextChange(); });
     const del = iconBtn("🗑","Remove field", ()=>{ row.fields.splice(i,1); if(!row.fields.length) delete row.fields; afterStructuralChange(); }, true);
-    r.appendChild(key); r.appendChild(label); r.appendChild(type); r.appendChild(del);
+    main.appendChild(key); main.appendChild(label); main.appendChild(type); main.appendChild(del);
+    r.appendChild(main);
+
+    // Default ("boiler-plate") text. Whatever is typed here starts in the
+    // matching input in the Scope Builder for the end user to edit in place —
+    // so a standard paragraph is written once, here, instead of by every user.
+    const defWrap = document.createElement("label");
+    defWrap.className = "fe-default";
+    const defLbl = document.createElement("span");
+    defLbl.textContent = "Default text (pre-filled in the Scope Builder, editable there)";
+    const def = document.createElement("textarea");
+    def.rows = 2;
+    def.placeholder = "Boiler-plate text this field starts with — leave blank for an empty field";
+    def.value = f.default || "";
+    const hint = document.createElement("div");
+    hint.className = "fe-hint";
+    hint.hidden = true;
+    // A single-line <input> cannot hold line breaks (the browser strips them),
+    // so multi-line boiler-plate only survives on a "Text area" field.
+    const syncHint = ()=>{
+      const multiline = /\r\n|\r|\n/.test(def.value);
+      const lost = multiline && f.type !== "textarea";
+      hint.hidden = !lost;
+      hint.textContent = lost
+        ? "This default has line breaks — set the type to “Text area” to keep them."
+        : "";
+    };
+    def.addEventListener("input", ()=>{
+      if(def.value === "") delete f.default; else f.default = def.value;
+      syncHint();
+      afterTextChange();
+    });
+    type.addEventListener("change", ()=>{ f.type = type.value; syncHint(); afterTextChange(); });
+    syncHint();
+    defWrap.appendChild(defLbl); defWrap.appendChild(def); defWrap.appendChild(hint);
+    r.appendChild(defWrap);
+
     host.appendChild(r);
   });
 }
@@ -3603,7 +3746,7 @@ function buildPropertyServicesHtml(table){
     } else if(row.kind === "question"){
       rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${escapeHtml(psQuestionValue(table, row))}</td></tr>`;
     } else if(row.kind === "text"){
-      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${escapeHtml(psEffectiveText(table, row.id, row.source, ""))}</td></tr>`;
+      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${escapeHtmlLines(psEffectiveText(table, row.id, row.source, ""))}</td></tr>`;
     } else if(row.kind === "sectionHeader"){
       rows += `<tr><td colspan="2" style="background:#f0f0f0;font-style:italic;font-weight:bold;padding:6px 8px;${B}">${escapeHtml(row.label)}</td></tr>`;
     } else if(row.kind === "date"){
@@ -3612,7 +3755,7 @@ function buildPropertyServicesHtml(table){
   });
   if(ps.note){
     rows += `<tr><td colspan="2" style="font-weight:bold;padding:6px 8px;${B}">Note</td></tr>`;
-    rows += `<tr><td colspan="2" style="padding:6px 8px;${B}">${escapeHtml(ps.note)}</td></tr>`;
+    rows += `<tr><td colspan="2" style="padding:6px 8px;${B}">${escapeHtmlLines(ps.note)}</td></tr>`;
   }
   return `<table style="border-collapse:collapse;width:100%;font-family:Calibri,Arial,sans-serif;font-size:11pt;">${rows}</table>`;
 }
@@ -3626,7 +3769,7 @@ function buildPropertyServicesText(table){
     } else if(row.kind === "question"){
       out += `${row.label}\t${psQuestionValue(table, row)}\n`;
     } else if(row.kind === "text"){
-      out += `${row.label}\t${psEffectiveText(table, row.id, row.source, "")}\n`;
+      out += `${row.label}\t${flattenLines(psEffectiveText(table, row.id, row.source, ""))}\n`;
     } else if(row.kind === "sectionHeader"){
       out += `${row.label}\n`;
     } else if(row.kind === "date"){
