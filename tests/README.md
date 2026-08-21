@@ -289,3 +289,34 @@ PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
 PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/map-capture-button.test.mjs
 ```
+
+## `field-default-text.test.mjs` — default text + line breaks into Word
+
+Guards the two free-text changes:
+
+- **Default text.** A free-text field can carry boiler-plate (`fields[].default`,
+  set in *Manage Tables*) that lands **in the input** in the Scope Builder for the
+  end user to edit in place. The test asserts the default survives normalisation
+  and export, seeds builder state and the on-screen inputs, that a *pristine*
+  default does not count towards the progress bar (only an edited one does), that
+  **Clear** and the new *↺ Restore default text* link hand the wording back, that
+  a default added later fills only fields the user has never touched — never a
+  field they deliberately emptied — and that the row editor's *Default text* box
+  writes/clears the definition and flags multi-line boiler-plate on a single-line
+  **Text** field (which cannot hold line breaks).
+- **Line breaks into Word.** The copied HTML escaped values but left newlines
+  bare, and HTML treats a bare newline as a space — so the breaks users type to
+  separate chunks of scope text vanished on paste. The test asserts the copy now
+  emits `<br>` (a blank line becomes `<br><br>`), that markup in a value is still
+  escaped around them, and that the plain-text/TSV fallback keeps one table row on
+  one line by collapsing breaks to `; `.
+
+Hermetic — the central store is blocked and nothing else is fetched (no map, no
+QLD services, no Esri CDN); the definitions under test are applied through the
+app's own `applyDefinitions`. Same invocation as the others:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/field-default-text.test.mjs
+```
