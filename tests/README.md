@@ -320,3 +320,62 @@ PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
 PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/field-default-text.test.mjs
 ```
+
+## `word-column-widths.test.mjs` — the one-character-wide first column
+
+Guards the column widths of both copied tables. Pasted into Word, the left-hand
+column (*Item*, and the Property Services label column) collapsed to about one
+character wide and had to be dragged out by hand on every row. The cause is
+Word's **autofit**, which re-computes column widths over pasted HTML and only
+stands down when the table is declared fixed *and* every column has an explicit
+width — the old copy was `width:100%` with a single `width:28%` (38% in Property
+Services) on one cell per body row, and nothing at all on the header cells or the
+full-width `colspan="2"` rows.
+
+The test drives the real `buildHtmlTable` / `buildPropertyServicesHtml` and parses
+the emitted HTML with the browser's own parser (not by regex), asserting that both
+tables carry `table-layout:fixed`, an absolute table width, a `<colgroup>` with a
+`<col>` per column, and a width on **every** cell — `colspan="2"` cells at the full
+table width, two-column rows at the **1/3 : 2/3** split the user asked for — with
+the cm CSS width and the px `width` attribute agreeing, the column widths adding
+up to the table width, and no percentage cell width left anywhere.
+
+Hermetic — the central store is blocked and nothing else is fetched (no map, no
+QLD services, no Esri CDN). Same invocation as the others:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium \
+  node tests/word-column-widths.test.mjs
+```
+
+## `map-reopen-refit.test.mjs` — "the map opens where the last station was"
+
+Guards the framing on re-open. The MapView is kept alive between opens by design,
+and the first manual pan/zoom latches `siteMap.userHasAdjustedView` so `fitView`
+leaves the framing alone. That flag used to survive a **close**, so scoping one
+station, closing the modal and opening it again for the next one landed on the
+previous station's framing. Clearing it only when the anchor *coordinate* changed
+(the A3 rule) missed every other case — a different anchor row, no previous anchor
+to compare against, or simply wanting the pins re-framed.
+
+Every open now re-frames on the pins showing at that moment. The test drives the
+real `openSiteMap` / `fitView` against a stand-in view and asserts:
+
+- `fitView({force:true})` re-frames a manually adjusted view and lands on the
+  anchor pin, while plain `fitView()` still honours it (no surprise mid-session
+  re-frame — the behaviour `map-copy-recenter.test.mjs` also pins);
+- `openSiteMap` drops the manual framing and frames **once**, passing `force`, so
+  the warm-on-close capture restoring the flag mid-open cannot strand the old view;
+- a second open — the reported workflow, two scoping sessions without closing the
+  tool — re-frames again;
+- **Reset view** and **Fit all pins** are still there for mid-session re-framing.
+
+Hermetic — the central store, the Esri CDN and every QLD host are blocked, and no
+WebGL view is created. Same invocation as the others:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium \
+  node tests/map-reopen-refit.test.mjs
+```

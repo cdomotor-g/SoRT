@@ -1944,6 +1944,47 @@ forumDateEl.value =
   String(today.getMonth() + 1).padStart(2, "0") + "/" +
   today.getFullYear();
   
+/* ---- Word table geometry: column widths that survive the paste ----------
+   Word runs its OWN autofit over pasted HTML, and on these tables it collapsed
+   the left-hand Item column to about one character wide — every row had to be
+   dragged wider by hand in the report. Autofit only stands down when the table
+   is declared fixed-layout AND every column has an explicit width, so the copy
+   now emits all three things Word needs:
+     * `table-layout:fixed` + an absolute table width — Word writes a fixed
+       table layout instead of re-running autofit over the content;
+     * a `<colgroup>` with one `<col>` per column — Word takes its column grid
+       straight from it;
+     * a width on EVERY cell, the full-width `colspan="2"` header cells
+       included — a cell with no width is an invitation for autofit to guess.
+   Widths are absolute (cm, mirrored as pixels in the legacy `width` attribute
+   older Word builds read first) rather than percentages, because Word re-runs
+   autofit over percentage widths and the narrow column collapses again.
+   WORD_TABLE_CM is the A4-portrait text width (21 cm page less 2.5 cm margins
+   each side). To change the split — 50/50, say — edit WORD_COL_SPLIT; the two
+   fractions must add up to 1. */
+const WORD_TABLE_CM = 16;
+const WORD_COL_SPLIT = [1/3, 2/3];   // Item column, Details column
+
+const CM_TO_PX = 96 / 2.54;          // CSS reference pixels per cm
+function wordWidthPair(cm){
+  const rounded = Math.round(cm * 100) / 100;
+  return { cm: rounded, px: Math.round(rounded * CM_TO_PX) };
+}
+const WORD_COLS = WORD_COL_SPLIT.map(f=> wordWidthPair(WORD_TABLE_CM * f));
+const WORD_FULL = wordWidthPair(WORD_TABLE_CM);
+
+// Width of column `i`, or of the whole table when `i` is omitted (a colspan cell).
+function wordW(i){ return (i == null ? WORD_FULL : WORD_COLS[i]); }
+// `style` fragment — always ends in ";" so it can be concatenated with the rest.
+function wordWStyle(i){ return `width:${wordW(i).cm}cm;`; }
+// Legacy `width` attribute, leading space included so it drops straight after `<td`.
+function wordWAttr(i){ return ` width="${wordW(i).px}"`; }
+
+const WORD_TABLE_STYLE = `border-collapse:collapse;table-layout:fixed;width:${WORD_FULL.cm}cm;font-family:Calibri,Arial,sans-serif;font-size:11pt;`;
+const WORD_COLGROUP = `<colgroup>${WORD_COLS.map(c=>`<col style="width:${c.cm}cm;">`).join("")}</colgroup>`;
+// Open a table with the fixed geometry above.
+function wordTableOpen(){ return `<table${wordWAttr()} style="${WORD_TABLE_STYLE}">${WORD_COLGROUP}`; }
+
 function buildHtmlTable(){
   const table = activeTable();
   const includeHeader = includeHeaderEl.checked;
@@ -1955,21 +1996,21 @@ function buildHtmlTable(){
     if(!lines.length && !includeEmpty) return;
     const detail = lines.length ? lines.map(escapeHtmlLines).join("<br>") : "";
     rowsHtml += `<tr>
-      <td style="font-weight:bold;vertical-align:top;padding:6px 8px;border:1px solid #999;width:28%;">${escapeHtml(row.item)}</td>
-      <td style="vertical-align:top;padding:6px 8px;border:1px solid #999;">${detail}</td>
+      <td${wordWAttr(0)} style="font-weight:bold;vertical-align:top;padding:6px 8px;border:1px solid #999;${wordWStyle(0)}">${escapeHtml(row.item)}</td>
+      <td${wordWAttr(1)} style="vertical-align:top;padding:6px 8px;border:1px solid #999;${wordWStyle(1)}">${detail}</td>
     </tr>`;
   });
 
   let headHtml = "";
   if(includeHeader){
-    headHtml += `<tr><td colspan="2" style="background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;border:1px solid #999;">SoRT Forum Agreed Remediation</td></tr>`;
-    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><b>SoRT Forum Date:</b> ${escapeHtml(forumDateEl.value || "dd/mm/yyyy")}</td></tr>`;
-    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><b>SoRT Forum Attendees:</b> ${escapeHtml(forumAttendeesEl.value || "")}</td></tr>`;
-    headHtml += `<tr><td colspan="2" style="padding:6px 8px;border:1px solid #999;"><i><b>${escapeHtml(table.title)}</b></i></td></tr>`;
+    headHtml += `<tr><td colspan="2"${wordWAttr()} style="background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;border:1px solid #999;${wordWStyle()}">SoRT Forum Agreed Remediation</td></tr>`;
+    headHtml += `<tr><td colspan="2"${wordWAttr()} style="padding:6px 8px;border:1px solid #999;${wordWStyle()}"><b>SoRT Forum Date:</b> ${escapeHtml(forumDateEl.value || "dd/mm/yyyy")}</td></tr>`;
+    headHtml += `<tr><td colspan="2"${wordWAttr()} style="padding:6px 8px;border:1px solid #999;${wordWStyle()}"><b>SoRT Forum Attendees:</b> ${escapeHtml(forumAttendeesEl.value || "")}</td></tr>`;
+    headHtml += `<tr><td colspan="2"${wordWAttr()} style="padding:6px 8px;border:1px solid #999;${wordWStyle()}"><i><b>${escapeHtml(table.title)}</b></i></td></tr>`;
   }
-  headHtml += `<tr><td style="background:#e8e8e8;font-weight:bold;padding:6px 8px;border:1px solid #999;">Item</td><td style="background:#e8e8e8;font-weight:bold;padding:6px 8px;border:1px solid #999;">Details</td></tr>`;
+  headHtml += `<tr><td${wordWAttr(0)} style="background:#e8e8e8;font-weight:bold;padding:6px 8px;border:1px solid #999;${wordWStyle(0)}">Item</td><td${wordWAttr(1)} style="background:#e8e8e8;font-weight:bold;padding:6px 8px;border:1px solid #999;${wordWStyle(1)}">Details</td></tr>`;
 
-  return `<table style="border-collapse:collapse;width:100%;font-family:Calibri,Arial,sans-serif;font-size:11pt;">${headHtml}${rowsHtml}</table>`;
+  return `${wordTableOpen()}${headHtml}${rowsHtml}</table>`;
 }
 
 function buildPlainText(){
@@ -3733,12 +3774,16 @@ function refreshPsLinkBar(scopeEl, table, key, hasSource, sourceKind){
 function buildPropertyServicesHtml(table){
   const ps = psDef();
   const B = "border:1px solid #999;";
-  const cell = `style="padding:6px 8px;${B}vertical-align:top;"`;
-  const labelCell = `style="padding:6px 8px;${B}vertical-align:top;font-weight:bold;width:38%;"`;
-  let rows = `<tr><td colspan="2" style="background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;${B}">${escapeHtml(ps.title)}</td></tr>`;
+  // Same fixed geometry as the scope table above — Word's autofit squashed this
+  // table's label column to a character wide too, so every cell carries its
+  // column's width and the full-width rows carry the table's.
+  const cell = `${wordWAttr(1)} style="padding:6px 8px;${B}vertical-align:top;${wordWStyle(1)}"`;
+  const labelCell = `${wordWAttr(0)} style="padding:6px 8px;${B}vertical-align:top;font-weight:bold;${wordWStyle(0)}"`;
+  const spanCell = (extra)=> `colspan="2"${wordWAttr()} style="${extra}padding:6px 8px;${B}${wordWStyle()}"`;
+  let rows = `<tr><td colspan="2"${wordWAttr()} style="background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;${B}${wordWStyle()}">${escapeHtml(ps.title)}</td></tr>`;
   ps.rows.forEach(row=>{
     if(row.kind === "coordGroup"){
-      rows += `<tr><td colspan="2" style="background:#e8e8e8;font-weight:bold;padding:6px 8px;${B}">${escapeHtml(row.label)}</td></tr>`;
+      rows += `<tr><td ${spanCell("background:#e8e8e8;font-weight:bold;")}>${escapeHtml(row.label)}</td></tr>`;
       (row.coords||[]).forEach(c=>{
         const v = psEffectiveText(table, `${row.id}.${c.key}`, c.source, c.default);
         rows += `<tr><td ${labelCell}>${escapeHtml(c.label)}</td><td ${cell}>${escapeHtml(v)}</td></tr>`;
@@ -3748,16 +3793,16 @@ function buildPropertyServicesHtml(table){
     } else if(row.kind === "text"){
       rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${escapeHtmlLines(psEffectiveText(table, row.id, row.source, ""))}</td></tr>`;
     } else if(row.kind === "sectionHeader"){
-      rows += `<tr><td colspan="2" style="background:#f0f0f0;font-style:italic;font-weight:bold;padding:6px 8px;${B}">${escapeHtml(row.label)}</td></tr>`;
+      rows += `<tr><td ${spanCell("background:#f0f0f0;font-style:italic;font-weight:bold;")}>${escapeHtml(row.label)}</td></tr>`;
     } else if(row.kind === "date"){
       rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}:</td><td ${cell}>${escapeHtml(psEffectiveText(table, row.id, null, todayStr()))}</td></tr>`;
     }
   });
   if(ps.note){
-    rows += `<tr><td colspan="2" style="font-weight:bold;padding:6px 8px;${B}">Note</td></tr>`;
-    rows += `<tr><td colspan="2" style="padding:6px 8px;${B}">${escapeHtmlLines(ps.note)}</td></tr>`;
+    rows += `<tr><td ${spanCell("font-weight:bold;")}>Note</td></tr>`;
+    rows += `<tr><td ${spanCell("")}>${escapeHtmlLines(ps.note)}</td></tr>`;
   }
-  return `<table style="border-collapse:collapse;width:100%;font-family:Calibri,Arial,sans-serif;font-size:11pt;">${rows}</table>`;
+  return `${wordTableOpen()}${rows}</table>`;
 }
 function buildPropertyServicesText(table){
   const ps = psDef();
@@ -5546,10 +5591,13 @@ async function whenViewDisplayed(view){
 }
 
 // Fit the view to the active pins, centred on the anchor pin, unless the user
-// has taken manual control of the view (§6.1, §6.2).
-async function fitView(){
+// has taken manual control of the view (§6.1, §6.2). `opts.force` ignores that
+// manual framing — the modal's open path passes it so a re-open always re-frames
+// on the current pins, whatever the user did to the view last session.
+async function fitView(opts){
   const view = siteMap.view;
-  if(!view || siteMap.userHasAdjustedView) return;
+  if(!view) return;
+  if(siteMap.userHasAdjustedView && !(opts && opts.force)) return;
   await whenViewDisplayed(view);      // a just-re-shown container has re-measured
   const pins = activeSitePins();
   if(!pins.length) return;
@@ -6387,9 +6435,20 @@ async function openSiteMap(triggerEl){
   clearSiteMapBanners();
   // A3: always re-read pins from app state on every open (the view is kept alive
   // between opens, so a table edit made while it was closed must still take
-  // effect). If the anchor coordinate moved, syncPinsForReopen clears the manual
-  // framing so the view re-centres on the new location below.
+  // effect), and note in the diagnostics whether the anchor coordinate moved.
   syncPinsForReopen(table);
+  // Every open then re-frames on the pins that are showing NOW. The MapView is
+  // kept alive between opens, so without this the pan/zoom from the LAST scoping
+  // session was still on screen when the modal reopened for the next one — the
+  // user landed on the previous station and had to hunt for their own pins. (A3
+  // only dropped the framing when the anchor COORDINATE had moved, which misses a
+  // different anchor row, a previous session with no anchor to compare against,
+  // and simply wanting the pins back in view.) Manual framing still holds for as
+  // long as the modal stays open — "Reset view" / "Fit all pins" are still there
+  // mid-session — it just does not survive a close. `fitView({ force:true })`
+  // below re-fits regardless, so a background capture-on-close restoring this
+  // flag mid-open can't strand the old view either.
+  siteMap.userHasAdjustedView = false;
   // Take the overlay's visibility back off any capture still running in the
   // background (§7.5) — its restore is a no-op once `.smap-capturing` is gone.
   siteMap.overlay.classList.remove("smap-capturing");
@@ -6414,11 +6473,13 @@ async function openSiteMap(triggerEl){
       // buildView clears the overlay on view.when() and streams layers in (§4.4).
       await buildView(siteMap.mapHost);
       drawPins();
-      await fitView();
+      await fitView({ force:true });
     } else {
-      // Re-use the existing view: re-draw pins, re-fit unless user-adjusted (§6).
+      // Re-use the existing view: re-draw the pins and re-fit to them. The re-fit
+      // is forced because the view survived the last open with that session's
+      // framing on it (§6).
       drawPins();
-      await fitView();
+      await fitView({ force:true });
       // While the modal was hidden its container was display:none, so the view
       // was SUSPENDED and its layers stopped drawing (A2) — they all have to come
       // back now. Track them, or the bar completes over a map that is still

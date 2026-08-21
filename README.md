@@ -139,6 +139,29 @@ only. Click **Export JSON**, upload the file to your shared location as
 **Copy table for Word** puts the finished table on the clipboard as rich HTML
 (with a plain-text fallback), ready to paste straight into a document.
 
+**Column widths land as 1/3 : 2/3.** Word runs its own autofit over pasted HTML,
+and it used to collapse the left-hand column of both tables (*Item*, and the
+Property Services label column) to about one character wide — every row had to
+be dragged wider by hand in the report. The copy now declares the geometry
+firmly enough that autofit stands down: a **fixed table layout**, an absolute
+table width, a `<colgroup>` carrying the column widths, and an explicit width on
+**every** cell — the full-width `colspan="2"` heading rows included — in cm
+(CSS) and in px (the legacy `width` attribute older Word builds read first).
+Widths are absolute rather than percentages because Word re-runs autofit over
+percentage widths and the narrow column collapses again.
+
+The defaults sit at the top of the copy code in `index.html`, next to
+`buildHtmlTable`, and are the only two lines to touch if the split should
+change:
+
+```js
+const WORD_TABLE_CM  = 16;             // A4 portrait text width (21 cm − 2.5 cm margins ×2)
+const WORD_COL_SPLIT = [1/3, 2/3];     // Item column, Details column — must add up to 1
+```
+
+Set `WORD_COL_SPLIT` to `[0.5, 0.5]` for an even split. Both copied tables share
+the constants, so they always land the same width as each other.
+
 Free-text answers keep the **line breaks the user typed**. A blank line between
 two chunks of text in a field, or in a row's note, stays a blank line in Word —
 the copy emits `<br>` for each newline rather than letting HTML collapse it to a
@@ -385,6 +408,14 @@ and — on the Water Level table — `riverCoords` / `riverRelocation`.
   even if a slow service delays everything else. The "Loading map…" overlay clears
   the instant the view is ready (`view.when()`), and the imagery / contour / road
   layers stream in underneath — a map missing one layer is still usable.
+- **Every open re-fits the pins.** The MapView is deliberately kept alive between
+  opens (rebuilding it costs a full Esri load), so panning or zooming used to
+  leave the map sitting on the *previous* station when the modal was reopened for
+  the next scoping session — you had to hunt for your own pins. Opening the modal
+  now always re-frames on the pins showing at that moment. Manual framing still
+  holds for as long as the modal stays open; it simply does not survive a close,
+  and **Reset view** / **Fit all pins** are still there to get back to the pins
+  mid-session.
 - **Map diagnostics** — a collapsed *Map diagnostics* disclosure in the side panel
   reports, per external dependency (Esri CDN, imagery, contours, cadastre lookup,
   road layer), whether it **loaded / failed / timed out** and how long it took,
