@@ -15,6 +15,7 @@ them straight into Word. It has three modes:
 | --- | --- |
 | `index.html` | The whole application (no build step, no dependencies). |
 | `definitions.json` | Seed / offline copy of the table, row, and option definitions. Also used to first-load the central store, and as the fallback when the store can't be reached. |
+| `backups/` | Point-in-time dumps of the central store, plus `extract-definitions.mjs` to rebuild `definitions.json` from one. See [backups/README.md](backups/README.md). |
 
 The definitions used to be hard-coded inside `index.html`. They now live outside
 the app so they can change without touching the code. The **recommended** setup
@@ -286,6 +287,12 @@ controls what that key may do.
 - **Rollback:** every publish copies the previous document into
   `definitions_history`. To restore one, copy its `doc` back onto the master row
   (`update definitions set doc = (...), version = version + 1 where id = 1;`).
+- **Keep a dump.** A paused or deleted project takes the store with it, and the
+  only thing standing behind it is the bundled `definitions.json`. Download a
+  backup from the dashboard now and then, drop it in `backups/`, and run
+  `node backups/extract-definitions.mjs backups/<dump>` to refresh the offline
+  fallback from it — see [backups/README.md](backups/README.md). The same script
+  unpacks `definitions_history`, so rollback still works with the store down.
 
 ### Troubleshooting
 

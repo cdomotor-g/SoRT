@@ -1,12 +1,11 @@
 {
   "version": 1,
   "meta": {
-    "updated": "2026-07-23",
+    "updated": "2026-08-21",
     "appTitle": "SORT Forum Scope Builder"
   },
   "optionSets": {},
   "propertyServices": {
-    "title": "Property Services Instruction",
     "note": "Property Services conducts its due diligence and secures tenure agreements based on the information provided in this Site Assessment. If there have been any changes to the coordinates since the completion date of this site assessment, you must inform Property Services (FWINLeasing@bom.gov.au) to ensure that the due diligence performed remains valid.",
     "rows": [
       {
@@ -36,15 +35,15 @@
         "id": "relocating",
         "kind": "question",
         "label": "Is the equipment being relocated?",
-        "linkedNote": "Preselected from the Relocation answer in the table above — change it here if this differs.",
+        "source": {
+          "row": "relocation",
+          "field": null
+        },
         "options": [
           "Yes",
           "No"
         ],
-        "source": {
-          "row": "relocation",
-          "field": null
-        }
+        "linkedNote": "Preselected from the Relocation answer in the table above — change it here if this differs."
       },
       {
         "id": "relocationCoords",
@@ -80,11 +79,11 @@
         "id": "turnSoil",
         "kind": "question",
         "label": "Does the work require the turning of soil?",
-        "required": true,
         "options": [
           "Yes",
           "No"
-        ]
+        ],
+        "required": true
       },
       {
         "id": "wlHeader",
@@ -97,11 +96,11 @@
         "kind": "question",
         "label": "Will the orifice line be replaced?",
         "wlOnly": true,
-        "required": true,
         "options": [
           "Yes",
           "No"
-        ]
+        ],
+        "required": true
       },
       {
         "id": "orificeDirection",
@@ -114,108 +113,125 @@
         "id": "date",
         "kind": "date",
         "label": "Date"
+      },
+      {
+        "id": "psSection",
+        "kind": "sectionHeader",
+        "label": "Note to PS: Please check above if this is a DLGWV site, as they do not require PS clearances (covered under access agreement with DLGWV)."
       }
-    ]
+    ],
+    "title": "Property Services Instruction"
   },
   "sharedRows": [
     {
       "id": "fadeMargin",
-      "item": "Fade Margin >20db",
-      "instruction": "(If station is ERRTS)",
-      "type": "single",
       "icon": "📶",
+      "item": "Fade Margin >20db",
+      "type": "single",
       "options": [
         "Yes",
         "No",
         "NA"
-      ]
+      ],
+      "instruction": "(If station is ERRTS)"
     },
     {
       "id": "reasonComms",
-      "item": "Reason for Changing Comms Type",
-      "instruction": "",
-      "type": "single",
       "icon": "☎️",
+      "item": "Reason for Changing Comms Type",
       "note": "Changing comms type requires GM Approval — ERRTS to SAT",
+      "type": "single",
+      "fields": [
+        {
+          "key": "reasonDetail",
+          "type": "text",
+          "label": "Reason (if Yes)"
+        }
+      ],
       "options": [
         "Yes",
         "NA"
       ],
-      "fields": [
-        {
-          "key": "reasonDetail",
-          "label": "Reason (if Yes)",
-          "type": "text"
-        }
-      ]
+      "instruction": ""
     },
     {
       "id": "comms",
-      "item": "Comms Option",
-      "instruction": "(Choose 1 option)",
-      "type": "single",
       "icon": "📞",
+      "item": "Comms Option",
+      "type": "single",
       "options": [
         "IP Logger - Cellular Communications",
         "IP Logger - Satellite Communications",
         "IP Logger - Campbell Scientific - ERRTS VHF Communications",
         "Local Processing Unit - Elpro ERRTS VHF Communications",
         "AL200X Campbell Scientific - ERRTS VHF Communications"
-      ]
+      ],
+      "instruction": "(Choose 1 option)"
     },
     {
       "id": "txpower",
-      "item": "TX power",
-      "instruction": "",
-      "type": "single",
       "icon": "☀️",
+      "item": "TX power",
+      "type": "single",
       "options": [
         "NA",
         "1W",
         "5W",
         "25W",
         "Other (Specify)"
-      ]
+      ],
+      "instruction": "(Repeaters typically 5W, )"
     },
     {
       "id": "frequency",
-      "item": "ERRTS/ALERT Frequency",
-      "instruction": "",
-      "type": "single",
       "icon": "🐝",
+      "item": "ERRTS/ALERT Frequency",
+      "type": "single",
       "options": [
         "NA",
         "151.500 MHz",
         "152.400 MHz",
         "151.950 MHz",
         "Other or multiple:"
-      ]
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "alertFormat",
+      "icon": "🔡",
+      "item": "ALERT Reporting",
+      "type": "single",
+      "options": [
+        "BINARY",
+        "IFLOWS"
+      ],
+      "instruction": ""
     },
     {
       "id": "stockFence",
-      "item": "Stock Fence",
-      "instruction": "(Yes/No, details)",
-      "type": "single",
       "icon": "🐄",
-      "options": [
-        "Yes (standard dimensions and configuration)",
-        "No",
-        "Other"
-      ],
+      "item": "Stock Fence",
+      "type": "single",
       "fields": [
         {
           "key": "Comments",
-          "label": "Comments (eg: Sprcify non standard size)",
-          "type": "text"
+          "type": "text",
+          "label": "Comments (eg: Specify non standard size)"
         }
-      ]
+      ],
+      "options": [
+        "Yes (standard dimensions and configuration)",
+        "No",
+        "Other",
+        "Not applicable (eg: Co-location)"
+      ],
+      "instruction": "(Yes/No, details)"
     },
     {
       "id": "demolition",
-      "item": "Demolition / Disposal",
-      "instruction": "(Select one, optional details)",
-      "type": "single",
       "icon": "♻️",
+      "item": "Demolition / Disposal",
+      "type": "multi",
       "options": [
         "### Standard: ",
         "Complete demolition and/or disposal (nothing returned to HUB)",
@@ -223,100 +239,110 @@
         "ALL Parts to be returned to HUB",
         "LPU to be returned to HUB",
         "TBRG to be returned to the HUB",
+        "Modem to be returned to HUB",
+        "Water level sensor to be returned to HUB",
         "Other:"
-      ]
+      ],
+      "instruction": "(Select one, optional details)"
     },
     {
       "id": "coords",
+      "icon": "🚩",
       "item": "Instrumentation Coordinates",
-      "instruction": "(Existing)",
       "type": "none",
-      "icon": "🗺",
-      "note": "Enter as decimal degrees, e.g. -27.4710, 153.0234. Use the Site Map button to view the location.",
       "fields": [
         {
           "key": "existing",
-          "label": "Existing",
-          "type": "text"
+          "type": "text",
+          "label": "Existing"
         }
       ],
       "mapPin": {
         "field": "existing",
         "label": "Current location",
+        "anchor": true,
         "colour": "red",
-        "defaultOn": true,
-        "anchor": true
-      }
+        "defaultOn": true
+      },
+      "instruction": "(Existing)"
     },
     {
       "id": "relocation",
+      "icon": "🚩🚩",
       "item": "Relocation",
-      "instruction": "",
+      "note": "Relocation requires EPS & GM Approval",
       "type": "single",
-      "icon": "🚩",
-      "note": "WL Relocation requires EPS & GM Approval",
-      "options": [
-        "Yes",
-        "No"
-      ],
       "fields": [
         {
           "key": "distance",
-          "label": "Distance",
-          "type": "text"
+          "type": "text",
+          "label": "Distance"
         },
         {
           "key": "newLocation",
-          "label": "New Location (coordinates)",
-          "type": "text"
+          "type": "text",
+          "label": "New Location (coordinates)"
         }
       ],
       "mapPin": {
         "field": "newLocation",
         "label": "Relocation site",
         "colour": "orange",
-        "defaultOn": true,
         "requires": {
-          "row": "relocation",
-          "not": "No"
-        }
-      }
+          "not": "No",
+          "row": "relocation"
+        },
+        "defaultOn": true
+      },
+      "options": [
+        "Yes",
+        "No"
+      ],
+      "instruction": ""
     },
     {
       "id": "accessibility",
-      "item": "Accessibility",
-      "instruction": "(Delete irrelevant options)",
-      "type": "multi",
       "icon": "🚚",
+      "item": "Accessibility",
+      "type": "multi",
       "options": [
+        "### Weather Permitting",
         "All weather access",
         "Dry weather access only",
-        "Concrete truck",
+        "### Vehicles up to and including",
+        "Concrete truck ",
         "Flatbed truck",
         "4WD with tandem trailer",
         "4WD only"
-      ]
+      ],
+      "instruction": "(Delete irrelevant options)"
     },
     {
       "id": "installNotes",
-      "item": "Installation Notes",
-      "instruction": "(Freeform section)",
-      "type": "none",
       "icon": "📝",
+      "item": "Installation Notes",
+      "type": "none",
       "fields": [
         {
           "key": "notes",
-          "label": "Notes",
-          "type": "textarea"
+          "type": "textarea",
+          "label": "Notes"
         }
-      ]
+      ],
+      "instruction": "(Freeform section)"
     },
     {
       "id": "remediation",
-      "item": "Remediation / Additional Works",
-      "instruction": "(Delete irrelevant options)",
-      "type": "multi",
       "icon": "👷",
+      "item": "Remediation / Additional Works",
+      "type": "multi",
+      "fields": [
+        {
+          "key": "other",
+          "type": "text",
+          "label": "Other"
+        }
+      ],
       "options": [
         "Vendor/Contractor site visit required prior to complex installation",
         "Vegetation management",
@@ -324,94 +350,85 @@
         "Data access to be provided to Council via satellite modem",
         "Track / stairs required to access orifice / gauge boards"
       ],
-      "fields": [
-        {
-          "key": "other",
-          "label": "Other",
-          "type": "text"
-        }
-      ]
+      "instruction": "(Delete irrelevant options)"
     },
     {
       "id": "nonStandard",
-      "item": "Non-Standard options",
-      "instruction": "(Please avoid if possible)",
-      "type": "single",
       "icon": "⭐",
+      "item": "Non-Standard options",
+      "type": "single",
+      "fields": [
+        {
+          "key": "detail",
+          "type": "textarea",
+          "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)"
+        }
+      ],
       "options": [
         "Yes",
         "NA"
       ],
-      "fields": [
-        {
-          "key": "detail",
-          "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
-          "type": "textarea"
-        }
-      ]
+      "instruction": "(Please avoid if possible)"
     },
     {
       "id": "rainfallLocation",
-      "item": "Rainfall Mounted Location",
-      "instruction": "(Details / NA)",
-      "type": "none",
       "icon": "☔",
+      "item": "Rainfall Mounted Location",
+      "type": "none",
       "fields": [
         {
           "key": "detail",
-          "label": "Details",
-          "type": "text"
+          "type": "text",
+          "label": "Details"
         }
-      ]
+      ],
+      "instruction": "(Details / NA)"
     },
     {
       "id": "Benchmark",
-      "item": "Benchmark",
-      "instruction": "",
-      "type": "single",
       "icon": "🔩",
+      "item": "Benchmark",
+      "type": "single",
       "options": [
         "Install new BM, surveyed in AHD & LGH (specify location)",
         "Not required"
-      ]
+      ],
+      "instruction": ""
     },
     {
       "id": "photos",
-      "item": "Site Assessment Photos",
-      "instruction": "",
-      "type": "none",
       "icon": "📷",
+      "item": "Site Assessment Photos",
+      "type": "none",
       "fields": [
         {
           "key": "link",
-          "label": "Insert link & confirm access",
-          "type": "text"
+          "type": "text",
+          "label": "Insert link & confirm access"
         }
-      ]
+      ],
+      "instruction": ""
     }
   ],
   "tables": [
     {
       "id": "rainfall",
-      "label": "Rainfall Table",
-      "title": "Rainfall Table",
       "rows": [
         {
           "id": "stationType",
+          "icon": "🌧️",
           "item": "Station Type",
-          "instruction": "(Choose relevant option)",
           "type": "single",
-          "icon": "🌧",
           "options": [
             "Rain Gauge"
-          ]
+          ],
+          "instruction": "(Choose relevant option)"
         },
         {
           "id": "complexity",
+          "icon": "🧩",
           "item": "Complexity, Scope & Type",
-          "instruction": "(Choose 1 option)",
-          "type": "single",
-          "icon": "❓",
+          "type": "multi",
           "options": [
             "### High Complexity",
             "High Complexity Total Rebuild – Type 1",
@@ -437,7 +454,8 @@
             "Acquire & Relocate",
             "Acquired – No Remediation Required",
             "Do Not Acquire"
-          ]
+          ],
+          "instruction": "(Choose 1 option)"
         },
         {
           "shared": "coords"
@@ -461,6 +479,9 @@
           "shared": "frequency"
         },
         {
+          "shared": "alertFormat"
+        },
+        {
           "shared": "stockFence"
         },
         {
@@ -481,19 +502,18 @@
         {
           "shared": "photos"
         }
-      ]
+      ],
+      "label": "Rainfall Table",
+      "title": "Rainfall Table"
     },
     {
       "id": "waterlevel",
-      "label": "Water Level Table",
-      "title": "Water Level (+/- Rainfall) Table",
       "rows": [
         {
           "id": "stationType",
-          "item": "Station Type",
-          "instruction": "(Choose relevant option)",
-          "type": "single",
           "icon": "🌊",
+          "item": "Station Type",
+          "type": "single",
           "options": [
             "Rain Gauge / Water Level",
             "Rain Gauge / Water Level / Repeater",
@@ -503,14 +523,14 @@
             "Water Level / Reservoir",
             "Water Level / Tide Gauge",
             "Base Station"
-          ]
+          ],
+          "instruction": "(Choose relevant option)"
         },
         {
           "id": "complexity",
+          "icon": "🧩",
           "item": "Complexity, Scope & Type",
-          "instruction": "(Choose 1 option)",
-          "type": "single",
-          "icon": "❓",
+          "type": "multi",
           "options": [
             "### High Complexity",
             "High Complexity Total Rebuild – Type 1",
@@ -530,7 +550,6 @@
             "### Low Complexity",
             "Low Complexity Remediation – Instrumentation Only",
             "Low Complexity Remediation - Co-Located Equipment Upgrade",
-            "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter",
             "Low Complexity – Type 4",
             "### Other",
             "Vegetation Management",
@@ -538,62 +557,8 @@
             "Acquire & Relocate",
             "Acquired – No Remediation Required",
             "Do Not Acquire"
-          ]
-        },
-        {
-          "id": "sensorOption",
-          "item": "Sensor Option",
-          "instruction": "(Choose 1 option, details)",
-          "type": "single",
-          "icon": "💧",
-          "options": [
-            "HS40 (define range)",
-            "Amazon Bubbler (define psi pressure)",
-            "Vega C23"
-          ]
-        },
-        {
-          "id": "SensorRange",
-          "item": "Range",
-          "instruction": "",
-          "type": "single",
-          "icon": "📈",
-          "options": [
-            "NA (radar)",
-            "0-20m",
-            "0-30psi (20m)",
-            "Other (specify)"
-          ]
-        },
-        {
-          "id": "terminationType",
-          "item": "River line termination type",
-          "instruction": "",
-          "type": "single",
-          "options": [
-            "GCO ",
-            "BU07"
-          ]
-        },
-        {
-          "id": "riverCoords",
-          "item": "River Line Termination Coordinates",
-          "instruction": "",
-          "type": "none",
-          "icon": "📍",
-          "fields": [
-            {
-              "key": "detail",
-              "label": "Coordinates",
-              "type": "text"
-            }
           ],
-          "mapPin": {
-            "field": "detail",
-            "label": "River line termination",
-            "colour": "blue",
-            "defaultOn": true
-          }
+          "instruction": "(Choose 1 option)"
         },
         {
           "shared": "coords"
@@ -602,16 +567,40 @@
           "shared": "relocation"
         },
         {
-          "id": "riverRelocation",
-          "item": "River Line Termination relocation",
-          "instruction": "",
+          "id": "riverCoords",
+          "icon": "📍",
+          "item": "River Line Termination Coordinates",
           "type": "none",
+          "fields": [
+            {
+              "key": "detail",
+              "type": "text",
+              "label": "Coordinates"
+            }
+          ],
+          "mapPin": {
+            "field": "detail",
+            "label": "River line termination",
+            "colour": "blue",
+            "defaultOn": true
+          },
+          "instruction": ""
+        },
+        {
+          "id": "riverRelocation",
           "icon": "📍📍",
+          "item": "River Line Termination relocation",
+          "type": "none",
           "fields": [
             {
               "key": "newRiver",
-              "label": "New Coordinates",
-              "type": "text"
+              "type": "text",
+              "label": "New Coordinates"
+            },
+            {
+              "key": "newRiverHeight",
+              "type": "textarea",
+              "label": "Relative height change in m with tolerance and datum (discuss whether and why new orifice is to be higher, no change, or lower)"
             }
           ],
           "mapPin": {
@@ -619,52 +608,89 @@
             "label": "River line relocation",
             "colour": "purple",
             "defaultOn": true
-          }
+          },
+          "instruction": ""
+        },
+        {
+          "id": "sensorOption",
+          "icon": "💧",
+          "item": "Sensor Option",
+          "type": "single",
+          "options": [
+            "HS40 (define range)",
+            "Amazon Bubbler (define psi pressure)",
+            "Vega C23"
+          ],
+          "instruction": "(Choose 1 option, details)"
+        },
+        {
+          "id": "SensorRange",
+          "icon": "📈",
+          "item": "Range",
+          "type": "single",
+          "options": [
+            "NA (radar)",
+            "0-20m",
+            "0-30psi (20m)",
+            "Other (specify)"
+          ],
+          "instruction": ""
+        },
+        {
+          "id": "terminationType",
+          "icon": "｡˚○",
+          "item": "River line termination type",
+          "type": "single",
+          "options": [
+            "GCO ",
+            "BU07"
+          ],
+          "instruction": ""
         },
         {
           "id": "gaugeBoards",
-          "item": "Gauge Boards",
-          "instruction": "(Yes/No, add details)",
-          "type": "single",
           "icon": "📏",
+          "item": "Gauge Boards",
+          "type": "single",
+          "fields": [
+            {
+              "key": "quantity",
+              "type": "text",
+              "label": "Quantity"
+            },
+            {
+              "key": "comment",
+              "type": "text",
+              "label": "Comment"
+            }
+          ],
           "options": [
             "Yes",
             "No",
             "TBA"
           ],
-          "fields": [
-            {
-              "key": "quantity",
-              "label": "Quantity",
-              "type": "text"
-            },
-            {
-              "key": "comment",
-              "label": "Comment",
-              "type": "text"
-            }
-          ]
+          "instruction": "(Yes/No, add details)"
+        },
+        {
+          "shared": "Benchmark"
         },
         {
           "id": "DipPoint",
-          "item": "Dip point",
-          "instruction": "(eg. radars)",
-          "type": "single",
           "icon": "📐",
+          "item": "Dip point",
+          "type": "single",
+          "fields": [
+            {
+              "key": "comment",
+              "type": "textarea",
+              "label": "Comments"
+            }
+          ],
           "options": [
             "Yes",
             "No"
           ],
-          "fields": [
-            {
-              "key": "comment",
-              "label": "Comments",
-              "type": "textarea"
-            }
-          ]
-        },
-        {
-          "shared": "Benchmark"
+          "instruction": "(eg. radars)"
         },
         {
           "shared": "comms"
@@ -682,6 +708,9 @@
           "shared": "frequency"
         },
         {
+          "shared": "alertFormat"
+        },
+        {
           "shared": "stockFence"
         },
         {
@@ -691,7 +720,219 @@
           "shared": "accessibility"
         },
         {
+          "shared": "remediation"
+        },
+        {
+          "shared": "nonStandard"
+        },
+        {
           "shared": "installNotes"
+        },
+        {
+          "shared": "photos"
+        }
+      ],
+      "label": "Water Level Table",
+      "title": "Water Level (+/- Rainfall) Table"
+    },
+    {
+      "id": "waterlevel-dlgwv",
+      "rows": [
+        {
+          "id": "stationType",
+          "icon": "🌊",
+          "item": "Station Type",
+          "type": "multi",
+          "options": [
+            "### Rain Gauge",
+            "Bureau owned TBRG",
+            "Consolidated rainfall (DLGWV owned TBRG)",
+            "### Water Level ",
+            "Bureau owned water level sensor",
+            "Consolidated water level (DLGWV owned WL Sensor)"
+          ],
+          "instruction": "(Choose relevant option)"
+        },
+        {
+          "id": "complexity",
+          "icon": "🧩",
+          "item": "Complexity, Scope & Type",
+          "type": "multi",
+          "options": [
+            "Low Complexity Remediation - Co-Located Equipment Upgrade – (eg: DLGWV)",
+            "Plus TBRG replacement",
+            "Vegetation Management",
+            "Acquire & Decommission",
+            "Acquire & Relocate",
+            "Acquired – No Remediation Required",
+            "Do Not Acquire",
+            "NA"
+          ],
+          "instruction": "(Choose 1 option)"
+        },
+        {
+          "shared": "coords"
+        },
+        {
+          "shared": "relocation"
+        },
+        {
+          "id": "riverCoords",
+          "icon": "📍",
+          "item": "River Line Termination Coordinates",
+          "note": "Leave blank if not applicable",
+          "type": "none",
+          "fields": [
+            {
+              "key": "detail",
+              "type": "text",
+              "label": "Coordinates"
+            }
+          ],
+          "mapPin": {
+            "field": "detail",
+            "label": "River line termination",
+            "colour": "blue",
+            "defaultOn": true
+          },
+          "instruction": ""
+        },
+        {
+          "id": "riverRelocation",
+          "icon": "📍📍",
+          "item": "River Line Termination relocation",
+          "type": "none",
+          "fields": [
+            {
+              "key": "newRiver",
+              "type": "text",
+              "label": "New Coordinates"
+            },
+            {
+              "key": "newRiverHeight",
+              "type": "textarea",
+              "label": "Relative height change (discuss whether and why new orifice is to be higher, no change, or lower)"
+            }
+          ],
+          "mapPin": {
+            "field": "newRiver",
+            "label": "River line relocation",
+            "colour": "purple",
+            "defaultOn": true
+          },
+          "instruction": "Leave blank if not applicable"
+        },
+        {
+          "id": "sensorOption",
+          "icon": "💧",
+          "item": "Sensor Option",
+          "type": "single",
+          "options": [
+            "HS40 (define range)",
+            "Amazon Bubbler (define psi pressure)",
+            "Vega C23",
+            "Not applicable (eg: Co-location)"
+          ],
+          "instruction": "(Choose 1 option, details)"
+        },
+        {
+          "id": "SensorRange",
+          "icon": "📈",
+          "item": "Range",
+          "type": "single",
+          "options": [
+            "NA (radar)",
+            "0-20m",
+            "0-30psi (20m)",
+            "Other (specify)",
+            "Not applicable (eg: Co-location)"
+          ],
+          "instruction": ""
+        },
+        {
+          "id": "terminationType",
+          "icon": "｡˚○",
+          "item": "River line termination type",
+          "type": "single",
+          "options": [
+            "GCO ",
+            "BU07",
+            "Not applicable (eg: Co-location)"
+          ],
+          "instruction": ""
+        },
+        {
+          "id": "gaugeBoards",
+          "icon": "📏",
+          "item": "Gauge Boards",
+          "type": "single",
+          "fields": [
+            {
+              "key": "quantity",
+              "type": "text",
+              "label": "Quantity"
+            },
+            {
+              "key": "comment",
+              "type": "text",
+              "label": "Comment"
+            }
+          ],
+          "options": [
+            "Yes",
+            "No",
+            "TBA"
+          ],
+          "instruction": "(Yes/No, add details)"
+        },
+        {
+          "shared": "Benchmark"
+        },
+        {
+          "id": "DipPoint",
+          "icon": "📐",
+          "item": "Dip point",
+          "type": "single",
+          "fields": [
+            {
+              "key": "comment",
+              "type": "textarea",
+              "label": "Comments"
+            }
+          ],
+          "options": [
+            "Yes",
+            "No",
+            "Not applicable (eg: Co-location)"
+          ],
+          "instruction": "(eg. radars)"
+        },
+        {
+          "shared": "comms"
+        },
+        {
+          "shared": "reasonComms"
+        },
+        {
+          "shared": "fadeMargin"
+        },
+        {
+          "shared": "txpower"
+        },
+        {
+          "shared": "frequency"
+        },
+        {
+          "shared": "alertFormat"
+        },
+        {
+          "shared": "stockFence"
+        },
+        {
+          "shared": "demolition"
+        },
+        {
+          "shared": "accessibility"
         },
         {
           "shared": "remediation"
@@ -700,21 +941,35 @@
           "shared": "nonStandard"
         },
         {
+          "id": "notesCoLocated",
+          "icon": "📝",
+          "item": "Installation Notes",
+          "type": "none",
+          "fields": [
+            {
+              "key": "notesCoLocated_field",
+              "type": "textarea",
+              "label": "Install Notes",
+              "default": "Notes:  \n\n1. Solar, satellite antenna mounting \n- Require a 40NB pipe with attached, Pipe is to be mounted on existing rail at top of stairs.  \n- Antenna bracket/pipe to be positioned on the railing front corner to ensure access is not impeded.  \n- RFI Symmetry Solar panel pole mount bracket. Telco TF1SS Stainless Parallel Antenna brackets x 2 Ensure length of pipe places antenna close to roof height.  \n- Swivel coupler forged clamps x 2  \n\n2. TBRG mounting  \n- Separate mounting Pipe is to be mounted on existing rail at top of stairs.  \n- New TBRG to be installed - Kister TB3 \n- 60 - od - 50 nb - threaded pipe \n- Flange threaded with TB334 mounting bracket Ensure length of pipe places TB3 above roof height.  \n- Swivel coupler forged clamps x 2 Existing RIMCO TBRG to be removed \n\n3. Cabling installation notes  \n- 25mm flex conduit - UV stable Stainless  \n- cable ties along conduit to inside enclosure Cable gland for conduit entry to hut.  \n- Consideration for junction box to combine antenna and TBRG conduits into 1 "
+            }
+          ],
+          "instruction": "adjust as required"
+        },
+        {
           "shared": "photos"
         }
-      ]
+      ],
+      "label": "DLGWV Water Level Table",
+      "title": "Water Level (+/- Rainfall) Table"
     },
     {
       "id": "repeater",
-      "label": "Repeater / Gateway Table",
-      "title": "Repeater / Gateway Table",
       "rows": [
         {
           "id": "stationType",
-          "item": "Station Type",
-          "instruction": "(Delete irrelevant options)",
-          "type": "single",
           "icon": "🗼",
+          "item": "Station Type",
+          "type": "single",
           "options": [
             "Rain Gauge / Repeater",
             "Rain Gauge / Water Level / Repeater",
@@ -725,14 +980,14 @@
             "Repeater",
             "Gateway",
             "Base Station"
-          ]
+          ],
+          "instruction": "(Delete irrelevant options)"
         },
         {
           "id": "complexity",
+          "icon": "🧩",
           "item": "Complexity & Scope",
-          "instruction": "(Choose 1 option)",
-          "type": "single",
-          "icon": "❓",
+          "type": "multi",
           "options": [
             "### High Complexity",
             "High Complexity Total Rebuild – Type 5A",
@@ -753,77 +1008,103 @@
             "Acquire & Relocate",
             "Acquired – No Remediation Required",
             "Do Not Acquire"
-          ]
-        },
-        {
-          "id": "infraType",
-          "item": "Infra Type",
-          "instruction": "(Choose 1 option)",
-          "type": "single",
-          "icon": "🚪",
-          "options": [
-            "Rack Mount",
-            "Outdoor Cabinet"
-          ]
-        },
-        {
-          "id": "mast",
-          "item": "Mast",
-          "instruction": "(Choose relevant option)",
-          "type": "single",
-          "icon": "🏗",
-          "options": [
-            "8m",
-            "4m",
-            "Cabinet mount"
-          ]
-        },
-        {
-          "id": "backhaul",
-          "item": "Backhaul Options",
-          "instruction": "(Choose 1 option)",
-          "type": "single",
-          "icon": "🛰",
-          "options": [
-            "Bureau WAN",
-            "Cellular Modem"
-          ]
-        },
-        {
-          "id": "bgan",
-          "item": "Optional BGAN Backup",
-          "instruction": "(Yes / No)",
-          "type": "single",
-          "icon": "🌐",
-          "options": [
-            "Yes",
-            "No"
-          ]
-        },
-        {
-          "id": "cavityFilters",
-          "item": "Cavity Filters",
-          "instruction": "(Add relevant detail)",
-          "type": "none",
-          "icon": "🖥",
-          "fields": [
-            {
-              "key": "bandpass",
-              "label": "Bandpass",
-              "type": "text"
-            },
-            {
-              "key": "frequency",
-              "label": "Frequency",
-              "type": "text"
-            }
-          ]
+          ],
+          "instruction": "(Choose 1 option)"
         },
         {
           "shared": "coords"
         },
         {
           "shared": "relocation"
+        },
+        {
+          "id": "row",
+          "icon": "☔",
+          "item": "TBRG Location",
+          "note": "Leave coordinates blank if not applicable",
+          "type": "single",
+          "fields": [
+            {
+              "key": "tbrg",
+              "type": "text",
+              "label": "TBRG coordinates"
+            }
+          ],
+          "mapPin": {
+            "field": "tbrg",
+            "label": "TBRG Location",
+            "colour": "blue",
+            "defaultOn": true
+          },
+          "options": [
+            "TBRG cabinet mounted",
+            "TBRG remote from cabinet"
+          ],
+          "instruction": "(if separated from enclosure)"
+        },
+        {
+          "id": "infraType",
+          "icon": "🚪",
+          "item": "Infra Type",
+          "type": "single",
+          "options": [
+            "Rack Mount",
+            "Outdoor Cabinet"
+          ],
+          "instruction": "(Choose 1 option)"
+        },
+        {
+          "id": "mast",
+          "icon": "🏗",
+          "item": "Mast",
+          "type": "single",
+          "options": [
+            "8m (tilt mast)",
+            "\"3\"m (swivel pole, functional height 4m)",
+            "Cabinet mount"
+          ],
+          "instruction": "(Choose relevant option)"
+        },
+        {
+          "id": "backhaul",
+          "icon": "🛰",
+          "item": "Backhaul Options",
+          "type": "single",
+          "options": [
+            "Bureau WAN",
+            "Cellular Modem"
+          ],
+          "instruction": "(Choose 1 option)"
+        },
+        {
+          "id": "bgan",
+          "icon": "🌐",
+          "item": "Optional BGAN Backup",
+          "type": "single",
+          "options": [
+            "Yes",
+            "No"
+          ],
+          "instruction": "(Yes / No)"
+        },
+        {
+          "id": "cavityFilters",
+          "icon": "🖥",
+          "item": "Cavity Filters",
+          "type": "none",
+          "fields": [
+            {
+              "key": "bandpass",
+              "type": "text",
+              "label": "Bandpass"
+            },
+            {
+              "key": "frequency",
+              "type": "text",
+              "label": "Frequency"
+            }
+          ],
+          "instruction": "(Add relevant detail)"
         },
         {
           "shared": "fadeMargin"
@@ -835,6 +1116,9 @@
           "shared": "frequency"
         },
         {
+          "shared": "alertFormat"
+        },
+        {
           "shared": "remediation"
         },
         {
@@ -844,18 +1128,20 @@
           "shared": "accessibility"
         },
         {
-          "shared": "installNotes"
-        },
-        {
           "shared": "demolition"
         },
         {
           "shared": "stockFence"
         },
         {
+          "shared": "installNotes"
+        },
+        {
           "shared": "photos"
         }
-      ]
+      ],
+      "label": "Repeater / Gateway Table",
+      "title": "Repeater / Gateway Table"
     }
   ]
 }
