@@ -878,6 +878,10 @@
   .map-state[hidden]{ display:none; }
   .map-state--ok{ background:var(--accent-soft); color:var(--accent-dark); }
   .map-state--todo{ background:var(--amber-soft); color:var(--amber); }
+  /* A picture is being made right now, unattended (§7.6) — and the one state
+     that is a genuine problem: the automatic attempt produced nothing. */
+  .map-state--busy{ background:var(--line); color:var(--ink-soft); }
+  .map-state--warn{ background:var(--danger-soft); color:var(--danger); }
   .map-state-act{
     appearance:none; border:none; background:transparent; color:inherit; font:inherit;
     text-decoration:underline; cursor:pointer; padding:0;
@@ -995,7 +999,7 @@
   <div class="toolbar-inner">
     <button class="btn btn-primary" id="copyBtn">Copy table for Word</button>
     <button class="btn btn-secondary" id="siteMapBtn" title="Open the site map for this table's coordinates">🗺 Site Map</button>
-    <label class="map-copy-toggle" title="Include the site map picture you captured in the Site Map window in the copied Word output">
+    <label class="map-copy-toggle" title="Include a site map picture in the copied Word output. If you haven’t captured one yourself in the Site Map window, one is made for you automatically.">
       <input type="checkbox" id="includeMapChk"> Include site map in copied output
     </label>
     <!-- Says whether a map picture is actually ready to paste, and whether it is
@@ -2051,7 +2055,7 @@ async function copyTable(){
   if(includeMapCopy){
     showStatus("Preparing map…");
     const hadPins = (function(){ const t = activeTable(); refreshPins(t); return activeSitePins().length > 0; })();
-    const res = await getMapImageForCopy();
+    const res = await ensureMapPicture();
     if(res && res.dataUrl){
       html += `<p style="margin:12px 0 0;font-family:Calibri,Arial,sans-serif;">&nbsp;</p>` +
         `<div><img src="${res.dataUrl}" alt="Site map" style="width:16cm;max-width:100%;height:auto;border:1px solid #999;"></div>`;
@@ -2059,13 +2063,13 @@ async function copyTable(){
       const outside = res.meta.pinsTotal - res.meta.pinsInView;
       if(outside > 0) mapNote = " — " + outside + " of " + res.meta.pinsTotal + " pins are outside the map picture";
       else if(siteMap.screenshot.source === "capture") mapNote = " (with the map picture you captured)";
-      else mapNote = " (map included — it was built unattended; capture one in the Site Map to be sure of it)";
+      else mapNote = " (with a map picture made automatically — open 🗺 Site Map to frame one yourself)";
     } else if(!hadPins){
       mapNote = " (map not included — no coordinates entered)";
     } else {
       // Pins exist but no usable picture: never paste a blank rectangle — omit
       // the image and say what to do about it (A2 "fail loudly", §7.5).
-      mapNote = " (map not included — open 🗺 Site Map and press “📸 Copy map image”)";
+      mapNote = " (map not included — the picture could not be made automatically; open 🗺 Site Map and press “📸 Copy map image”)";
     }
   }
 
@@ -2137,13 +2141,22 @@ const mapStateChip = document.getElementById("mapStateChip");
 if(includeMapChk) includeMapChk.addEventListener("change", ()=>{
   includeMapCopy = includeMapChk.checked;
   renderMapStateChip();
+  // Ticking the box IS the instruction to put a map in the document (§7.6), so
+  // start making the picture now rather than waiting for the Copy press. Pressing
+  // 📸 is how you *choose the framing*, not how you switch the feature on — and
+  // having the picture ready means Copy doesn’t stall while a whole map loads.
+  if(includeMapCopy) scheduleAutoCapture(0);
 });
 
-// The toolbar's answer to "will a map actually come out of this?" (§7.5). Three
-// states, and the two that need the user to do something say what that is and
-// offer the button that does it:
-//   • a captured picture that still matches the map → ready, with the time;
-//   • nothing captured (or the map has moved since) → "Capture it" → Site Map;
+// The toolbar's answer to "will a map actually come out of this?" (§7.5, §7.6).
+// Since the picture is now made automatically whenever the box is ticked and
+// there isn’t a good one already, the chip REPORTS where things stand instead of
+// issuing an order — the manual capture is offered as a choice, not a chore:
+//   • a picture the user captured, still matching the map → ready, with the time;
+//   • a picture made automatically → ready, and says nobody framed it;
+//   • one being made right now → "Making the map picture…";
+//   • none yet → says one is made on copy, and offers to capture it now;
+//   • the automatic attempt failed → the one case that does need the user;
 //   • hidden entirely while the tick box is off, so the toolbar stays quiet.
 function renderMapStateChip(){
   if(!mapStateChip) return;
@@ -2151,21 +2164,33 @@ function renderMapStateChip(){
   mapStateChip.hidden = false;
   mapStateChip.textContent = "";
   const shot = siteMap.screenshot;
-  const ready = shot.valid && shot.dataUrl && shot.source === "capture";
-  mapStateChip.classList.toggle("map-state--ok", ready);
-  mapStateChip.classList.toggle("map-state--todo", !ready);
+  const ready = !!(shot.valid && shot.dataUrl);
+  const busy  = !!autoCaptureRun;
+  mapStateChip.classList.toggle("map-state--ok",   ready);
+  mapStateChip.classList.toggle("map-state--busy", !ready && busy);
+  mapStateChip.classList.toggle("map-state--warn", !ready && !busy && autoCaptureFailed);
+  mapStateChip.classList.toggle("map-state--todo", !ready && !busy && !autoCaptureFailed);
   if(ready){
-    mapStateChip.textContent = "✓ Map picture ready (captured " + fmtClock(shot.at) + ")";
+    mapStateChip.textContent = shot.source === "capture"
+      ? "✓ Map picture ready (captured " + fmtClock(shot.at) + ")"
+      : "✓ Map picture ready (made automatically " + fmtClock(shot.at) + ")";
     return;
   }
+  if(busy){ mapStateChip.textContent = "◌ Making the map picture…"; return; }
   const label = document.createElement("span");
-  label.textContent = shot.source === "capture"
-    ? "Map moved since you captured it — "     // captured, then panned/zoomed/edited
-    : "No map picture captured yet — ";
   const act = document.createElement("button");
   act.type = "button"; act.className = "map-state-act";
-  act.textContent = "capture it";
-  act.title = "Open the Site Map, then press “Copy map image”";
+  if(autoCaptureFailed){
+    label.textContent = "⚠ Couldn’t make the map picture — ";
+    act.textContent = "capture it in the Site Map";
+  } else if(shot.source === "capture"){
+    label.textContent = "Map moved — a fresh picture is made on copy, or ";  // captured, then panned/zoomed/edited
+    act.textContent = "recapture now";
+  } else {
+    label.textContent = "Map picture is made automatically on copy — or ";
+    act.textContent = "capture it now";
+  }
+  act.title = "Open the Site Map, frame it, then press “Copy map image”";
   act.addEventListener("click", ()=> openSiteMap(act));
   mapStateChip.appendChild(label);
   mapStateChip.appendChild(act);
@@ -4335,6 +4360,20 @@ function pinRgb(colour){ return PIN_RGB[colour] || PIN_RGB.red; }
 // output is byte-identical unless the user opts in (§7.4, §8).
 let includeMapCopy = false;
 
+/* ---- automatic capture (§7.6) ----------------------------------------------
+   Ticking "Include site map in copied output" is on its own enough to get a map
+   into the document: whenever the box is on and there is no good picture, the app
+   makes one itself — when the box is ticked, when the Site Map is closed, and (as
+   the backstop) during the copy. Pressing 📸 is how a user CHOOSES the framing and
+   sees the result first; it is not how the feature is switched on.
+   These track the single in-flight run — so a Copy pressed while a warm-up is
+   still going waits for THAT capture instead of starting a competing second one
+   on the same view — the pending debounce, and whether the last automatic attempt
+   came back empty, which is the one state the toolbar has to ask the user about. */
+let autoCaptureRun = null;      // Promise of the capture currently running, or null
+let autoCaptureTimer = null;    // pending (debounced) scheduleAutoCapture
+let autoCaptureFailed = false;  // the last automatic attempt produced no picture
+
 // Live module state. The MapView is kept alive between opens and re-fitted
 // rather than re-instantiated (§6). Screenshot is cached and invalidated on any
 // change to pins, coordinates, contour interval, or extent (§7.3).
@@ -4365,6 +4404,14 @@ const siteMap = {
   // was made — "capture" means the user pressed the button while looking at the
   // map (the trustworthy path), "auto" means the copy built it unattended.
   screenshot: { dataUrl: null, valid: false, meta: null, source: null, at: null },
+  // > 0 while a capture is in flight. A capture un-hides the overlay so the view
+  // does not suspend (beginCaptureVisibility), which makes the view resume and
+  // report a `stationary` transition — and that watch would then throw away the
+  // very picture the capture had just cached, leaving every automatic capture
+  // instantly "stale". Nothing the USER does can pan the map during a capture, so
+  // that watch stands down while this is set (a real pan still invalidates via
+  // the `interacting` watch, which is not gated).
+  captureBusy: 0,
   building: false,
   // In-app diagnostics (§6). The user has no DevTools, so every external
   // dependency reports its own outcome here and nothing is console-only.
@@ -5521,7 +5568,13 @@ async function buildView(container, opts){
       if(!siteMap.userHasAdjustedView){ siteMap.userHasAdjustedView = true; renderSiteMapPanel(); }
       invalidateScreenshot();
     });
-    E.reactiveUtils.watch(()=> view.stationary, (stationary)=>{ if(stationary){ invalidateScreenshot(); renderDiagnostics(); } });
+    E.reactiveUtils.watch(()=> view.stationary, (stationary)=>{
+      if(!stationary) return;
+      // A capture resuming a suspended view registers here as movement (§7.6);
+      // dropping the picture it just made would make automatic captures useless.
+      if(siteMap.captureBusy){ renderDiagnostics(); return; }
+      invalidateScreenshot(); renderDiagnostics();
+    });
     // Bottom-of-map build progress (§A6). view.updating drives the fill; a real
     // user pan/zoom restarts it from zero and, when the drag ENDS, registers the
     // live layers so the bar waits for the new extent to actually draw (§A6.1)
@@ -6027,7 +6080,7 @@ function buildSiteMapModal(){
                HERE rather than discovered after pasting into Word. -->
           <div class="smap-capture-card">
             <div class="smap-panel-head">Picture for the Word copy</div>
-            <p class="smap-capture-how">Frame the map how you want it, wait for it to finish drawing, then press <strong>📸 Copy map image</strong> above. That takes a picture of <em>this map area, exactly as you see it</em> — legend and all.</p>
+            <p class="smap-capture-how">Frame the map how you want it, wait for it to finish drawing, then press <strong>📸 Copy map image</strong> above. That takes a picture of <em>this map area, exactly as you see it</em> — legend and all. You don’t have to: with <em>Include site map in copied output</em> ticked a picture is made for you automatically. Pressing the button is how you choose the framing — and see the result before it reaches a document.</p>
             <div class="smap-capture-state">Nothing captured yet.</div>
             <img class="smap-capture-thumb hidden" alt="Preview of the captured map picture">
             <div class="smap-capture-thumbnote hidden">This is exactly what gets pasted. If it looks wrong, re-frame the map and capture again.</div>
@@ -6220,9 +6273,10 @@ function diagnosticsText(){
   const shot = siteMap.screenshot;
   L.push("Picture for the Word copy: " + (
     !shot.valid || !shot.dataUrl
-      ? (shot.source === "capture" ? "none — one was captured but the map has changed since" : "none captured")
+      ? (shot.source === "capture" ? "none — one was captured but the map has changed since; a fresh one is made automatically on copy"
+                                   : "none yet — one is made automatically on copy")
       : (shot.source === "capture" ? "captured by the user from the open map at " + fmtClock(shot.at) + " (checked on screen)"
-                                   : "built automatically at " + fmtClock(shot.at) + " (nobody saw it)")
+                                   : "made automatically at " + fmtClock(shot.at) + " (nobody has looked at it)")
   ));
   L.push("");
   // Live render state (A2/A5): the view's suspend/ready/updating flags right now
@@ -6452,6 +6506,9 @@ async function openSiteMap(triggerEl){
   // Take the overlay's visibility back off any capture still running in the
   // background (§7.5) — its restore is a no-op once `.smap-capturing` is gone.
   siteMap.overlay.classList.remove("smap-capturing");
+  // Drop a queued automatic capture (§7.6): the user is about to frame the map
+  // themselves, and closeSiteMap re-arms one on whatever they settle on.
+  if(autoCaptureTimer){ clearTimeout(autoCaptureTimer); autoCaptureTimer = null; }
   siteMap.overlay.classList.remove("hidden");
   renderSiteMapPanel();
   const closeBtn = siteMap.overlay.querySelector(".smap-close");
@@ -6511,20 +6568,17 @@ async function closeSiteMap(){
   siteMap.overlay.classList.add("hidden");
   if(siteMap.triggerEl && siteMap.triggerEl.focus){ try{ siteMap.triggerEl.focus(); }catch(_){} }
 
-  // Safety net for users who never press the capture button (§7.5): warm the
-  // cache with the frame that was on screen a moment ago, so "open, frame, close,
-  // tick Include, Copy" still produces a map. It runs AFTER the modal is hidden —
-  // in the background, never delaying the close — because getMapImageForCopy
-  // re-parks the overlay in the non-suspending `.smap-capturing` state itself
-  // (§7, A2). A capture the user made explicitly is left alone: the cache-valid
-  // check returns it untouched, and this path is tagged "auto" in the
-  // diagnostics so an unattended picture is never mistaken for a checked one.
-  if(siteMap.view && !siteMap.screenshot.valid){
-    Promise.race([
-      getMapImageForCopy(),
-      new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.layer))
-    ]).catch(()=>{});   // a copy failure must never surface as a close failure
-  }
+  // For everyone who never presses the capture button (§7.5, §7.6): keep the
+  // frame that was on screen a moment ago, so "open, frame, close, tick Include,
+  // Copy" produces the map the user was actually looking at. It runs AFTER the
+  // modal is hidden — in the background, never delaying the close — because the
+  // capture re-parks the overlay in the non-suspending `.smap-capturing` state
+  // itself (§7, A2). Forced, because the value of this one does not depend on the
+  // tick box: it is the framing the user just chose, kept in case they tick the
+  // box afterwards. A capture the user made explicitly is left alone (the
+  // cache-valid check returns it untouched), and this path is tagged "auto" in
+  // the diagnostics so an unattended picture is never mistaken for a checked one.
+  if(siteMap.view && !siteMap.screenshot.valid) scheduleAutoCapture(0, { force:true });
 }
 
 /* ---- screenshot for the Word copy (§7) ---- */
@@ -6533,10 +6587,24 @@ async function closeSiteMap(){
 // the UI can distinguish "you never captured one" from "you captured one and
 // then moved the map" — two different things to tell the user (§7.5).
 function invalidateScreenshot(){
+  const wasValid = siteMap.screenshot.valid;
   siteMap.screenshot.valid = false;
   siteMap.screenshot.dataUrl = null;
+  autoCaptureFailed = false;     // a new picture is owed; the last verdict is moot
   renderCaptureCard();
   renderMapStateChip();
+  // Keep the copy armed (§7.6): a picture that has just gone stale while the tick
+  // box is on is replaced in the background, so Copy doesn't have to wait for a
+  // whole map to load. Only while the map is SHUT — with the modal open the user
+  // is still framing it, and closeSiteMap captures whatever they settle on.
+  // Debounced, so a pin drag or a run of coordinate edits schedules one capture
+  // rather than twenty, and single-flighted by ensureMapPicture. No guard against
+  // a capture's own book-keeping is needed here: the one watch that fires as a
+  // side effect of capturing (`stationary`, when the view resumes) stands down on
+  // siteMap.captureBusy before it ever reaches this function, so an invalidation
+  // that gets this far is a real change — a pin moved, a coordinate retyped — and
+  // deserves a replacement picture even if it lands mid-capture.
+  if(wasValid && includeMapCopy && !siteMapIsOpen()) scheduleAutoCapture(2500);
 }
 
 /* ---- §7.5: capture what the user can actually see ---------------------------
@@ -6570,6 +6638,7 @@ async function captureVisibleMap(btn){
   // browsers outlives the click's user activation and gets the clipboard write
   // refused. So hand the clipboard a PROMISE of the image inside the click
   // instead of a finished blob — the supported way to keep a gesture alive.
+  siteMap.captureBusy++;
   const capture = (async ()=>{
     await whenCaptureReady(siteMap.view);
     const pv = pinsInView(siteMap.view);
@@ -6595,6 +6664,7 @@ async function captureVisibleMap(btn){
     // leaving them to discover a tick box they also had to find (§7.5).
     includeMapCopy = true;
     if(includeMapChk) includeMapChk.checked = true;
+    autoCaptureFailed = false;   // there is a picture now, however it was made
 
     let clipOk = false;
     if(clipWrite){ try{ await clipWrite; clipOk = true; }catch(_){ clipOk = false; } }
@@ -6628,6 +6698,7 @@ async function captureVisibleMap(btn){
     renderDiagnostics();
     return null;
   }finally{
+    setTimeout(()=>{ siteMap.captureBusy = Math.max(0, siteMap.captureBusy - 1); }, 400);
     if(btn){ btn.disabled = false; btn.textContent = restoreLabel; }
     if(card) card.classList.remove("smap-capture--busy");
   }
@@ -6654,9 +6725,10 @@ function renderCaptureCard(msg, kind){
       text = "The map has changed since you captured it. Press “📸 Copy map image” again so the picture matches what you see.";
       tone = "stale";
     }else if(ready){
-      text = "A picture was made automatically for the last copy. Press “📸 Copy map image” for one you have actually looked at.";
+      text = "✓ Made automatically " + fmtClock(shot.at) + " — attached to “Copy table for Word”. Press “📸 Copy map image” for one you have framed and looked at yourself.";
+      tone = "ok";
     }else{
-      text = "Nothing captured yet.";
+      text = "Nothing captured yet — a picture is made automatically when you copy, with whatever framing the map has then.";
     }
   }
   if(state){
@@ -6913,6 +6985,94 @@ async function whenCaptureReady(view){
   await new Promise(res=> requestAnimationFrame(()=> requestAnimationFrame(res)));
 }
 
+/* ---- §7.6: make the picture without being asked -----------------------------
+   §7.5 gave the user a capture button so the picture they paste is one they have
+   actually looked at. That is the *best* picture, not the required one: a user who
+   ticks "Include site map in copied output" has already said what they want, and
+   should not also have to find a modal and press a button inside it to get it. So
+   the tick box alone is enough — the app makes the picture itself, and the button
+   becomes the way to CHOOSE the framing and check the result. */
+
+// Is the Site Map modal actually on screen? `.smap-capturing` is the overlay
+// un-hidden purely so the view keeps rendering during a capture — invisible and
+// click-through — and must never read as "open" (§7, A2).
+function siteMapIsOpen(){
+  const o = siteMap.overlay;
+  return !!(o && !o.classList.contains("hidden") && !o.classList.contains("smap-capturing"));
+}
+
+// Ask for an automatic picture, after `delay` ms of quiet. Debounced because the
+// things that call for one arrive in bursts (a pin dragged across the map, a
+// coordinate typed a character at a time), and one capture per burst is enough.
+// Gated on the tick box — the user has to have asked for a map at all — except on
+// the capture-on-close path, which keeps the framing the user just chose in case
+// they tick the box afterwards (`force`).
+function scheduleAutoCapture(delay, opts){
+  const force = !!(opts && opts.force);
+  if(!force && !includeMapCopy) return;
+  if(autoCaptureTimer){ clearTimeout(autoCaptureTimer); autoCaptureTimer = null; }
+  autoCaptureTimer = setTimeout(()=>{
+    autoCaptureTimer = null;
+    ensureMapPicture();
+  }, Math.max(0, delay || 0));
+}
+
+// The picture for the Word copy, made without the user pressing anything (§7.6).
+// Returns { dataUrl, meta } or null — never throws and never rejects, because the
+// copy must survive the map failing (§7.4). Single-flight: a Copy pressed while
+// the capture-on-close warm-up is still running awaits THAT run instead of
+// starting a second capture that would fight it over the overlay's visibility.
+function ensureMapPicture(){
+  if(autoCaptureRun) return autoCaptureRun;              // one capture at a time
+  const cached = siteMap.screenshot;
+  if(cached.valid && cached.dataUrl) return Promise.resolve({ dataUrl: cached.dataUrl, meta: cached.meta });
+
+  const run = (async ()=>{
+    const table = activeTable();
+    if(!table) return null;
+    refreshPins(table);
+    // No coordinates is not a failure — there is simply nothing to map, and the
+    // chip must not accuse the map of breaking when the table is just empty.
+    if(!activeSitePins().length){ autoCaptureFailed = false; return null; }
+
+    // First go: the live view when there is one, so the user's own framing is what
+    // gets pasted (§7.3); an off-screen view with the default auto-fit when the
+    // Site Map has never been opened.
+    let res = await getMapImageForCopy();
+
+    // Second go, only if the first produced nothing AND a live view was what tried.
+    // That is the fragile path: the view has just come back from being suspended,
+    // so a base layer can still be mid-fetch when the settle budget expires and
+    // the frame is refused as blank (compositeScreenshot, A2). A throwaway
+    // off-screen view is laid out, never suspended and drawn from scratch, so it
+    // is a retry with an actual reason to succeed — at the cost of falling back to
+    // the default framing, which beats pasting no map at all.
+    if(!res && siteMap.view){
+      diagLog("Automatic map picture: the live view produced nothing — rebuilding it off-screen.");
+      try{ res = await captureOffscreen(table); }catch(_){ res = null; }
+    }
+
+    autoCaptureFailed = !res;
+    if(res) diagLog("Map picture made automatically (the capture button was not used).");
+    return res;
+  })().catch((err)=>{
+    // getMapImageForCopy and captureOffscreen report their own failures; anything
+    // reaching here is unexpected, so it is logged rather than swallowed.
+    console.error("Automatic map capture failed.", err);
+    autoCaptureFailed = true;
+    return null;
+  });
+
+  autoCaptureRun = run;
+  renderMapStateChip();          // "◌ Making the map picture…"
+  run.then(()=>{
+    if(autoCaptureRun === run) autoCaptureRun = null;
+    renderMapStateChip();
+    renderCaptureCard();
+  });
+  return run;
+}
+
 // Produce the map image for the copy. Uses the live view (honouring the user's
 // framing) when one exists; otherwise builds an off-screen view with the default
 // auto-fit framing (§7.3). Returns { dataUrl, meta } or null on any failure —
@@ -6941,6 +7101,7 @@ async function getMapImageForCopy(){
       // and capture pins-on-white; visibility:hidden keeps it rendering. Always
       // restored in `finally`, so the modal can never get stuck invisible.
       const restoreVisibility = beginCaptureVisibility();
+      siteMap.captureBusy++;
       try{
         // Wait for a genuinely settled, un-suspended frame — never the stale
         // `updating === false` a suspended view reports (A2). Bounded (§7.4).
@@ -6954,6 +7115,10 @@ async function getMapImageForCopy(){
         return { dataUrl, meta };
       } finally {
         restoreVisibility();
+        // Held a beat past the capture: re-hiding the overlay suspends the view
+        // again, and the `stationary` transition that follows lands on the next
+        // ticks — after this frame, but still not something the user did (§7.6).
+        setTimeout(()=>{ siteMap.captureBusy = Math.max(0, siteMap.captureBusy - 1); }, 400);
       }
     }
     // No live view — build off-screen with default framing (§7.3).

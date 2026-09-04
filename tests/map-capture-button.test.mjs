@@ -192,7 +192,13 @@ try{
   const stale = await page.evaluate(() => {
     invalidateScreenshot();                 // what a pan / pin edit does
     const chip = document.getElementById('mapStateChip');
+    // §7.6: a stale picture is replaced in the background rather than left for the
+    // user to notice. Record that it was re-armed, then cancel it so the pending
+    // capture can't rewrite siteMap.screenshot underneath the rest of this test.
+    const rearmed = autoCaptureTimer !== null;
+    if(autoCaptureTimer){ clearTimeout(autoCaptureTimer); autoCaptureTimer = null; }
     return {
+      rearmed,
       cacheDropped: siteMap.screenshot.valid === false && siteMap.screenshot.dataUrl === null,
       sourceKept: siteMap.screenshot.source === 'capture',
       cardText: document.querySelector('.smap-capture-state').textContent,
@@ -207,7 +213,8 @@ try{
   check('stale: the cached picture is dropped once the map changes', stale.cacheDropped);
   check('stale: the card says the map moved SINCE the capture (not "nothing captured")', stale.cardStale && stale.sourceKept && /changed since you captured/i.test(stale.cardText));
   check('stale: the thumbnail goes with it — no stale preview left on screen', stale.thumbHidden);
-  check('stale: the toolbar chip says the same thing and offers the fix', !stale.chipHidden && stale.chipTodo && /Map moved since you captured it/.test(stale.chipText) && /capture it/.test(stale.chipText));
+  check('stale: the toolbar chip says the same thing and offers the fix', !stale.chipHidden && stale.chipTodo && /Map moved/.test(stale.chipText) && /recapture now/.test(stale.chipText));
+  check('stale: a replacement picture is armed automatically, not left to the user (§7.6)', stale.rearmed);
   check('stale: diagnostics distinguish "captured but the map has changed" from "none"', /one was captured but the map has changed since/.test(stale.diag));
 
   // ---- 4. a blank frame is refused, in the modal, before it reaches Word ------

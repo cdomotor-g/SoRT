@@ -290,6 +290,46 @@ PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/map-capture-button.test.mjs
 ```
 
+## `map-auto-capture.test.mjs` — §7.6 "the tick box is enough"
+
+The test above guards that a capture the user *makes* is honest. This one guards
+that they don't have to make one at all: ticking **Include site map in copied
+output** is the whole instruction, and the picture makes itself.
+
+Drives the real `ensureMapPicture` / `scheduleAutoCapture` / `getMapImageForCopy`
+/ `copyTable` against the same stand-in view (rich raster vs. the
+pins-on-transparent failure signature), with **real pins typed into the
+coordinate field** — the automatic path resolves pins from app state, not from a
+stub — and asserts:
+
+- **ticking the box** makes a picture straight away, tagged `source:"auto"`, with
+  the chip moving *"made automatically on copy"* → *"Making the map picture…"* →
+  *"✓ Map picture ready (made automatically …)"*;
+- **Copy with nothing captured** puts an `<img>` in the copied HTML, 📸 never
+  pressed, and says in the status line that the picture was made automatically;
+- **one capture at a time**: two callers share one run and one `takeScreenshot`;
+- **a blank live-view frame** falls back to a fresh off-screen rebuild instead of
+  giving up on the picture, and logs the fallback for the diagnostics;
+- **staleness re-arms itself**, debounced (a burst of edits schedules one capture,
+  not one each) and only while the Site Map is shut;
+- **a capture the user framed is never overwritten** — the automatic path hands
+  that picture back untouched, with no second `takeScreenshot`;
+- **unticked changes nothing**: no captures, nothing scheduled, and the copy is
+  the map-free output it always was (§7.4, §8);
+- **no coordinates is not a failure** — nothing captured, nothing reported as
+  broken, and the copy still says why there is no map;
+- **a genuine failure IS reported**: both routes are tried, the chip says so and
+  points at the Site Map, and the tables still copy.
+
+Fully hermetic — no WebGL view, no QLD services, no Esri CDN (`loadEsri` is
+stubbed). Same invocation:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/map-auto-capture.test.mjs
+```
+
 ## `field-default-text.test.mjs` — default text + line breaks into Word
 
 Guards the two free-text changes:

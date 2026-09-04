@@ -490,27 +490,41 @@ and — on the Water Level table — `riverCoords` / `riverRelocation`.
   river-line relocation distance is intentionally **not** auto-calculated: there
   is no matching field in `definitions.json`, so it is left alone rather than
   guessed at.
-- **Getting the map into Word — press 📸 Copy map image** (in the Site Map
-  header). It takes a picture of the map area **exactly as it is on screen**, puts
-  that picture on the clipboard (paste anywhere with Ctrl+V) *and* attaches it to
-  **Copy table for Word**, ticking *"Include site map in copied output"* for you.
+- **Getting the map into Word — tick *"Include site map in copied output"*.**
+  That is the whole requirement. If you haven't captured a picture yourself, the
+  app makes one: as soon as you tick the box, again when you close the Site Map,
+  and — as the backstop — during the copy itself, so a map lands in the document
+  whether or not you ever open the map window. The toolbar chip next to the tick
+  box tracks it (*"Making the map picture…"* → *"✓ Map picture ready (made
+  automatically 14:32)"*), and pictures nobody framed are labelled as such
+  everywhere they are reported, because an unattended picture should never be
+  mistaken for a checked one.
+
+- **Choosing the framing — press 📸 Copy map image** (in the Site Map header).
+  This is the *better* picture, not the required one. It takes a picture of the map
+  area **exactly as it is on screen**, puts that picture on the clipboard (paste
+  anywhere with Ctrl+V) *and* attaches it to **Copy table for Word**, ticking
+  *"Include site map in copied output"* for you.
 
   What you have to do is deliberately short: **frame the map, let it finish
   drawing, press the button.** The panel then shows a **thumbnail of the exact
   picture** — so if a capture ever comes out blank you see it there, in the
   modal, with the map still on screen beside it, instead of discovering it after
   pasting into a scope document. A capture that didn't render is refused outright
-  and says what to wait for; nothing blank is ever put on the clipboard.
+  and says what to wait for; nothing blank is ever put on the clipboard. A picture
+  you made by hand is never replaced by an automatic one.
 
   Pan, zoom, retick a pin or change the contours and the picture no longer matches
-  the map, so it is dropped and both the panel and the toolbar chip say *"the map
-  has changed since you captured it"* — press the button again. The toolbar chip
-  (next to the tick box) always answers the one question that matters before you
-  copy: **is a map picture actually ready, and is it still the one I framed?**
+  the map, so it is dropped — the panel says *"the map has changed since you
+  captured it"*, and a replacement is made for you in the background (once the map
+  window is shut; while it is open you are still framing it, so nothing is
+  captured behind your back). The toolbar chip always answers the one question
+  that matters before you copy: **is a map picture ready, and is it the one I
+  framed or one the app made?**
 
-  If you never open the Site Map at all, ticking the box still makes the copy
-  build a picture unattended, exactly as before — it is just labelled as such in
-  the diagnostics, because nobody has looked at it.
+  If an automatic picture can't be made at all — the live map came back blank and
+  a fresh off-screen rebuild failed too — the chip says so in as many words and
+  points you at the Site Map. That is the only state that asks anything of you.
 - **Offline / no network** — the Esri library and the QLD services are external.
   With no connection the modal says so and the Word copy still produces the
   tables (the map is an enhancement to the copy, never a dependency of it).
@@ -537,8 +551,20 @@ and — on the Water Level table — `riverCoords` / `riverRelocation`.
 >
 > If a map still pastes blank, open **Map diagnostics** and read the
 > *"Picture for the Word copy"* line. `captured by the user` means the picture in
-> the document is one that was checked on screen; `built automatically` means
-> nobody saw it and the capture button hasn't been used.
+> the document is one that was checked on screen; `made automatically` means
+> nobody has looked at it and the capture button hasn't been used.
+>
+> **Why the tick box is now enough (§7.6).** The capture button fixed *blank*, but
+> it made the map *conditional on finding a button inside a modal*: tick the box,
+> press Copy, and the answer was "map not included — open the Site Map and
+> press 📸". A user who ticks "Include site map in copied output" has already said
+> what they want. So the tick box arms the picture on its own — on the tick, on
+> closing the Site Map, and during the copy — and 📸 became what it should always
+> have been: the way to *choose the framing* and see the result first. The
+> automatic path is bounded and single-flighted (a Copy pressed while a warm-up is
+> still running joins that capture rather than starting a competing second one on
+> the same view), it falls back to a fresh off-screen view when the live one comes
+> back blank, and it never touches a picture the user made by hand.
 
 The map *services* (imagery / contour / cadastre endpoints) live in a documented
 `SITE_MAP_CONFIG` constant near the top of the script in `index.html`, so an
