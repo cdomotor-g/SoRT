@@ -4301,6 +4301,8 @@ const SITE_MAP_CONFIG = {
   // invisible over aerial imagery, and we never want a server-side maxScale to
   // hide it when zoomed in. High-contrast magenta outline over a 50%-transparent
   // sandy fill, so the bounded reserve reads like the usual QLD Globe view.
+  // The outline traces the OUTSIDE of the whole reserve, not every parcel in it
+  // (A8) — see the three-pass GroupLayer in loadRoadLayer.
   roadOutline: { color: [255, 0, 200, 1], width: 2 },
   // Sandy fill for the area bounded by the road reserve (A1). Alpha 0.5 so the
   // aerial imagery still reads through it — this is a client-side render choice
@@ -4322,6 +4324,22 @@ const SITE_MAP_CONFIG = {
   // actually live) is tried first. If nothing resolves the road layer is
   // WITHHELD and a banner is shown — never full unfiltered cadastre (§5).
   roadFieldCandidates: ["parcel_typ","parcel_type","tenure","feat_name","segpar_typ"],
+  // A road reserve does not stop at the kerb line of the next street, but the
+  // DCDB's road parcels do: every INTERSECTION is held as its OWN parcel, typed
+  // "Unlinked parcel or inter[section]" with alias_name listing the streets that
+  // meet there — a type the '%ROAD%' filter above never matches. So every
+  // intersection drew as an unfilled hole boxed in by the road parcels that
+  // stopped at it, reading as "not road reserve" when it plainly is (A8, the
+  // reported defect). This second pattern is probed and validated on the SAME
+  // field, exactly like the road one, and only ORed into the filter when it
+  // matches — a service with no such parcel type behaves exactly as before.
+  roadIntersectionPattern: "%INTER%",
+  // Sanity cap on that pattern: intersections are always a fraction of the road
+  // parcels around them (Millmerran: 43 intersections against 78 road parcels).
+  // A candidate matching far more than the roads is not an intersection type, so
+  // it is rejected rather than allowed to paint the rest of the cadastre as road
+  // reserve — the same "a count is not proof" discipline as the road filter.
+  roadIntersectionMaxRatio: 3,
   // Half-width (km) of the site envelope used to validate road-filter candidates.
   roadProbeKm: 2,
   attribution: "© State of Queensland (Department of Natural Resources and Mines) — CC BY 4.0",
@@ -4344,10 +4362,19 @@ const SITE_MAP_CONFIG = {
   // this scale and show a "zoom in" hint instead of silently rendering nothing
   // (§4.6). ~1:20,000. Confirm against each sublayer's own Min/Max scale in ?f=json.
   dynamicMinScale: 20000,
+  // How many times fitView may re-issue its framing before giving up (A9). The
+  // first pass can be lost to the container re-measure as the modal un-hides; the
+  // spare passes are what make the re-centre on open actually stick.
+  frameAttempts: 3,
   // Every external call is bounded (§4.3). Nothing may block the modal forever.
   // 8 s per QLD call / layer / view; the Esri bundle is a much larger download so
   // it gets a little more headroom — still bounded, still bannered on expiry.
-  timeouts: { esri: 12000, meta: 8000, layer: 8000, view: 8000 }
+  // `settle` bounds the wait for the view to stop moving between framing passes.
+  // Kept short on purpose: the framing goTos are animate:false, so a settle that
+  // has not happened in this long is not going to, and fitView is awaited before
+  // the "Loading map…" overlay clears — frameAttempts × settle is the worst the
+  // re-frame loop can add to an open.
+  timeouts: { esri: 12000, meta: 8000, layer: 8000, view: 8000, settle: 1500 }
 };
 
 const PIN_RGB = {
@@ -4413,6 +4440,10 @@ const siteMap = {
   // the `interacting` watch, which is not gated).
   captureBusy: 0,
   building: false,
+  // Set while captureOffscreen has the module's view/layers/diag pointed at its
+  // OWN throwaway view; calling it hands the interactive view straight back (A9).
+  // openSiteMap does exactly that, so the modal is never framed on a throwaway.
+  offscreenRestore: null,
   // In-app diagnostics (§6). The user has no DevTools, so every external
   // dependency reports its own outcome here and nothing is console-only.
   diag: null
@@ -4626,10 +4657,11 @@ function loadEsri(){
           "esri/Map","esri/views/MapView",
           "esri/layers/ImageryLayer","esri/layers/ImageryTileLayer",
           "esri/layers/MapImageLayer","esri/layers/TileLayer","esri/layers/FeatureLayer",
+          "esri/layers/GroupLayer",
           "esri/Graphic","esri/core/reactiveUtils","esri/config",
           "esri/widgets/DistanceMeasurement2D"
-        ], (Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,FeatureLayer,Graphic,reactiveUtils,esriConfig,DistanceMeasurement2D)=>{
-          siteMap.esri = { Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,FeatureLayer,Graphic,reactiveUtils,esriConfig,DistanceMeasurement2D };
+        ], (Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,FeatureLayer,GroupLayer,Graphic,reactiveUtils,esriConfig,DistanceMeasurement2D)=>{
+          siteMap.esri = { Map,MapView,ImageryLayer,ImageryTileLayer,MapImageLayer,TileLayer,FeatureLayer,GroupLayer,Graphic,reactiveUtils,esriConfig,DistanceMeasurement2D };
           resolve(siteMap.esri);
         }, reject);
       };
@@ -4689,6 +4721,41 @@ async function countRoadParcels(base, where, env, T){
   return (json && typeof json.count === "number") ? json.count : null;
 }
 
+/* Extend a resolved road filter with the DCDB's INTERSECTION parcels (§5, A8).
+   Probed on the same field and in the same scope the road count was resolved in,
+   and adopted only when it matches without swamping the roads (roadIntersection-
+   MaxRatio) — otherwise `hit` is returned untouched, so a service that has no
+   such parcel type keeps exactly the filter it had before. Never throws: a failed
+   probe just leaves the intersections out and says so in the diagnostics. */
+async function addRoadIntersections(base, hit, env, T){
+  const where = "UPPER(" + hit.field + ") LIKE '" + SITE_MAP_CONFIG.roadIntersectionPattern + "'";
+  const scope = env ? "within ~" + SITE_MAP_CONFIG.roadProbeKm + " km of the site" : "state-wide";
+  let count = null;
+  try{ count = await countRoadParcels(base, where, env, T); }
+  catch(e){ diagLog("Road-intersection probe failed (" + (e.message||"error") + ") — intersections left out."); return hit; }
+  if(!(count > 0)){
+    diagLog("No intersection parcels matched " + where + " " + scope + " — intersections left out of the road reserve.");
+    return hit;
+  }
+  if(hit.count > 0 && count > hit.count * SITE_MAP_CONFIG.roadIntersectionMaxRatio){
+    diagLog("Ignoring the intersection pattern: " + count + " matches against " + hit.count +
+            " road parcels " + scope + " is too many to be intersections.");
+    return hit;
+  }
+  hit.where = "(" + hit.where + ") OR (" + where + ")";
+  hit.intersections = count;
+  diagLog("Road intersections included: " + where + " matched " + count + " parcels " + scope + ".");
+  return hit;
+}
+
+// How the resolved filter reads in the diagnostics, including the intersections
+// when they were adopted (so "did the intersections come in?" is answerable from
+// a copied report alone).
+function roadFilterNote(hit, countNote){
+  return hit.field + " LIKE '%ROAD%' (" + countNote + ")" +
+    (hit.intersections ? " + " + hit.intersections + " intersection parcels" : "");
+}
+
 async function resolveRoadWhere(){
   const base = SITE_MAP_CONFIG.cadastre + "/" + SITE_MAP_CONFIG.cadastreParcelsSublayer;
   const T = SITE_MAP_CONFIG.timeouts.meta;
@@ -4729,8 +4796,10 @@ async function resolveRoadWhere(){
     const local = await countAll(env);
     const hit = local.find(r=> r.count > 0);
     if(hit){
-      setDiag("cadastre", { status:"resolved", resolved: hit.field + " LIKE '%ROAD%' (" + hit.count + " parcels within ~" + km + " km of the site)" },
-        "Road filter resolved: UPPER(" + hit.field + ") LIKE '%ROAD%' matched " + hit.count + " parcels within ~" + km + " km of the site.");
+      await addRoadIntersections(base, hit, env, T);   // fill the intersections too (A8)
+      setDiag("cadastre", { status:"resolved", resolved: roadFilterNote(hit, hit.count + " parcels within ~" + km + " km of the site") },
+        "Road filter resolved: UPPER(" + hit.field + ") LIKE '%ROAD%' matched " + hit.count + " parcels within ~" + km + " km of the site" +
+        (hit.intersections ? ", plus " + hit.intersections + " intersection parcels" : "") + ".");
       return hit;
     }
     diagLog("No candidate field matched road parcels within ~" + km + " km of the site — falling back to state-wide counts.");
@@ -4742,9 +4811,11 @@ async function resolveRoadWhere(){
   let best = null;
   wide.forEach(r=>{ if(r.count > 0 && (!best || r.count > best.count)) best = r; });
   if(best){
+    await addRoadIntersections(base, best, null, T);   // fill the intersections too (A8)
     const localNote = env ? " (none within ~" + km + " km of the site — the outline may not be visible at this location)" : "";
-    setDiag("cadastre", { status:"resolved", resolved: best.field + " LIKE '%ROAD%' (" + best.count + " parcels state-wide" + localNote + ")" },
-      "Road filter resolved from state-wide counts: UPPER(" + best.field + ") LIKE '%ROAD%' matched " + best.count + " parcels" + localNote + ".");
+    setDiag("cadastre", { status:"resolved", resolved: roadFilterNote(best, best.count + " parcels state-wide" + localNote) },
+      "Road filter resolved from state-wide counts: UPPER(" + best.field + ") LIKE '%ROAD%' matched " + best.count + " parcels" + localNote +
+      (best.intersections ? ", plus " + best.intersections + " intersection parcels" : "") + ".");
     return best;
   }
   setDiag("cadastre", { status:"failed", note:"schema read, but no candidate field returned road parcels" },
@@ -5072,7 +5143,27 @@ async function loadContourLayer(map, silent){
    and NO scale ceiling, so it is legible over aerial imagery and never hidden by
    a server-side maxScale when zoomed in (the reported symptom). Falls back to a
    MapImageLayer with the same outline renderer if the FeatureLayer path is
-   unavailable. Never renders unfiltered cadastre — the filter must resolve first. */
+   unavailable. Never renders unfiltered cadastre — the filter must resolve first.
+
+   A8 — the reserve is drawn as ONE reserve, not as the pile of parcels it is
+   stored as. The DCDB holds a road corridor as a parcel per block plus a parcel
+   per intersection, so outlining each parcel drew a magenta line ACROSS the road
+   at every intersection and boxed the intersection off from the corridor it is
+   part of: users read those internal seams as "the intersection is not road
+   reserve". So the group below outlines the OUTSIDE of the whole reserve and
+   nothing else, in three passes over the same filtered source (bottom → top):
+
+     edge — every parcel painted magenta and stroked at twice the outline width,
+            so the stroke overhangs each parcel by `roadOutline.width`;
+     cut  — the same parcels erased from the group's own canvas ("destination-out"),
+            which removes the magenta everywhere except that overhang — i.e.
+            everywhere but the OUTSIDE of the union of the parcels. Abutting
+            parcels erase each other's shared edge, so the seams go and the
+            reserve reads continuous through every intersection;
+     fill — the sandy wash, at its own alpha so the imagery still reads through.
+
+   The erase is confined to the group (that is what a GroupLayer isolates), so
+   the imagery and contours underneath are untouched. */
 async function loadRoadLayer(map, silent){
   const start = smNow();
   try{
@@ -5086,24 +5177,42 @@ async function loadRoadLayer(map, silent){
     }
     const roadUrl = SITE_MAP_CONFIG.cadastre + "/" + road.sublayer;
     const outline = SITE_MAP_CONFIG.roadOutline;
-    const roadRenderer = { type:"simple", symbol:{ type:"simple-fill", color: SITE_MAP_CONFIG.roadFill, outline:{ color: outline.color, width: outline.width } } };
-    // Primary: FeatureLayer — client-side symbology we control, no server
-    // maxScale. No outFields: the outline renderer needs no attributes, so the
-    // feature tiles carry geometry only.
+    const fillSym = (color, stroke)=> ({ type:"simple", symbol:{ type:"simple-fill", color, outline: stroke || null } });
+    // Per-parcel symbology, for the MapImageLayer fallback below only: a server-
+    // rendered sublayer cannot do the three-pass trick, so that degraded path
+    // still outlines each parcel (it does at least carry the intersections now).
+    const roadRenderer = fillSym(SITE_MAP_CONFIG.roadFill, { color: outline.color, width: outline.width });
+    // One pass over the filtered source, symbolised for its role in the stack.
+    // No outFields: none of the renderers read an attribute, so the feature tiles
+    // carry geometry only.
+    const roadPass = (renderer, extra)=> new siteMap.esri.FeatureLayer(Object.assign({
+      url: roadUrl,
+      definitionExpression: road.where,
+      opacity: 1,
+      minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0,   // no zoomed-in ceiling
+      renderer
+    }, extra || {}));
+    // Primary: FeatureLayer passes in a GroupLayer — client-side symbology we
+    // control, no server maxScale, and the reserve outlined as one shape (A8).
     try{
-      const fl = new siteMap.esri.FeatureLayer({
-        url: roadUrl,
-        definitionExpression: road.where,
-        opacity: 1,
-        minScale: SITE_MAP_CONFIG.dynamicMinScale, maxScale: 0,   // no zoomed-in ceiling
-        renderer: roadRenderer
+      // The sandy pass is the one that carries the diagnostics: it is a real
+      // FeatureLayer over the real filter, so "drew 0 features in view" still
+      // catches a filter that resolves and shows nothing.
+      const fill = roadPass(fillSym(SITE_MAP_CONFIG.roadFill, null));
+      await withTimeout(fill.load(), SITE_MAP_CONFIG.timeouts.layer, "Road reserve (cadastre FeatureLayer)");
+      if(fill.capabilities && fill.capabilities.query && fill.capabilities.query.supportsQuery === false) throw new Error("sublayer does not support query");
+      const grp = new siteMap.esri.GroupLayer({
+        title: "Road reserve",
+        layers: [
+          roadPass(fillSym(outline.color, { color: outline.color, width: outline.width * 2 })),
+          roadPass(fillSym([0, 0, 0, 1], null), { blendMode: "destination-out" }),
+          fill
+        ]
       });
-      await withTimeout(fl.load(), SITE_MAP_CONFIG.timeouts.layer, "Road reserve (cadastre FeatureLayer)");
-      if(fl.capabilities && fl.capabilities.query && fl.capabilities.query.supportsQuery === false) throw new Error("sublayer does not support query");
-      siteMap.layers.road = fl; insertLayerOrdered(map, fl, "road");
+      siteMap.layers.road = grp; insertLayerOrdered(map, grp, "road");
       if(!silent){
-        setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.source, mode:"FeatureLayer, magenta outline, maxScale 0" }, "Road reserve applied as FeatureLayer (" + road.source + ") — magenta 2 px outline, no zoomed-in scale ceiling.");
-        reportLayerFirstDraw(fl, "road", "Road reserve", start);
+        setDiag("road", { status:"applied", ms: Math.round(smNow()-start), note: road.source, mode:"FeatureLayer group, outline around the whole reserve, maxScale 0" }, "Road reserve applied as a FeatureLayer group (" + road.source + ") — magenta " + outline.width + " px outline around the reserve as a whole (intersections included, no internal seams), no zoomed-in scale ceiling.");
+        reportLayerFirstDraw(fill, "road", "Road reserve", start);
       }
       return;
     }catch(eFeat){
@@ -5611,8 +5720,11 @@ async function buildView(container, opts){
 }
 
 /* ---- pin graphics (always on top, in view.graphics) ---- */
-function drawPins(){
-  const view = siteMap.view;
+// `viewArg` lets the off-screen capture draw into ITS OWN view rather than
+// whichever view the module happens to point at (A9) — the module pointer can be
+// handed back to the modal mid-capture.
+function drawPins(viewArg){
+  const view = viewArg || siteMap.view;
   if(!view) return;
   const E = siteMap.esri;
   view.graphics.removeAll();
@@ -5634,21 +5746,55 @@ function drawPins(){
 // computes against a stale/zero size or is interrupted by the re-show resize —
 // the "map does not re-centre on the new coordinates when re-opened" defect (A3).
 // Never blocks the open: resolves on the first real size or when the bound elapses.
+// `suspended` is part of "on screen": a view whose container was display:none is
+// suspended, and a goTo issued before it comes back is the frame that never lands
+// (A9 — the modal re-opening on the LAST station). Bounded either way, so a view
+// that never wakes cannot hold the open.
 async function whenViewDisplayed(view){
   if(!view || !siteMap.esri) return;
-  if(view.ready && view.width > 0 && view.height > 0) return;
+  const shown = ()=> view.ready && view.width > 0 && view.height > 0 && !view.suspended;
+  if(shown()) return;
   await Promise.race([
-    siteMap.esri.reactiveUtils.whenOnce(()=> view.ready && view.width > 0 && view.height > 0),
+    siteMap.esri.reactiveUtils.whenOnce(shown),
     new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.view))
   ]).catch(()=>{});
+}
+
+// Bounded wait for a view to stop moving, so the next frame is not issued into
+// the middle of the previous one (which aborts it and leaves the old centre).
+async function whenViewSettled(view){
+  const E = siteMap.esri;
+  if(!view || !E || !E.reactiveUtils) return;
+  await Promise.race([
+    E.reactiveUtils.whenOnce(()=> view.stationary),
+    new Promise(res=> setTimeout(res, SITE_MAP_CONFIG.timeouts.settle))
+  ]).catch(()=>{});
+}
+
+// Did the frame actually land on the coordinate we asked for? Measured on SCREEN
+// — where the point sits in the viewport — so it needs no unit conversion and
+// scales with the zoom: the target must be within the middle half of the view.
+// Unanswerable (no view geometry yet) counts as landed, so a browser that can't
+// project never spins the re-frame loop below.
+function viewFramedOn(view, lon, lat){
+  try{
+    if(!view.ready || !view.width || !view.height) return true;
+    const pt = new siteMap.esri.Graphic({ geometry:{ type:"point", longitude:lon, latitude:lat } }).geometry;
+    const s = view.toScreen(pt);
+    if(!s || typeof s.x !== "number" || typeof s.y !== "number") return true;
+    return Math.abs(s.x - view.width / 2) <= view.width / 4 &&
+           Math.abs(s.y - view.height / 2) <= view.height / 4;
+  }catch(_){ return true; }
 }
 
 // Fit the view to the active pins, centred on the anchor pin, unless the user
 // has taken manual control of the view (§6.1, §6.2). `opts.force` ignores that
 // manual framing — the modal's open path passes it so a re-open always re-frames
 // on the current pins, whatever the user did to the view last session.
+// `opts.view` frames a view other than the module's (the off-screen capture's own
+// view, which must not follow the module pointer if the modal takes it back, A9).
 async function fitView(opts){
-  const view = siteMap.view;
+  const view = (opts && opts.view) || siteMap.view;
   if(!view) return;
   if(siteMap.userHasAdjustedView && !(opts && opts.force)) return;
   await whenViewDisplayed(view);      // a just-re-shown container has re-measured
@@ -5656,6 +5802,7 @@ async function fitView(opts){
   if(!pins.length) return;
   const anchor = pins.find(p=>p.anchor) || pins[0];
   const anchorPoint = { type:"point", longitude:anchor.lon, latitude:anchor.lat };
+  let warnedFar = false;              // the loop below can frame more than once
   const frame = async ()=>{
     if(pins.length === 1){
       await view.goTo({ target: anchorPoint, zoom: 17 }, { animate:false });
@@ -5664,25 +5811,34 @@ async function fitView(opts){
       await view.goTo({ target: graphics, center: [anchor.lon, anchor.lat] }, { animate:false, padding: 60 });
       // Guard against a distant pin zooming the site out to an unreadable dot.
       if(view.scale > 25000){
-        siteMapBanner("A pin is far from the site — showing the site at a readable scale. Use “Fit all pins” to see them all.", "warn");
+        if(!warnedFar){
+          warnedFar = true;
+          siteMapBanner("A pin is far from the site — showing the site at a readable scale. Use “Fit all pins” to see them all.", "warn");
+        }
         await view.goTo({ target: anchorPoint, scale: 12000 }, { animate:false });
       }
     }
   };
-  try{
-    await frame();
-  }catch(e){
-    // A goTo issued as the modal un-hides can be interrupted by the re-show resize:
-    // it aborts leaving the OLD centre on screen (the "does not re-centre on reopen"
-    // defect, A3). Wait for the view to stop moving, then frame once more so the new
-    // anchor actually lands. Bounded, and never throws out of framing.
-    try{
-      await Promise.race([
-        siteMap.esri.reactiveUtils.whenOnce(()=> view.stationary),
-        new Promise(res=> setTimeout(res, 3000))
-      ]);
-      await frame();
-    }catch(_){ /* give up quietly — a stale frame is better than a thrown open */ }
+  // Frame, then CONFIRM it landed, and frame again if it did not (A9). Asking
+  // once is not enough: a goTo issued while the modal is still being re-shown
+  // races ArcGIS's own re-measure of the container, and loses — it is aborted or
+  // superseded, and the view keeps the framing of the LAST scoping session, so
+  // the user opens the map on the previous station and has to hunt for their own
+  // pins. Every attempt is bounded and nothing here throws out of framing: worst
+  // case we run out of attempts and leave the view where it was, exactly as
+  // before. `frameAttempts` passes are enough for the resize race; a view that
+  // cannot be framed at all would not be fixed by a fourth.
+  for(let attempt = 0; attempt < SITE_MAP_CONFIG.frameAttempts; attempt++){
+    // A goTo that REJECTED was interrupted and certainly did not land, so it is
+    // retried without asking the view — `viewFramedOn` reports "landed" when it
+    // cannot tell, which must never swallow a known failure.
+    let interrupted = false;
+    try{ await frame(); }
+    catch(_){ interrupted = true; }
+    await whenViewSettled(view);
+    if(!interrupted && viewFramedOn(view, anchor.lon, anchor.lat)) break;
+    diagLog("The map " + (interrupted ? "framing was interrupted" : "did not land") +
+            " on " + formatCoord(anchor.lat, anchor.lon) + " — re-framing.");
   }
   invalidateScreenshot();
 }
@@ -6484,6 +6640,15 @@ function renderDistanceSuggestion(){
 async function openSiteMap(triggerEl){
   const table = activeTable();
   if(!table){ showStatus("No table to map"); return; }
+  // A capture-on-close (§7.6) may be rebuilding the map off-screen right now, and
+  // while it does, the module's view, layers and diagnostics point at ITS
+  // throwaway view (captureOffscreen). Opening on that view frames the throwaway,
+  // and the capture then hands the interactive view back exactly as it was — the
+  // "the map opens where the last scoping session left it" defect (A9). Take the
+  // interactive view back first; the capture works from its own reference and
+  // abandons its picture. This is the FIRST thing the open does, because
+  // everything below reads that state.
+  if(siteMap.offscreenRestore) siteMap.offscreenRestore();
   siteMap.triggerEl = triggerEl || document.activeElement;
   buildSiteMapModal();
   clearSiteMapBanners();
@@ -7047,12 +7212,17 @@ function ensureMapPicture(){
     // off-screen view is laid out, never suspended and drawn from scratch, so it
     // is a retry with an actual reason to succeed — at the cost of falling back to
     // the default framing, which beats pasting no map at all.
+    let superseded = false;
     if(!res && siteMap.view){
       diagLog("Automatic map picture: the live view produced nothing — rebuilding it off-screen.");
-      try{ res = await captureOffscreen(table); }catch(_){ res = null; }
+      try{ res = await captureOffscreen(table); }
+      catch(e){ res = null; superseded = !!(e && e.superseded); }
     }
 
-    autoCaptureFailed = !res;
+    // A picture the user superseded by opening the Site Map is not a failure —
+    // they are framing the next one right now, and closing it schedules a capture.
+    if(superseded){ diagLog("Automatic map picture abandoned — the Site Map was opened while it was being built."); }
+    autoCaptureFailed = !res && !superseded;
     if(res) diagLog("Map picture made automatically (the capture button was not used).");
     return res;
   })().catch((err)=>{
@@ -7152,40 +7322,75 @@ async function takeViewScreenshot(view){
   return view.takeScreenshot();
 }
 
+/* Build a throwaway view off-screen and shoot that (§7.3).
+
+   A9 — this is the capture that used to strand the modal on the previous
+   station. Reusing buildView / drawPins / fitView off-screen means pointing the
+   module's view, map, layers and diagnostics AT THE THROWAWAY for as long as this
+   runs — and capture-on-close runs in the background for several seconds, which
+   is exactly when the user opens the Site Map for their next scoping session.
+   openSiteMap then re-used "the existing view" (the throwaway), framed THAT on
+   the new pins, and the restore below handed the interactive view back untouched:
+   still framed, and still pinned, where the last station was.
+
+   So the swap is now OWNED. `siteMap.offscreenRestore` hands the interactive view
+   back on demand, openSiteMap calls it the moment it opens, and everything here
+   works from its own `offView` reference afterwards rather than from the module
+   pointer. A capture that loses the swap abandons its picture instead of
+   publishing one of a framing the user has already moved on from — closing the
+   modal schedules a fresh one anyway (§7.6). */
 async function captureOffscreen(table){
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;left:-10000px;top:0;width:" + SITE_MAP_CONFIG.offscreenSize.width + "px;height:" + SITE_MAP_CONFIG.offscreenSize.height + "px;";
   document.body.appendChild(host);
-  // Build a throwaway view sharing the module's layer setup.
-  const savedView = siteMap.view, savedMap = siteMap.esriMap, savedLayers = siteMap.layers, savedIds = siteMap.contourIds, savedRendered = siteMap.renderedInterval;
-  const savedDiag = siteMap.diag;   // don't let the throwaway view rewrite the modal's report
+  const saved = { view: siteMap.view, esriMap: siteMap.esriMap, layers: siteMap.layers,
+                  contourIds: siteMap.contourIds, renderedInterval: siteMap.renderedInterval,
+                  diag: siteMap.diag };   // don't let the throwaway rewrite the modal's report
+  let offView = null;
+  const putBack = ()=>{
+    siteMap.view = saved.view; siteMap.esriMap = saved.esriMap; siteMap.layers = saved.layers;
+    siteMap.contourIds = saved.contourIds; siteMap.renderedInterval = saved.renderedInterval;
+    siteMap.diag = saved.diag;
+  };
+  // Idempotent, and only ever acts while this capture still owns the swap.
+  const restore = ()=>{ if(siteMap.offscreenRestore !== restore) return; siteMap.offscreenRestore = null; putBack(); };
+  const superseded = ()=>{
+    const e = new Error("the Site Map was opened while the picture was being built");
+    e.superseded = true; return e;
+  };
+  siteMap.offscreenRestore = restore;
   siteMap.view = null; siteMap.esriMap = null; siteMap.layers = {};
   try{
     await buildView(host, { offscreen: true });
-    drawPins();
+    offView = siteMap.view;
+    // The modal opened while this was building: it already took the interactive
+    // view back, and buildView has just re-pointed the module at the throwaway.
+    // Hand it straight back and get out of the way.
+    if(siteMap.offscreenRestore !== restore){ putBack(); throw superseded(); }
+    drawPins(offView);
     // Off-screen path has no manual view to honour → default auto-fit (§6.1).
     const savedAdjust = siteMap.userHasAdjustedView; siteMap.userHasAdjustedView = false;
-    await fitView();
+    await fitView({ view: offView });
     siteMap.userHasAdjustedView = savedAdjust;
-    const view = siteMap.view;
     // Wait for a settled, un-suspended frame before shooting (A2). The off-screen
     // host is laid out (position:fixed, off-screen) not display:none, so the view
     // is not suspended here — but whenCaptureReady still bounds the wait so a layer
     // stuck retrying (§4.4) can't hang the copy.
-    await whenCaptureReady(view);
-    const pv = pinsInView(view);
-    const shot = await takeViewScreenshot(view);
+    await whenCaptureReady(offView);
+    const pv = pinsInView(offView);
+    const shot = await takeViewScreenshot(offView);
     const dataUrl = await compositeScreenshot(shot, siteMap.renderedInterval);
     const meta = { interval: siteMap.renderedInterval, pinsTotal: pv.total, pinsInView: pv.inside };
+    // Opened while this was drawing → the picture is of a framing the user has
+    // already left. Drop it rather than publish it over the one they are making.
+    if(siteMap.offscreenRestore !== restore) throw superseded();
     siteMap.screenshot = { dataUrl, valid: true, meta, source: "auto", at: Date.now() };
     renderCaptureCard(); renderMapStateChip();
     return { dataUrl, meta };
   } finally {
-    try{ if(siteMap.view) siteMap.view.destroy(); }catch(_){}
+    try{ if(offView) offView.destroy(); }catch(_){}
     host.remove();
-    // Restore the interactive view state (and the modal's diagnostics record).
-    siteMap.view = savedView; siteMap.esriMap = savedMap; siteMap.layers = savedLayers; siteMap.contourIds = savedIds; siteMap.renderedInterval = savedRendered;
-    siteMap.diag = savedDiag;
+    restore();
   }
 }
 

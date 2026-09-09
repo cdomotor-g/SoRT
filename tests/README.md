@@ -67,6 +67,16 @@ road layer "applied" cleanly and drew nothing. The test also pins the fallback:
 when nothing matches locally, the **largest** state-wide match wins (not the
 first non-zero) and the diagnostics flag that nothing matched at this location.
 
+It also guards **A8 — the intersections**. A road reserve runs through its
+intersections, but the DCDB stores each one as its own parcel, typed
+`Unlinked parcel or inter…` rather than anything matching `%ROAD%`, so every
+intersection drew as an unfilled hole boxed in by the road parcels that stopped
+at it. `resolveRoadWhere` now probes a second pattern on the same field and ORs
+it in only when it validates; the test pins all three outcomes: intersections
+present (ORed in and counted in the report), none present (the filter is left
+exactly as it was), and a match so large it cannot be intersections (rejected,
+rather than painting the rest of the cadastre as road reserve).
+
 Unlike the other two tests this one **does** stub the QLD cadastre endpoint (via
 Playwright network interception) — that service is exactly what is unreachable
 from CI, and the resolution logic is pure request/response. The page code runs
@@ -410,6 +420,21 @@ real `openSiteMap` / `fitView` against a stand-in view and asserts:
 - a second open — the reported workflow, two scoping sessions without closing the
   tool — re-frames again;
 - **Reset view** and **Fit all pins** are still there for mid-session re-framing.
+
+Calling `fitView` was not enough on its own, so the test also covers **A9**, the
+two reasons the re-frame did not reach the screen:
+
+- `openSiteMap` frames the **interactive** view, never the off-screen capture's
+  throwaway. Capture-on-close rebuilds the map off-screen in the background and
+  points the module's view/layers/diagnostics at its own view while it does; a
+  re-open in that window framed the throwaway, and the capture then handed the
+  interactive view back untouched — still on the last station. The open now calls
+  `siteMap.offscreenRestore` first, and `fitView({view})` / `drawPins(view)` let
+  the capture work from its own reference instead of the module pointer;
+- `fitView` **confirms** the framing landed. A goTo issued while the modal is
+  still being re-shown can be dropped or interrupted, so it re-frames until the
+  anchor is actually in the middle of the view — bounded by
+  `SITE_MAP_CONFIG.frameAttempts`, and a rejected goTo always counts as a miss.
 
 Hermetic — the central store, the Esri CDN and every QLD host are blocked, and no
 WebGL view is created. Same invocation as the others:

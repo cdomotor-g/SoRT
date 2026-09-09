@@ -22,6 +22,17 @@
  *   C — nothing local: fall back to the LARGEST state-wide count (not the
  *       first non-zero), and the diagnostics say nothing matched near the site.
  *
+ * A8 (intersections) — a road reserve runs THROUGH its intersections, but the
+ * DCDB keeps each intersection as its own parcel of a type the '%ROAD%' filter
+ * never matches, so every intersection drew as a hole in the corridor. The
+ * resolver now probes a second pattern on the same field and ORs it in when it
+ * validates:
+ *
+ *   D — intersections present → ORed into the filter and counted in the report.
+ *   E — no intersection parcels → the filter is left exactly as it was.
+ *   F — a pattern matching far more than the roads is not an intersection type
+ *       → rejected, rather than painting the rest of the cadastre as reserve.
+ *
  * Run: see tests/README.md (same invocation as reopen-coords.test.mjs).
  */
 import http from 'node:http';
@@ -71,10 +82,15 @@ const SITE = { lat: -28.318253, lon: 152.921599 };
 
 // Per-scenario stub counts, keyed by upper-cased field name. Fields absent from
 // a table count 0. `local` answers geometry-scoped queries; `wide` state-wide.
+// `interLocal` / `interWide` answer the '%INTER%' (intersection) probe; a scenario
+// that omits them answers it from the road tables, as a real service does.
 const STUB = {
   A: { local: { PARCEL_TYP: 12, TENURE: 0 }, wide: { PARCEL_TYP: 400000, TENURE: 202 } },
   B: { local: { PARCEL_TYP: 0,  TENURE: 7 }, wide: { PARCEL_TYP: 400000, TENURE: 202 } },
-  C: { local: {},                            wide: { PARCEL_TYP: 5,      TENURE: 500000 } }
+  C: { local: {},                            wide: { PARCEL_TYP: 5,      TENURE: 500000 } },
+  D: { local: { PARCEL_TYP: 100 }, wide: {}, interLocal: { PARCEL_TYP: 60 } },
+  E: { local: { PARCEL_TYP: 100 }, wide: {}, interLocal: { PARCEL_TYP: 0 } },
+  F: { local: { PARCEL_TYP: 100 }, wide: {}, interLocal: { PARCEL_TYP: 5000 } }
 };
 let mode = 'A';
 let lastEnvelope = null;   // the geometry the page sent with a scoped query
@@ -111,7 +127,11 @@ try {
       const field = m ? m[1].toUpperCase() : '';
       const scoped = url.searchParams.has('geometry');
       if(scoped){ try{ lastEnvelope = JSON.parse(url.searchParams.get('geometry')); }catch(_){} }
-      const table = scoped ? STUB[mode].local : STUB[mode].wide;
+      const inter = /%INTER%/i.test(url.searchParams.get('where') || '');
+      const s = STUB[mode];
+      const table = inter
+        ? (scoped ? (s.interLocal || s.local) : (s.interWide || s.wide))
+        : (scoped ? s.local : s.wide);
       return json({ count: table[field] || 0 });
     }
     return route.abort();
@@ -136,6 +156,7 @@ try {
     const r = await resolveRoadWhere();
     return { r, resolved: siteMap.diag && siteMap.diag.cadastre.resolved };
   });
+  const hasInter = r => /%INTER%/.test((r && r.r && r.r.where) || '');
 
   // ---- A: the real-world shape of the defect. ------------------------------
   mode = 'A'; lastEnvelope = null;
@@ -158,6 +179,27 @@ try {
   const c = await resolve();
   check('C: falls back to the LARGEST state-wide count, not the first non-zero', c.r && c.r.field === 'TENURE' && c.r.count === 500000);
   check('C: diagnostics flag that nothing matched near the site', /none within/.test(c.resolved || ''));
+
+  // ---- D: intersections are ORed into the filter (A8). ---------------------
+  mode = 'D';
+  const d = await resolve();
+  check('D: the road pattern is still in the filter', /%ROAD%/.test((d.r && d.r.where) || ''));
+  check('D: the intersection parcels are ORed in', hasInter(d));
+  check('D: the intersection count is reported', d.r && d.r.intersections === 60);
+  check('D: diagnostics name the intersection parcels', /60 intersection parcels/.test(d.resolved || ''));
+  check('D: the road count is still the ROAD count', d.r && d.r.count === 100);
+
+  // ---- E: nothing to add → the filter is untouched. ------------------------
+  mode = 'E';
+  const e = await resolve();
+  check('E: no intersection parcels leaves the filter alone', !hasInter(e));
+  check('E: the road filter still resolves', e.r && e.r.field === 'PARCEL_TYP' && e.r.count === 100);
+
+  // ---- F: a pattern that swamps the roads is not an intersection type. -----
+  mode = 'F';
+  const f = await resolve();
+  check('F: an implausibly large intersection match is rejected', !hasInter(f));
+  check('F: the road filter survives the rejection', f.r && f.r.count === 100);
 
 } finally {
   await browser.close();

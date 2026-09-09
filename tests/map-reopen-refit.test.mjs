@@ -18,7 +18,22 @@
  * mid-open cannot strand the old view either. Manual framing still holds for as
  * long as the modal stays open — `fitView()` with no argument is unchanged.
  *
- * Drives the real `openSiteMap` / `fitView` code against a stand-in view.
+ * A9 — two further things had to be true before a re-open actually landed on the
+ * new station, and neither was:
+ *
+ *   1. `openSiteMap` must frame the INTERACTIVE view. Capture-on-close rebuilds
+ *      the map off-screen in the background (captureOffscreen), and while it does
+ *      it points the module's view/layers/diagnostics at its own throwaway view.
+ *      A re-open in that window framed the THROWAWAY, and the capture then handed
+ *      the interactive view back exactly as it was — still on the last station.
+ *      openSiteMap now takes the interactive view back first
+ *      (`siteMap.offscreenRestore`), and the capture works from its own reference.
+ *   2. `fitView` must CONFIRM the framing landed. A goTo issued while the modal is
+ *      still being re-shown races the container's re-measure and can be dropped,
+ *      so fitView now re-frames until the anchor really is in the middle of the
+ *      view, bounded by SITE_MAP_CONFIG.frameAttempts.
+ *
+ * Drives the real `openSiteMap` / `fitView` / `drawPins` code against a stand-in view.
  * Fully hermetic: the central store, the Esri CDN and every QLD host are
  * blocked, and no WebGL view is ever created.
  *
@@ -115,7 +130,7 @@ try {
   const opened = await page.evaluate(async ()=>{
     // Stand in for the pieces that would need the Esri CDN and a WebGL view, so
     // the real openSiteMap can run its re-open branch end to end.
-    const realFit = window.fitView;
+    const realFit = window.fitView, realDraw = window.drawPins;
     const fitArgs = [];
     window.loadEsri = async ()=> (siteMap.esri = { reactiveUtils:{ whenOnce: ()=> Promise.resolve(true) } });
     window.fitView = async (opts)=>{ fitArgs.push(opts || null); };
@@ -138,7 +153,7 @@ try {
     await openSiteMap(document.getElementById('siteMapBtn'));
     const afterSecond = { adjusted: siteMap.userHasAdjustedView, fitArgs: fitArgs.slice() };
 
-    window.fitView = realFit;
+    window.fitView = realFit; window.drawPins = realDraw;
     await closeSiteMap();
     return { before, afterFirst, afterSecond };
   });
@@ -150,6 +165,99 @@ try {
         opened.afterSecond.adjusted === false && opened.afterSecond.fitArgs.length === 2);
   check('the second open forces its fit too',
         opened.afterSecond.fitArgs[1] && opened.afterSecond.fitArgs[1].force === true);
+
+  /* ---- A9.2: fitView re-frames until the view reports it landed ---- */
+  const landing = await page.evaluate(async ()=>{
+    // A view that only accepts the framing on its `landsOn`-th goTo, so we can see
+    // whether fitView notices a frame that did not take and asks again.
+    const makeView = (landsOn)=>{
+      const v = {
+        ready:true, width:800, height:450, stationary:true, scale:5000, suspended:false,
+        __calls:0, __at:{ lon:151, lat:-27 },
+        graphics:{ toArray:()=>[] },
+        goTo(t){
+          v.__calls++;
+          if(v.__calls >= landsOn){ v.__at = { lon:t.target.longitude, lat:t.target.latitude }; }
+          return Promise.resolve();
+        },
+        // Where a coordinate sits on screen: dead centre once the view is on it,
+        // off in the corner while it is not.
+        toScreen(pt){
+          return (pt.longitude === v.__at.lon && pt.latitude === v.__at.lat)
+            ? { x:400, y:225 } : { x:795, y:445 };
+        }
+      };
+      return v;
+    };
+    siteMap.esri = {
+      reactiveUtils:{ whenOnce: ()=> Promise.resolve(true) },
+      Graphic: function(o){ this.geometry = o.geometry; }
+    };
+    siteMap.pins = [{ key:'a', rowId:'coords', on:true, ok:true, anchor:true, lat:-17.1699, lon:145.68885, colour:'red', label:'Current location' }];
+    siteMap.userHasAdjustedView = false;
+
+    siteMap.view = makeView(1);  await fitView({ force:true });
+    const first = siteMap.view.__calls;
+    siteMap.view = makeView(3);  await fitView({ force:true });
+    const third = { calls: siteMap.view.__calls, at: siteMap.view.__at };
+    siteMap.view = makeView(99); await fitView({ force:true });
+    const never = siteMap.view.__calls;
+
+    // An explicit view is framed instead of the module's (the off-screen capture).
+    const modules = makeView(1), other = makeView(1);
+    siteMap.view = modules;
+    await fitView({ force:true, view: other });
+    return { first, third, never, cap: SITE_MAP_CONFIG.frameAttempts,
+             moduleCalls: modules.__calls, otherCalls: other.__calls };
+  });
+  check('a framing that lands is asked for exactly once', landing.first === 1);
+  check('a framing that is dropped is asked for again', landing.third.calls === 3);
+  check('the re-framing ends on the anchor pin', landing.third.at && landing.third.at.lat === -17.1699);
+  check('re-framing is bounded by frameAttempts', landing.never === landing.cap && landing.cap >= 1);
+  check('fitView({view}) frames the view it was given', landing.otherCalls === 1);
+  check('fitView({view}) leaves the module view alone', landing.moduleCalls === 0);
+
+  /* ---- A9.1: an open never frames the off-screen capture's throwaway view ---- */
+  const handback = await page.evaluate(async ()=>{
+    const fitArgs = [];
+    const realFit = window.fitView, realDraw = window.drawPins;
+    const interactive = { __id:'interactive', ready:true, width:800, height:450, stationary:true,
+                          scale:5000, suspended:false, graphics:{ toArray:()=>[] }, goTo:()=>Promise.resolve() };
+    const throwaway  = { __id:'throwaway',  ready:true, width:1600, height:1120, stationary:true,
+                          scale:5000, suspended:false, graphics:{ toArray:()=>[] }, goTo:()=>Promise.resolve() };
+    window.loadEsri = async ()=> (siteMap.esri = { reactiveUtils:{ whenOnce: ()=> Promise.resolve(true) } });
+    window.drawPins = ()=>{};
+    window.mapBuildTrackRedraw = ()=>{};
+    window.fitView = async ()=>{ fitArgs.push(siteMap.view && siteMap.view.__id); };
+
+    // Exactly the state captureOffscreen leaves behind while it builds.
+    siteMap.view = throwaway;
+    let handedBack = false;
+    siteMap.offscreenRestore = ()=>{ handedBack = true; siteMap.view = interactive; siteMap.offscreenRestore = null; };
+
+    await openSiteMap(document.getElementById('siteMapBtn'));
+    const framed = fitArgs.slice();
+    window.fitView = realFit; window.drawPins = realDraw;
+    await closeSiteMap();
+    return { handedBack, framed, cleared: siteMap.offscreenRestore };
+  });
+  check('opening hands the interactive view back from an off-screen capture', handback.handedBack === true);
+  check('the open frames the interactive view, never the throwaway',
+        handback.framed.length === 1 && handback.framed[0] === 'interactive');
+  check('the hand-back is one-shot', !handback.cleared);
+
+  /* ---- drawPins draws into the view it is given ---- */
+  const pinned = await page.evaluate(()=>{
+    siteMap.esri = { Graphic: function(o){ Object.assign(this, o); } };
+    siteMap.pins = [{ key:'a', rowId:'coords', on:true, ok:true, anchor:true, lat:-17.1, lon:145.6, colour:'red', label:'Current location' }];
+    const mk = ()=>{ const g = []; return { added:g, graphics:{ removeAll:()=>{ g.length = 0; }, add:x=>g.push(x) } }; };
+    const modules = mk(), other = mk();
+    siteMap.view = modules;
+    drawPins(other);
+    return { module: modules.added.length, other: other.added.length };
+  });
+  check('drawPins(view) draws into the view it was given', pinned.other === 1);
+  check('drawPins(view) leaves the module view alone', pinned.module === 0);
 
   /* ---- the "Fit all pins" / reset controls are untouched ---- */
   const controls = await page.evaluate(()=>{
