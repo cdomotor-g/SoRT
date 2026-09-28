@@ -41,6 +41,62 @@ At startup the app picks the first source that is available:
 > how the page is opened — so it even works from a `file://` copy. The bundled
 > `definitions.json` is only used if the store is unreachable (offline).
 
+Two buttons in the header step outside that order on request: **Load from repo**
+pulls `definitions.json` straight from GitHub, and **Clear cache** forgets what
+the app has saved in this browser and reloads it fresh — see
+[Header buttons](#header-buttons-load-from-repo--clear-cache).
+
+## Header buttons: Load from repo / Clear cache
+
+Both sit in the header next to the dark-mode toggle, so they are there on every
+tab.
+
+### Load from repo
+
+Loads `definitions.json` straight from the GitHub repo — the copy edited on
+github.com — into this browser, so a change made there is one click away rather
+than an Export → Import round trip.
+
+- **Where it reads.** The `GITHUB_REPO` constant near the top of the script in
+  `index.html` (next to `SUPABASE`) names the repo, branch and file:
+  `cdomotor-g/SoRT`, `main`, `definitions.json`.
+- **Current, not cached.** It asks the GitHub contents API, which returns the
+  branch as it is right now. Anonymous API use is limited to 60 requests an hour
+  per network address (a whole office behind one address shares that), so when
+  the API refuses — or is blocked — it falls back to `raw.githubusercontent.com`
+  with a cache-busting query. That copy can run up to 5 minutes behind a brand-new
+  commit, and the message says so when it is the one used.
+- **It loads; it doesn't publish.** Like **Import JSON…**, the result is an
+  unpublished copy in this browser: the source chip reads *Definitions: loaded
+  from GitHub (browser only)*, and Manage Tables says the definitions are not
+  published yet. With the central store on, check the result and click
+  **Publish to central store** to give it to everyone.
+- **Work in progress is safe.** Answers already filled in carry over to every
+  row that still exists. If the browser holds unpublished edits, it asks before
+  replacing them. If GitHub can't be reached, or sends back something that isn't
+  a definitions file, nothing changes and the message says why. Each route gives
+  up after 15 s, so the button can't hang.
+
+### Clear cache
+
+Clears what SoRT has saved in this browser and reloads the app fresh from the
+server — the fix for "I'm still seeing the old tables / the old version" on a PC
+with no DevTools to clear things by hand. It asks first, because the reload also
+clears anything filled in on the page.
+
+- **What goes:** every `sort.*` key in this browser's storage — the unpublished
+  draft (`sort.definitions.v1`) and a remembered *Load from URL* address
+  (`sort.definitionsUrl`).
+- **What stays:** the dark/light theme choice, and other apps' data — every
+  GitHub Pages site on one account shares an origin, so a blanket clear would
+  wipe theirs too. The published definitions (central store or
+  `definitions.json`) are never touched.
+- **A fresh page, not a cached one.** GitHub Pages lets browsers reuse
+  `index.html` for up to 10 minutes, so just after a deploy an ordinary visit can
+  still get the old version. Clear cache re-fetches the page past the HTTP cache
+  (`cache:"reload"`) before it reloads, then says *Cache cleared* once the fresh
+  page is up.
+
 ## Editing definitions (Manage Tables)
 
 The editor lets you:
@@ -130,6 +186,8 @@ step for other users. Extras you get for free:
   offered back next time (you can resume or discard it).
 - **History / rollback** — every publish is archived (see the setup section), so
   a bad change can be rolled back.
+- **Edited on GitHub?** Click **Load from repo** in the header, check the tables,
+  then **Publish to central store** — the store doesn't read GitHub by itself.
 
 **With no store configured (offline mode):** edits are saved in your browser
 only. Click **Export JSON**, upload the file to your shared location as

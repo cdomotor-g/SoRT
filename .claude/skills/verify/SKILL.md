@@ -35,6 +35,12 @@ python3 -m http.server 8642 --bind 127.0.0.1 &   # serve from the repo root
   live in `#commonRowList`.
 - Table Map: `.mode-btn[data-mode="map"]`, grid `table.map-grid`.
 - Source chip `#sourceLabel` shows which definitions source loaded.
+- Header buttons: `#loadRepoBtn` (stub `https://api.github.com/**` and
+  `https://raw.githubusercontent.com/**` with `ctx.route`; the outcome shows
+  in the `#appToast` toast) and `#clearCacheBtn` (accept its `confirm`; the
+  page reloads). Any `route()` switches Chromium's HTTP cache off, so a
+  real-cache check needs a context with no routes — see
+  `tests/header-cache-repo.test.mjs`.
 
 ## Gotchas
 

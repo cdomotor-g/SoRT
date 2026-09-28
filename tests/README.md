@@ -371,6 +371,40 @@ PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/field-default-text.test.mjs
 ```
 
+## `header-cache-repo.test.mjs` — the *Load from repo* and *Clear cache* buttons
+
+Guards the two header buttons.
+
+- **Load from repo** reads `definitions.json` from the GitHub contents API (asking
+  for the raw file) and falls back to `raw.githubusercontent.com`, cache-busted,
+  when the API is rate-limited. The test asserts the repo copy is applied as an
+  **unpublished browser copy** (origin `repo`, the source chip, the Manage Tables
+  note — and no bogus "draft from a previous session" banner), that answers on
+  rows that still exist carry over, that nothing is sent to the central store,
+  that it **asks before replacing unpublished edits** (and not over an untouched
+  repo load), and that an unreachable GitHub, a response that isn't a definitions
+  file, or a host that never answers (the per-route timeout) leaves everything
+  exactly as it was, with a message naming each route's failure.
+- **Clear cache** asks first; *Cancel* changes nothing. *OK* removes every
+  `sort.*` key except the theme — other apps' keys on the same origin survive —
+  even with an edit's autosave still pending, re-fetches the page with
+  `cache:"reload"` before reloading, and the fresh page says so.
+- **Against a real HTTP cache.** Network interception switches Chromium's cache
+  off, so the last section runs in a second browser with no interception (only
+  `127.0.0.1` resolves) and serves the app the way GitHub Pages does
+  (`max-age=600` + ETag). It shows the problem — after a deploy, an ordinary
+  visit still gets the old page — and that Clear cache brings up the new one, for
+  good.
+
+Hermetic — the central store is blocked, both GitHub hosts are stubbed, and the
+real-cache section never leaves 127.0.0.1. Same invocation as the others:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium \
+  node tests/header-cache-repo.test.mjs
+```
+
 ## `word-column-widths.test.mjs` — the one-character-wide first column
 
 Guards the column widths of both copied tables. Pasted into Word, the left-hand

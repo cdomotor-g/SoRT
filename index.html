@@ -88,7 +88,13 @@
   .header-titles{
     display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; min-width:0;
   }
-  .theme-toggle{
+  /* App-wide actions (Clear cache, Load from repo, theme) — one group, so the
+     header's space-between keeps them together on the right. */
+  .header-actions{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; align-self:center;
+  }
+  .theme-toggle,
+  .header-btn{
     appearance:none; cursor:pointer; font-family:inherit; align-self:center;
     display:inline-flex; align-items:center; gap:7px;
     background:rgba(255,255,255,.12); color:#fff;
@@ -96,9 +102,32 @@
     padding:7px 13px; border-radius:999px; font-size:.82rem; font-weight:600;
     transition:background .15s ease, border-color .15s ease;
   }
-  .theme-toggle:hover{ background:rgba(255,255,255,.22); border-color:rgba(255,255,255,.5); }
-  .theme-toggle:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
-  .theme-toggle-icon{ font-size:1rem; line-height:1; }
+  .theme-toggle:hover,
+  .header-btn:hover{ background:rgba(255,255,255,.22); border-color:rgba(255,255,255,.5); }
+  .theme-toggle:focus-visible,
+  .header-btn:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
+  .theme-toggle-icon,
+  .header-btn-icon{ font-size:1rem; line-height:1; }
+  .header-btn:disabled,
+  .header-btn:disabled:hover{
+    cursor:progress; opacity:.7;
+    background:rgba(255,255,255,.12); border-color:rgba(255,255,255,.28);
+  }
+
+  /* Feedback for the header actions. Fixed (not inside the sticky block, whose
+     overflow would clip it) and hung just under the nav bar, clear of the
+     source chip — see appToast(). */
+  .app-toast{
+    position:fixed; z-index:55;          /* above the sticky block + toolbar, below modals (60) */
+    right:16px; top:var(--app-toast-top, 72px);
+    max-width:min(440px, calc(100vw - 32px));
+    background:var(--card); color:var(--ink);
+    border:1px solid var(--line); border-left:4px solid var(--accent);
+    border-radius:var(--radius); padding:10px 14px;
+    font-size:.85rem; line-height:1.45; cursor:pointer;
+    box-shadow:0 8px 24px rgba(0,0,0,.18);
+  }
+  .app-toast.is-error{ border-left-color:var(--danger); }
 
   /* ---- top-level mode nav + data source bar ---- */
   .mode-nav{
@@ -612,13 +641,27 @@
     header.app-header{ padding:11px 16px; }
     header.app-header h1{ font-size:1.05rem; }
     header.app-header .sub{ display:none; }
-    .theme-toggle{ padding:5px 11px; font-size:.78rem; }
+    .theme-toggle,
+    .header-btn{ padding:5px 11px; font-size:.78rem; }
     .mode-nav{ padding:0 12px; gap:0; }
     .mode-btn{ padding:9px 10px; font-size:.84rem; }
     .sticky-builder{ padding:12px 16px 10px; }
     .meta-card{ padding:11px 13px; gap:9px; margin-bottom:11px; }
     .tabs{ margin-bottom:10px; }
     .tab-btn{ padding:8px 12px; font-size:.85rem; }
+  }
+  /* Narrow screens: the header buttons go icon-only so they stay on the title's
+     line (with labels they need ~600px). The labels are only visually hidden —
+     still the accessible name, and each button's tooltip says what it does. */
+  @media (max-width: 600px){
+    .theme-toggle,
+    .header-btn{ padding:5px 6px; }
+    .header-actions{ gap:4px; }
+    .header-btn .header-btn-label,
+    .theme-toggle .theme-toggle-label{
+      position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0;
+      overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap;
+    }
   }
 
   /* ===================== COORDINATE VALIDATION HINTS (§3) ===================== */
@@ -931,10 +974,21 @@
     <h1>SoRT Forum Scope Builder</h1>
     <div class="sub">Click through a table, then copy the finished result straight into your report</div>
   </div>
-  <button type="button" id="themeToggle" class="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false" title="Toggle dark mode">
-    <span class="theme-toggle-icon" aria-hidden="true">🌙</span>
-    <span class="theme-toggle-label">Dark</span>
-  </button>
+  <!-- App-wide actions, available on every tab (§ HEADER ACTIONS in the script). -->
+  <div class="header-actions">
+    <button type="button" id="clearCacheBtn" class="header-btn" title="Clear what SoRT has saved in this browser and reload it fresh from the server">
+      <span class="header-btn-icon" aria-hidden="true">🧹</span>
+      <span class="header-btn-label">Clear cache</span>
+    </button>
+    <button type="button" id="loadRepoBtn" class="header-btn" title="Load the latest definitions from the GitHub repo">
+      <span class="header-btn-icon" aria-hidden="true">📥</span>
+      <span class="header-btn-label">Load from repo</span>
+    </button>
+    <button type="button" id="themeToggle" class="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false" title="Toggle dark mode">
+      <span class="theme-toggle-icon" aria-hidden="true">🌙</span>
+      <span class="theme-toggle-label">Dark</span>
+    </button>
+  </div>
 </header>
 
 <nav class="mode-nav">
@@ -972,6 +1026,9 @@
   </div>
 
 </div><!-- /.sticky-top -->
+
+<!-- Feedback for the header actions (Clear cache / Load from repo). -->
+<div class="app-toast" id="appToast" role="status" aria-live="polite" hidden></div>
 
 <div class="wrap" id="wrap">
 
@@ -1130,8 +1187,25 @@ const SUPABASE = {
 const REMOTE_ON = !!(SUPABASE.url && SUPABASE.anonKey);
 let remoteVersion = null;   // version of the row we last loaded (optimistic-lock check)
 
+/* ===================== GITHUB REPO ("Load from repo") =====================
+   Where the header's "Load from repo" button reads definitions.json — the copy
+   people edit on github.com. It only LOADS it into this browser (like Import):
+   nothing reaches the central store until someone clicks Publish. Two routes,
+   tried in order (see fetchDefsFromGithub):
+     • the GitHub contents API — the branch as it is right now, but anonymous
+       callers share 60 requests an hour per network address;
+     • raw.githubusercontent.com — the fallback when the API refuses or is
+       blocked; its CDN can serve a copy up to 5 minutes old.                  */
+const GITHUB_REPO = {
+  owner:     "cdomotor-g",
+  repo:      "SoRT",
+  branch:    "main",
+  path:      DEFINITIONS_FILE,    // path of the definitions file inside the repo
+  timeoutMs: 15000                // per route, so a blocked host can't hang the button
+};
+
 let defs = null;          // active definitions used by the builder + editor
-let defsOrigin = "none";  // "file" | "url" | "local" | "imported" | "none"
+let defsOrigin = "none";  // "remote" | "file" | "url" | "local" | "imported" | "repo" | "none"
 let mode = "builder";     // "builder" | "manage"
 
 /* ===================== DEFINITION HELPERS ===================== */
@@ -2315,6 +2389,9 @@ function renderManage(){
 
   const issues = collectIssues();
   const hasDraft = REMOTE_ON && !!localStorage.getItem(LS_DEFS);
+  // The definitions on screen exist only in this browser (edited, imported or
+  // loaded from GitHub) — so the saved draft IS what is showing, not a leftover.
+  const unpublished = ["local", "imported", "repo"].includes(defsOrigin);
   const actions = REMOTE_ON
     ? `<button class="btn btn-primary" id="btnPublish">Publish to central store</button>
        <button class="btn btn-secondary" id="btnReloadRemote">Reload latest</button>
@@ -2328,14 +2405,15 @@ function renderManage(){
     ? `<div class="admin-note">
          Changes are saved in <b>this browser</b> as you type. Click <b>Publish to central store</b>
          to share them — everyone else picks up the update automatically the next time they open the app.
-         ${defsOrigin === "local" ? `<b>You have unpublished changes.</b>` : ""}
+         ${defsOrigin === "repo" ? `<b>These definitions were loaded from GitHub and are not published yet.</b>`
+           : unpublished ? `<b>You have unpublished changes.</b>` : ""}
        </div>`
     : `<div class="admin-note">
          <b>Heads up:</b> changes here are saved in <b>this browser only</b>. When you are happy,
          click <b>Export JSON</b> and upload the file to your shared location (SharePoint / on-prem)
          as <code>${escapeHtml(DEFINITIONS_FILE)}</code> so the whole team gets the update.
        </div>`;
-  const draftBanner = (hasDraft && defsOrigin !== "local")
+  const draftBanner = (hasDraft && !unpublished)
     ? `<div class="admin-note">
          You have an <b>unpublished draft</b> saved in this browser from a previous session.
          <button class="mini-btn" id="btnResumeDraft">Resume draft</button>
@@ -3367,14 +3445,80 @@ function resetToPublished(){
   boot(true);
 }
 
-async function fetchDefs(url){
-  const res = await fetch(url, { cache:"no-store" });
+async function fetchDefs(url, init){
+  const res = await fetch(url, Object.assign({ cache:"no-store" }, init));
   if(!res.ok) throw new Error("HTTP " + res.status);
   const json = await res.json();
   if(!json || typeof json !== "object" || !Array.isArray(json.tables)){
     throw new Error("not a valid definitions file");
   }
   return json;
+}
+
+/* ---- Load from repo (header button) ----
+   definitions.json straight from GitHub (see GITHUB_REPO). The API route reads
+   the branch as it is right now; the raw CDN is the fallback, with a throwaway
+   query so no cache in between can answer for it. */
+function githubDefinitionRoutes(){
+  const g = GITHUB_REPO;
+  const seg = s => String(s).split("/").map(encodeURIComponent).join("/");
+  return [
+    { via:"api", label:"GitHub API",
+      url:`https://api.github.com/repos/${seg(g.owner)}/${seg(g.repo)}/contents/${seg(g.path)}?ref=${encodeURIComponent(g.branch)}`,
+      init:{ headers:{ Accept:"application/vnd.github.raw" } } },   // the file itself, not the JSON envelope
+    { via:"raw", label:"raw.githubusercontent.com",
+      url:`https://raw.githubusercontent.com/${seg(g.owner)}/${seg(g.repo)}/${seg(g.branch)}/${seg(g.path)}?nocache=${Date.now()}` }
+  ];
+}
+
+// The first route that returns a valid definitions document wins. Each one is
+// bounded by GITHUB_REPO.timeoutMs; if none works, the error gives every
+// route's reason.
+async function fetchDefsFromGithub(){
+  const failures = [];
+  for(const route of githubDefinitionRoutes()){
+    const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(()=> ctrl.abort(), GITHUB_REPO.timeoutMs) : null;
+    try{
+      const doc = await fetchDefs(route.url, Object.assign({}, route.init, ctrl ? { signal: ctrl.signal } : {}));
+      return { doc, via: route.via };
+    }catch(e){
+      const why = (e && e.name === "AbortError")
+        ? "no response within " + Math.round(GITHUB_REPO.timeoutMs / 1000) + " s"
+        : (e && e.message) || String(e);
+      failures.push(route.label + ": " + why);
+    }finally{
+      if(timer) clearTimeout(timer);
+    }
+  }
+  throw new Error(failures.join("; "));
+}
+
+async function loadFromGithub(){
+  // Unpublished edits (applied, or waiting as a draft) are the one thing this
+  // can lose, so ask first — unless the copy in this browser is itself an
+  // untouched repo load (any edit re-labels it "local").
+  if(localStorage.getItem(LS_DEFS) && defsOrigin !== "repo" &&
+     !confirm("Load the latest definitions from GitHub?\n\nThis replaces the unpublished definition edits saved in this browser.")) return;
+  setHeaderBusy(loadRepoBtn, "Loading…");
+  try{
+    const { doc, via } = await fetchDefsFromGithub();
+    clearTimeout(persistTimer);          // a pending autosave must not re-label it "local"
+    applyDefinitions(doc, "repo");       // answers on rows that still exist carry over
+    writeLocal();                        // keep it: an unpublished copy, like an Import…
+    localStorage.removeItem(LS_URL);     // …which also forgets a remembered URL
+    const g = GITHUB_REPO;
+    appToast(
+      (via === "api" ? "Loaded the latest definitions" : "Loaded the definitions") +
+      ` from GitHub (${g.owner}/${g.repo}, ${g.branch}).` +
+      (via === "api" ? "" : " GitHub’s file cache can be up to 5 minutes behind, so if a change you have just made is missing, try again shortly.") +
+      (REMOTE_ON ? " They are in this browser only — Publish to central store (Manage Tables) to share them." : "")
+    );
+  }catch(err){
+    appToast("Couldn’t load definitions from GitHub — " + err.message, true);
+  }finally{
+    setHeaderBusy(loadRepoBtn, null);
+  }
 }
 
 // Set new definitions from any source and refresh everything.
@@ -3396,6 +3540,7 @@ function renderSourceChip(){
     file:   ["", "Definitions: published file"],
     url:    ["", "Definitions: loaded from URL"],
     imported:["local", "Definitions: imported file (browser only)"],
+    repo:   ["local", "Definitions: loaded from GitHub (browser only)"],
     local:  ["local", "Definitions: unpublished changes in this browser"],
     none:   ["none", "No definitions loaded"]
   };
@@ -7463,6 +7608,99 @@ if(themeToggleBtn){
     catch(e){ console.warn("Could not save theme preference", e); }
   });
 }
+
+/* ===================== HEADER ACTIONS =====================
+   Two app-wide buttons beside the theme toggle, on every tab:
+     • Load from repo — definitions.json straight from GitHub (loadFromGithub,
+       alongside the other definition sources).
+     • Clear cache — forget what SoRT has saved in this browser and reload the
+       page fresh from the server: the fix for "I'm still seeing the old tables
+       / the old version" on a PC with no DevTools to clear it by hand.       */
+const clearCacheBtn = document.getElementById("clearCacheBtn");
+const loadRepoBtn   = document.getElementById("loadRepoBtn");
+const appToastEl    = document.getElementById("appToast");
+const SS_CACHE_CLEARED = "sort.cacheCleared";   // sessionStorage: say so after the reload
+
+// One message at a time, hung just under the nav bar (wherever the sticky
+// block has put it), so the source chip stays readable; click to dismiss.
+// Errors stay up longer.
+let appToastTimer = null;
+function appToast(msg, isError){
+  const bar = document.querySelector(".mode-nav");
+  if(bar) appToastEl.style.setProperty("--app-toast-top", Math.round(bar.getBoundingClientRect().bottom + 8) + "px");
+  appToastEl.classList.toggle("is-error", !!isError);
+  appToastEl.hidden = false;
+  appToastEl.textContent = msg;
+  clearTimeout(appToastTimer);
+  appToastTimer = setTimeout(()=>{ appToastEl.hidden = true; }, isError ? 12000 : 8000);
+}
+appToastEl.addEventListener("click", ()=>{ clearTimeout(appToastTimer); appToastEl.hidden = true; });
+
+// Disable a header button, and say what it is doing, while its work runs.
+function setHeaderBusy(btn, busyLabel){
+  const label = btn.querySelector(".header-btn-label");
+  if(busyLabel){
+    btn.dataset.idleLabel = label.textContent;
+    label.textContent = busyLabel;
+    btn.setAttribute("aria-busy", "true");
+  }else{
+    if(btn.dataset.idleLabel) label.textContent = btn.dataset.idleLabel;
+    btn.removeAttribute("aria-busy");
+  }
+  btn.disabled = !!busyLabel;
+}
+
+// Only SoRT's own keys: every GitHub Pages site on one account shares an
+// origin, and so one localStorage — a blanket clear() would wipe other apps'
+// data too. The theme is a preference, not a cache, so it stays.
+function clearAppStorage(){
+  const doomed = [];
+  for(let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if(k && k.indexOf("sort.") === 0 && k !== LS_THEME) doomed.push(k);
+  }
+  doomed.forEach(k=> localStorage.removeItem(k));
+}
+
+// Fetch the page itself past the HTTP cache (`cache:"reload"` goes to the
+// network AND stores the fresh copy), so the reload after it can't be handed a
+// stale index.html by the browser or a proxy. Bounded, and a failure (file://,
+// offline) is ignored: the reload happens either way.
+function refreshPageCache(){
+  const fresh = fetch(location.href.split("#")[0], { cache:"reload" })
+    .then(r=> r.arrayBuffer());          // read to the end, so the copy is cached whole
+  return withTimeout(fresh, 8000, "The page refresh").catch(()=>{});
+}
+
+async function clearAppCache(){
+  if(!confirm(
+    "Clear the cache and reload?\n\n" +
+    "This deletes what SoRT has saved in this browser — unpublished definition edits and any " +
+    "remembered definitions URL — and reloads the app fresh from the server. Anything filled in " +
+    "on this page will be cleared.\n\n" +
+    (REMOTE_ON ? "The published definitions in the central store are not affected."
+               : "The published " + DEFINITIONS_FILE + " is not affected.")
+  )) return;
+  setHeaderBusy(clearCacheBtn, "Clearing…");
+  clearTimeout(persistTimer);            // a pending autosave would write the draft straight back
+  try{ clearAppStorage(); }
+  catch(e){ console.warn("Could not clear saved data", e); }
+  await refreshPageCache();
+  try{ sessionStorage.setItem(SS_CACHE_CLEARED, "1"); }catch(_){}
+  location.reload();
+}
+
+loadRepoBtn.title = `Load the latest definitions from GitHub (${GITHUB_REPO.owner}/${GITHUB_REPO.repo}, ${GITHUB_REPO.branch})`;
+loadRepoBtn.addEventListener("click", loadFromGithub);
+clearCacheBtn.addEventListener("click", clearAppCache);
+
+// Back from a Clear cache reload: say it worked (otherwise it just looks reloaded).
+try{
+  if(sessionStorage.getItem(SS_CACHE_CLEARED)){
+    sessionStorage.removeItem(SS_CACHE_CLEARED);
+    appToast("Cache cleared — SoRT was reloaded fresh from the server.");
+  }
+}catch(_){}
 
 boot();
 </script>

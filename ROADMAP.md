@@ -140,11 +140,34 @@ Services section**.
 
 ---
 
-## 3. "Load from GitHub" button 📋
+## 3. "Load from GitHub" button 🚧
 
 Add a **"Load from GitHub"** button that **clears the browser cache and reloads
 the definitions from the repo** — both the existing **`definitions.json`** and
 the new **`stations.json`**.
+
+> **Shipped so far** (as two header buttons, on every tab — see the README's
+> *Header buttons* section):
+>
+> - **Load from repo** reads `definitions.json` from GitHub — the contents API
+>   first, so a commit made a moment ago shows up at once, and
+>   `raw.githubusercontent.com` (cache-busted) when the API is rate-limited or
+>   blocked. The result is an **unpublished browser copy**, like an Import: it
+>   asks before replacing unpublished edits, keeps answers on rows that still
+>   exist, and goes live for everyone only when someone clicks **Publish to
+>   central store**. The repo, branch and path are the `GITHUB_REPO` constant in
+>   `index.html`.
+> - **Clear cache** clears the app's own `sort.*` browser data (keeping the
+>   theme, and other apps' data on the shared `github.io` origin), re-fetches
+>   the page past the HTTP cache and reloads.
+>
+> That settles the open questions below for `definitions.json`: the repo's
+> `main` branch, read through the API (configurable); `cache:"no-store"` plus a
+> cache-busting query on the fallback (there is no Service Worker to clear); and
+> the store stays the source of truth — a repo load is a draft until published.
+>
+> **Still planned:** reloading `stations.json` the same way, once Item 2
+> creates it.
 
 ### Scope
 
