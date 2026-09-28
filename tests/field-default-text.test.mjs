@@ -17,7 +17,7 @@
  * Drives the real page code (normalizeRow / emptyRowState / reconcileState /
  * rowHasContent / renderRows / renderFieldEditor / buildHtmlTable /
  * buildPlainText) against a purpose-built definition set applied through the
- * app's own applyDefinitions. Fully hermetic: the central store is blocked and
+ * app's own applyDefinitions. Fully hermetic: GitHub is blocked and
  * nothing else is fetched — no map, no QLD services, no Esri CDN.
  *
  * Run: see tests/README.md (same invocation as reopen-coords.test.mjs).
@@ -91,7 +91,7 @@ const browser = await chromium.launch(launchOpts);
 
 try {
   const ctx = await browser.newContext();
-  await ctx.route('**://*.supabase.co/**', r => r.abort());
+  await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());
   const page = await ctx.newPage();
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));

@@ -34,7 +34,7 @@
  *      view, bounded by SITE_MAP_CONFIG.frameAttempts.
  *
  * Drives the real `openSiteMap` / `fitView` / `drawPins` code against a stand-in view.
- * Fully hermetic: the central store, the Esri CDN and every QLD host are
+ * Fully hermetic: GitHub, the Esri CDN and every QLD host are
  * blocked, and no WebGL view is ever created.
  *
  * Run: see tests/README.md (same invocation as reopen-coords.test.mjs).
@@ -85,7 +85,7 @@ const browser = await chromium.launch(launchOpts);
 
 try {
   const ctx = await browser.newContext();
-  await ctx.route('**://*.supabase.co/**', r => r.abort());
+  await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());
   await ctx.route('**://js.arcgis.com/**', r => r.abort());
   await ctx.route('**://*.arcgis.com/**', r => r.abort());
   await ctx.route('**://*.qld.gov.au/**', r => r.abort());

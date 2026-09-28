@@ -13,7 +13,7 @@
  *     captures pointer events (so the map is never locked).
  *
  * It drives the real page globals (SITE_MAP_CONFIG, contourRenderer,
- * buildSiteMapModal, mapBuild*) and is hermetic: the central store, the Esri CDN
+ * buildSiteMapModal, mapBuild*) and is hermetic: GitHub, the Esri CDN
  * and every QLD host are blocked, so nothing here touches the network. The
  * progress lifecycle is exercised directly (no WebGL view needed).
  *
@@ -85,7 +85,7 @@ const browser = await chromium.launch(launchOpts);
 const pageErrors = [];
 try {
   const ctx = await browser.newContext();
-  await ctx.route('**://*.supabase.co/**', r => r.abort());            // bundled definitions.json
+  await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());            // bundled definitions.json
   await ctx.route(/js\.arcgis\.com|information\.qld\.gov\.au/, r => r.abort());  // no external map calls
   const page = await ctx.newPage();
   page.on('pageerror', e => pageErrors.push(String(e)));

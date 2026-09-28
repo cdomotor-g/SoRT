@@ -97,7 +97,7 @@ const browser = await chromium.launch(launchOpts);
 
 try {
   const ctx = await browser.newContext();
-  await ctx.route('**://*.supabase.co/**', r => r.abort());
+  await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());
 
   await ctx.route(/spatial-gis\.information\.qld\.gov\.au/, route=>{
     const url = new URL(route.request().url());

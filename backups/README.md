@@ -1,7 +1,14 @@
 # Backups
 
-Point-in-time copies of the Supabase central store, plus the script that turns
-one back into the app's offline fallback.
+> **Historical.** The Supabase store is retired: the app now keeps
+> `definitions.json` in this GitHub repo and publishes to it directly, so the
+> file's commit history is the backup and nothing here is needed to run the app.
+> These files are the last dump of the old store, kept for the record — the
+> extract script still turns it back into a `definitions.json` (and every
+> archived version) if that is ever wanted.
+
+Point-in-time copies of the (retired) Supabase central store, plus the script
+that turns one back into the app's offline fallback.
 
 | File | What it is |
 | --- | --- |
@@ -10,9 +17,9 @@ one back into the app's offline fallback.
 
 ## Why this is here
 
-The central store lives in one Supabase row (see the main README →
-[Central store (Supabase)](../README.md#central-store-supabase)). If that
-project is paused, deleted, or otherwise unreachable, boot falls through to the
+The central store lived in one Supabase row (see the main README →
+[The retired Supabase store](../README.md#the-retired-supabase-store)). If that
+project was paused, deleted, or otherwise unreachable, boot fell through to the
 bundled `definitions.json` — so keeping a dump next to the repo, and keeping
 `definitions.json` extracted from the newest one, is what stops a dead project
 from taking the definitions with it.

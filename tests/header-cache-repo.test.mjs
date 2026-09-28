@@ -2,17 +2,16 @@
  * Regression test for the two header actions: "Load from repo" and
  * "Clear cache".
  *
- * Load from repo reads definitions.json straight from GitHub — the copy people
- * edit on github.com — so an edit made there reaches the app without an Export /
- * Import round trip. It must:
+ * Load from repo loads the published definitions.json straight from GitHub —
+ * the store the app publishes to, and the copy people edit on github.com. It
+ * must:
  *   * read the branch as it is right now (the contents API, asking for the raw
  *     file), and fall back to raw.githubusercontent.com — with a throwaway query
  *     so no cache can answer — when the API refuses (rate limit) or is blocked;
- *   * keep the loaded copy as an UNPUBLISHED browser copy, like an Import: the
- *     central store is never written, the source chip and Manage Tables say where
- *     it came from, and a later reload doesn't lose it;
- *   * ask before it replaces unpublished edits — and not ask when the copy in
- *     the browser is itself an untouched repo load;
+ *   * apply it as the PUBLISHED copy: the source chip says GitHub, nothing is
+ *     left behind as a draft, and nothing is ever written anywhere;
+ *   * ask before it throws away unpublished edits — and not ask when there are
+ *     none;
  *   * carry over answers already filled in on rows that still exist;
  *   * leave everything exactly as it was when GitHub can't be reached, returns
  *     something that isn't a definitions file, or doesn't answer in time.
@@ -20,8 +19,9 @@
  * Clear cache forgets what SoRT has saved in this browser and reloads the page
  * fresh from the server. It must:
  *   * ask first (it clears the page's answers too), and do nothing on "Cancel";
- *   * remove every `sort.*` key EXCEPT the theme, and nothing else — GitHub
- *     Pages sites on one account share an origin, so other apps' keys survive;
+ *   * remove every `sort.*` key EXCEPT the theme and the GitHub connection, and
+ *     nothing else — GitHub Pages sites on one account share an origin, so
+ *     other apps' keys survive;
  *   * not let a pending (debounced) autosave write the draft straight back;
  *   * re-fetch the page past the HTTP cache before reloading, and say it
  *     worked once the fresh page is up;
@@ -29,8 +29,9 @@
  *     it (`max-age=600`), a new deploy is invisible to an ordinary visit until
  *     Clear cache is pressed — and from then on it isn't.
  *
- * Hermetic: the central store is blocked and both GitHub hosts are stubbed with
- * Playwright network interception — the page code runs unmodified. Interception
+ * Hermetic: both GitHub hosts are stubbed with Playwright network interception —
+ * the page code runs unmodified — and the retired Supabase store must never be
+ * contacted at all. Interception
  * switches Chromium's HTTP cache off, so the real-cache section runs in a second
  * browser with no interception, where only 127.0.0.1 resolves.
  *
@@ -115,11 +116,8 @@ const browser = await chromium.launch(launchOpts);
 
 try {
   const ctx = await browser.newContext();
-  const storeWrites = [];
-  await ctx.route('**://*.supabase.co/**', r => {
-    if(r.request().method() !== 'GET') storeWrites.push(r.request().method() + ' ' + r.request().url());
-    return r.abort();
-  });
+  const supabaseHits = [];
+  await ctx.route(/supabase\.co/, r => { supabaseHits.push(r.request().url()); return r.abort(); });
   await ctx.route('https://api.github.com/**', async r => {
     ghLog.push({ via:'api', url: r.request().url(), headers: await r.request().allHeaders() });
     await answer(r, gh.api);
@@ -148,6 +146,8 @@ try {
       localStorage.setItem('sort.theme', 'dark');
     }
   });
+  gh.api = 'abort';
+  gh.raw = 'abort';
   await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#rowsContainer .row', { timeout: 15000 });
 
@@ -199,15 +199,15 @@ try {
 
   /* ================= Load from repo — the API route ================= */
   const before = await snap();
-  check('(setup) the bundled file loaded, with no browser copy saved',
+  check('(setup) with GitHub unreachable, the bundled file loaded, with no browser copy saved',
         before.origin === 'file' && !before.draft);
   // Work in progress: an answer on a row the repo copy keeps, and the attendees.
   await page.locator('label.option-row', { hasText: 'Reduced footing' }).locator('input').check();
   await page.fill('#forumAttendees', 'CD, JS');
-  await page.evaluate(()=> localStorage.setItem('sort.definitionsUrl', 'https://example.invalid/defs.json'));
 
   gh.api = { status: 200, body: repoCopy('Rainfall Table (repo)') };
   gh.raw = { status: 500, body: '' };
+  ghLog.length = 0;
   dialogAnswer = 'fail';
   const dialogsBefore = dialogs.length;
   const a = await loadFromRepo();
@@ -215,24 +215,23 @@ try {
   check('it reads the contents API for main', ghLog.length === 1 && ghLog[0].via === 'api' && ghLog[0].url === API_URL);
   check('…asking for the raw file, not the JSON envelope',
         ghLog[0] && ghLog[0].headers.accept === 'application/vnd.github.raw');
+  check('…anonymously, with no GitHub connected', ghLog[0] && !ghLog[0].headers.authorization);
   check('the raw CDN is not touched when the API answers', !ghLog.some(l => l.via === 'raw'));
   check('the repo copy is applied', a.label === 'Rainfall Table (repo)' && a.tabs.includes('Rainfall Table (repo)'));
   check('an option added on GitHub shows up in the builder',
         await page.locator('label.option-row', { hasText: 'Repo-only footing' }).count() === 1);
-  check('its origin is "repo"', a.origin === 'repo');
-  check('the source chip says it came from GitHub', a.source === 'Definitions: loaded from GitHub (browser only)');
+  check('it is the published copy (origin "remote")', a.origin === 'remote');
+  check('the source chip says it is published, on GitHub', a.source === 'Definitions: GitHub (published)');
   check('an answer already given on a row that still exists carries over',
         await page.evaluate(()=> state.rainfall.InfraOps.selected) === 'Reduced footing' &&
         await page.locator('label.option-row', { hasText: 'Reduced footing' }).locator('input').isChecked());
   check('the forum attendees are left alone', await page.inputValue('#forumAttendees') === 'CD, JS');
-  check('it is kept in this browser (so a reload does not lose it)',
-        a.draft && JSON.parse(a.draft).tables.find(t=>t.id === 'rainfall').label === 'Rainfall Table (repo)');
-  check('like an Import, it forgets a remembered URL', a.url === null);
-  check('the toast says it loaded the latest from GitHub', /Loaded the latest definitions from GitHub \(cdomotor-g\/SoRT, main\)/.test(a.toast));
-  check('…and that it still has to be published to reach everyone', /Publish to central store/.test(a.toast) && !a.toastError);
+  check('no draft is left behind — the published copy isn\'t one', a.draft === null);
+  check('the toast says it loaded the latest from GitHub',
+        /Loaded the latest definitions from GitHub \(cdomotor-g\/SoRT, main\)\./.test(a.toast) && !a.toastError);
+  check('…with nothing left to publish', !/Publish/.test(a.toast));
   check('the button is usable again, label restored, not busy',
         !a.btnDisabled && a.btnLabel === 'Load from repo' && !a.btnBusy);
-  check('nothing was sent to the central store', storeWrites.length === 0);
 
   // Manage Tables tells the editor where these came from — not a stale draft.
   await page.evaluate(()=> setMode('manage'));
@@ -240,20 +239,20 @@ try {
     note: document.querySelector('#manageView .admin-note').textContent,
     resumeBanner: !!document.getElementById('btnResumeDraft')
   }));
-  check('Manage Tables says they were loaded from GitHub and are not published yet',
-        /loaded from GitHub and are not published yet/.test(manage.note));
-  check('…and does not offer them back as a draft "from a previous session"', !manage.resumeBanner);
+  check('Manage Tables says edits are published to GitHub, and none are pending',
+        /Publish to GitHub/.test(manage.note) && !/unpublished changes/.test(manage.note));
+  check('…and offers no draft "from a previous session"', !manage.resumeBanner);
   await page.evaluate(()=> setMode('builder'));
 
   // The toast dismisses on click.
   await page.click('#appToast');
   check('the toast dismisses on click', await page.evaluate(()=> document.getElementById('appToast').hidden));
 
-  /* ================= loading again over an untouched repo load ================= */
+  /* ================= loading again over the published copy ================= */
   gh.api = { status: 200, body: repoCopy('Rainfall Table (repo, v2)') };
   const d0 = dialogs.length;
   const again = await loadFromRepo();
-  check('re-loading over an untouched repo load does not ask', dialogs.length === d0);
+  check('re-loading over the published copy does not ask', dialogs.length === d0);
   check('…and picks up the newer copy', again.label === 'Rainfall Table (repo, v2)');
 
   /* ================= unpublished edits: ask first ================= */
@@ -265,8 +264,8 @@ try {
   await page.click('#loadRepoBtn');
   await sleep(300);
   const kept = await snap();
-  check('with unpublished edits, it asks before replacing them',
-        dialogs.length === d1 + 1 && /unpublished definition edits/.test(dialogs[dialogs.length - 1]));
+  check('with unpublished edits, it asks before throwing them away',
+        dialogs.length === d1 + 1 && /discards the unpublished edits/.test(dialogs[dialogs.length - 1]));
   check('"Cancel" leaves the edits in place and never contacts GitHub',
         ghLog.length === logBefore && kept.label === 'Edited locally' && kept.origin === 'local' &&
         JSON.parse(kept.draft).tables.find(t=>t.id === 'rainfall').label === 'Edited locally');
@@ -275,7 +274,8 @@ try {
   dialogAnswer = 'accept';
   gh.api = { status: 200, body: repoCopy('Rainfall Table (repo, v3)') };
   const replaced = await loadFromRepo();
-  check('"OK" replaces them with the repo copy', replaced.label === 'Rainfall Table (repo, v3)' && replaced.origin === 'repo');
+  check('"OK" replaces them with the published copy, and the draft goes',
+        replaced.label === 'Rainfall Table (repo, v3)' && replaced.origin === 'remote' && replaced.draft === null);
 
   /* ================= the API refuses → the raw CDN ================= */
   gh.api = { status: 403, body: '{"message":"API rate limit exceeded"}' };
@@ -284,7 +284,7 @@ try {
   const viaRaw = await loadFromRepo();
   const rawReq = ghLog.slice(rawStart).find(l => l.via === 'raw');
   check('a rate-limited API falls back to raw.githubusercontent.com',
-        viaRaw.label === 'Rainfall Table (raw)' && viaRaw.origin === 'repo');
+        viaRaw.label === 'Rainfall Table (raw)' && viaRaw.origin === 'remote');
   check('…at main, with a throwaway query so no cache can answer',
         rawReq && rawReq.url.startsWith(RAW_PREFIX) && /nocache=\d+$/.test(rawReq.url));
   check('…and the toast warns the raw copy can lag a very recent commit',
@@ -328,14 +328,17 @@ try {
 
   /* ================= Clear cache ================= */
   await page.evaluate(()=>{
+    localStorage.setItem('sort.definitions.v1', JSON.stringify(defs));
+    localStorage.setItem('sort.definitions.base', 'stale base');
     localStorage.setItem('sort.definitionsUrl', 'https://example.invalid/defs.json');
     localStorage.setItem('sort.someFutureKey', 'stale');
+    localStorage.setItem('sort.github', JSON.stringify({ token: 'github_pat_KEEP', login: 'someone' }));
     window.__notReloaded = true;
   });
   const seeded = await page.evaluate(()=> Object.keys(localStorage).sort());
-  check('(setup) the browser holds SoRT data, the theme and another app\'s key',
-        ['sort.definitions.v1','sort.definitionsUrl','sort.someFutureKey','sort.theme','other.app.setting']
-          .every(k => seeded.includes(k)));
+  check('(setup) the browser holds SoRT data, the theme, a GitHub connection and another app\'s key',
+        ['sort.definitions.v1','sort.definitions.base','sort.definitionsUrl','sort.someFutureKey','sort.theme',
+         'sort.github','other.app.setting'].every(k => seeded.includes(k)));
 
   // "Cancel" clears nothing and doesn't reload.
   dialogAnswer = 'dismiss';
@@ -344,9 +347,10 @@ try {
   await sleep(300);
   check('Clear cache asks first', dialogs.length === d2 + 1 &&
         /Clear the cache and reload\?/.test(dialogs[dialogs.length - 1]));
-  check('…warning that answers on the page are cleared and the store is untouched',
+  check('…warning that answers on the page are cleared, and GitHub and the connection are untouched',
         /Anything filled in on this page will be cleared/.test(dialogs[dialogs.length - 1]) &&
-        /central store are not affected/.test(dialogs[dialogs.length - 1]));
+        /published definitions on GitHub are not affected/.test(dialogs[dialogs.length - 1]) &&
+        /GitHub connection and theme are kept/.test(dialogs[dialogs.length - 1]));
   check('"Cancel" clears nothing and does not reload',
         JSON.stringify(await page.evaluate(()=> Object.keys(localStorage).sort())) === JSON.stringify(seeded) &&
         await page.evaluate(()=> window.__notReloaded === true) &&
@@ -378,6 +382,7 @@ try {
     };
   });
   dialogAnswer = 'accept';
+  gh.api = { status: 200, body: fs.readFileSync(path.join(REPO_ROOT, 'definitions.json'), 'utf8') };
   await page.evaluate(()=>{ defs.tables[0].label = 'Unsaved edit'; persistLocal(); });
   const reloaded = page.waitForEvent('load', { timeout: 15000 });
   await page.click('#clearCacheBtn');
@@ -388,6 +393,7 @@ try {
   const after = await page.evaluate(()=>({
     keys: Object.keys(localStorage).sort(),
     theme: localStorage.getItem('sort.theme'),
+    github: localStorage.getItem('sort.github'),
     themeApplied: document.documentElement.getAttribute('data-theme'),
     other: localStorage.getItem('other.app.setting'),
     notReloaded: window.__notReloaded === true,
@@ -400,12 +406,14 @@ try {
   check('"OK" reloads the page', !after.notReloaded);
   check('the saved definitions draft is gone', !after.keys.includes('sort.definitions.v1'));
   check('…even though an autosave was pending when it was pressed', !after.keys.includes('sort.definitions.v1'));
+  check('…and so is the base it was edited from', !after.keys.includes('sort.definitions.base'));
   check('the remembered definitions URL is gone', !after.keys.includes('sort.definitionsUrl'));
   check('any other sort.* key is gone too', !after.keys.includes('sort.someFutureKey'));
   check('the theme choice is kept (and still applied)', after.theme === 'dark' && after.themeApplied === 'dark');
+  check('the GitHub connection is kept', after.github && JSON.parse(after.github).token === 'github_pat_KEEP');
   check('another app\'s data on the same origin is untouched', after.other === 'keep me');
-  check('the app starts from the published definitions again',
-        after.origin === 'file' && after.source === 'Definitions: published file' && after.label === 'Rainfall Table');
+  check('the app starts from the published definitions on GitHub again',
+        after.origin === 'remote' && after.source === 'Definitions: GitHub (published)' && after.label === 'Rainfall Table');
   check('the page itself is re-fetched with cache:"reload" (past the HTTP cache)',
         pageFetchCalls.some(c => c.url === PAGE_URL && c.cache === 'reload'));
   check('…and that refresh lands before the reload',
@@ -414,9 +422,14 @@ try {
   check('the fresh page says the cache was cleared', /Cache cleared/.test(after.toast));
   check('…once (the one-shot flag is consumed)', after.flag === null);
 
+  check('the retired Supabase store is never contacted', supabaseHits.length === 0);
   check('no uncaught page errors', pageErrors.length === 0);
   if(pageErrors.length) console.log('page errors:', pageErrors.slice(0,3));
 
+} catch(e){
+  // A step that throws (a wait that never came true) must not hide the checks
+  // already made: report it as a failure of its own and print the lot.
+  check('the run reached the end without an exception — ' + String(e && e.message || e).split('\n')[0], false);
 } finally {
   await browser.close();
   server.close();
@@ -425,7 +438,7 @@ try {
 /* ================= Clear cache against a REAL HTTP cache =================
    Routing (above) switches Chromium's HTTP cache off, so this part runs in its
    own browser with no routes at all: every host but 127.0.0.1 fails to resolve
-   (so the central store is still unreachable), and the app is served the way
+   (so GitHub is unreachable and the bundled file loads), and the app is served the way
    GitHub Pages serves it — `max-age=600` plus an ETag — from a scratch copy we
    can "deploy" a new version into. */
 {

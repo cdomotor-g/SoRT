@@ -106,7 +106,7 @@ const browser = await chromium.launch(launchOpts);
 try {
   const ctx = await browser.newContext();
   // Force the bundled definitions.json (keep the run hermetic).
-  await ctx.route('**://*.supabase.co/**', r => r.abort());
+  await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());
 
   // Stub the QLD cadastre service: schema + count queries. Everything else on
   // the QLD hosts is aborted — this test exercises only the road-filter logic.

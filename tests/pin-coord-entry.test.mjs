@@ -9,7 +9,7 @@
  * "clear = remove the pin" path.
  *
  * Like pin-writeback.test.mjs this is fully hermetic: no WebGL view, no QLD
- * services, no Esri CDN, nothing stubbed on the QLD side. The central store is
+ * services, no Esri CDN, nothing stubbed on the QLD side. GitHub is
  * blocked so the bundled definitions.json loads. Same invocation as the others
  * (see tests/README.md).
  */
@@ -59,7 +59,7 @@ const browser = await chromium.launch(launchOpts);
 
 try {
   const ctx = await browser.newContext();
-  await ctx.route('**://*.supabase.co/**', r => r.abort());
+  await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());
   const page = await ctx.newPage();
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));

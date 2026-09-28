@@ -6,9 +6,11 @@ intent, the touch points in the current codebase, open questions, and rough
 acceptance criteria so the work can be picked up later.
 
 > Current codebase at time of writing: a single-page app (`index.html`) with all
-> table/row definitions in `definitions.json`. Definitions load in this order —
-> central Supabase store → local browser edits → a remembered/`?defs=` URL →
-> the bundled `definitions.json`. Reloads already use `fetch(url, { cache:"no-store" })`.
+> table/row definitions in `definitions.json`, which lives in this GitHub repo:
+> the app reads it from GitHub and **Publish to GitHub** commits edits back to it
+> (the Supabase store is retired). Definitions load in this order — GitHub →
+> local browser edits → a remembered/`?defs=` URL → the bundled
+> `definitions.json`. Reloads already use `fetch(url, { cache:"no-store" })`.
 
 ## Status legend
 
@@ -82,8 +84,7 @@ Services**. It is a richer, map-aware block rather than a plain option table.
 - **Copy-to-Word behaviour** — how (and whether) the Property Services answers,
   coordinates, and map appear in the table copied into Word.
 - **Data shape** — how Property Services answers are stored alongside the other
-  table answers, and whether they publish through the central store like the
-  rest.
+  table answers, and whether they publish to GitHub like the rest.
 
 ### Acceptance criteria (draft)
 
@@ -126,7 +127,7 @@ Services section**.
 - **`stations.json` schema** — exact field list per station (id, display name,
   coordinates, region, station type, comms, …?).
 - **Load source & precedence** — is `stations.json` bundled only, or also
-  fetched from the central store / a URL like `definitions.json`? How does it
+  read from (and published to) GitHub like `definitions.json`? How does it
   behave offline?
 - **Match key** — how a selected station maps onto Property Services fields
   (which fields get auto-filled, and whether the user can override them after).
@@ -152,19 +153,19 @@ the new **`stations.json`**.
 > - **Load from repo** reads `definitions.json` from GitHub — the contents API
 >   first, so a commit made a moment ago shows up at once, and
 >   `raw.githubusercontent.com` (cache-busted) when the API is rate-limited or
->   blocked. The result is an **unpublished browser copy**, like an Import: it
->   asks before replacing unpublished edits, keeps answers on rows that still
->   exist, and goes live for everyone only when someone clicks **Publish to
->   central store**. The repo, branch and path are the `GITHUB_REPO` constant in
->   `index.html`.
+>   blocked. GitHub is now the definitions store itself, so this loads the
+>   **published** copy (like **Reload latest**): it asks before throwing away
+>   unpublished edits and keeps answers on rows that still exist. The repo,
+>   branch and path are the `GITHUB_REPO` constant in `index.html`.
 > - **Clear cache** clears the app's own `sort.*` browser data (keeping the
->   theme, and other apps' data on the shared `github.io` origin), re-fetches
->   the page past the HTTP cache and reloads.
+>   theme, the GitHub connection, and other apps' data on the shared `github.io`
+>   origin), re-fetches the page past the HTTP cache and reloads.
 >
 > That settles the open questions below for `definitions.json`: the repo's
 > `main` branch, read through the API (configurable); `cache:"no-store"` plus a
 > cache-busting query on the fallback (there is no Service Worker to clear); and
-> the store stays the source of truth — a repo load is a draft until published.
+> precedence is moot — the repo *is* the store, so a repo load is the published
+> copy.
 >
 > **Still planned:** reloading `stations.json` the same way, once Item 2
 > creates it.
@@ -190,9 +191,9 @@ the new **`stations.json`**.
   `main`), and whether it is configurable.
 - **Cache strategy** — `cache:"no-store"` plus a cache-busting query param, and
   whether any Service Worker / app cache also needs clearing.
-- **Precedence vs. central store** — how a manual "Load from GitHub" interacts
-  with the existing Supabase central-store load order, and what happens to
-  unpublished local edits (warn / discard like "Reload latest" does today).
+- **Precedence vs. the store** — how a manual "Load from GitHub" interacts
+  with the load order, and what happens to unpublished local edits (warn /
+  discard like "Reload latest" does today).
 
 ### Acceptance criteria (draft)
 

@@ -19,11 +19,13 @@ python3 -m http.server 8642 --bind 127.0.0.1 &   # serve from the repo root
   `chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })` —
   the npm-installed Playwright wants a newer browser revision than the
   pre-installed one, so the explicit path is required.
-- **Block the central store** to exercise the bundled `definitions.json`
-  (and to keep the run hermetic):
-  `await ctx.route('**://*.supabase.co/**', r => r.abort())`.
-  With the store blocked, boot falls back to a saved localStorage draft
-  (`sort.definitions.v1`) and then to `definitions.json`.
+- **Block GitHub** to exercise the bundled `definitions.json` (and to keep
+  the run hermetic) — boot reads the published copy from GitHub first:
+  `await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort())`.
+  With GitHub blocked, boot falls back to a saved localStorage draft
+  (`sort.definitions.v1`) and then to `definitions.json`. To drive
+  publishing, stub `api.github.com` instead — `tests/github-publish.test.mjs`
+  has a fake that answers like the real contents API.
 - Grant `permissions: ['clipboard-read','clipboard-write']` to test the
   "Copy table for Word" flow, then read `navigator.clipboard.readText()`.
 

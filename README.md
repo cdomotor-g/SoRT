@@ -14,36 +14,38 @@ them straight into Word. It has three modes:
 | File | Purpose |
 | --- | --- |
 | `index.html` | The whole application (no build step, no dependencies). |
-| `definitions.json` | Seed / offline copy of the table, row, and option definitions. Also used to first-load the central store, and as the fallback when the store can't be reached. |
-| `backups/` | Point-in-time dumps of the central store, plus `extract-definitions.mjs` to rebuild `definitions.json` from one. See [backups/README.md](backups/README.md). |
+| `definitions.json` | The published table, row, and option definitions. The app reads it from GitHub on startup and **Publish to GitHub** commits edits back to it; the copy bundled next to `index.html` is the offline fallback. |
+| `backups/` | The last dump of the retired Supabase store, plus `extract-definitions.mjs` to rebuild `definitions.json` from it. Kept for the record — see [backups/README.md](backups/README.md). |
 
 The definitions used to be hard-coded inside `index.html`. They now live outside
-the app so they can change without touching the code. The **recommended** setup
-is a single **central store** (a Supabase row) that everyone reads and that
-editors publish to — see [Central store (Supabase)](#central-store-supabase).
-With no store configured the app still works fully offline from
+the app so they can change without touching the code, and **`definitions.json`
+in this GitHub repo is the single source of truth**: everyone reads it, editors
+publish to it from the app, and its commit history is the audit trail and the
+way to roll back — see [Publishing to GitHub](#publishing-to-github). With
+`GITHUB_REPO` blanked out the app still works fully offline from the bundled
 `definitions.json` + Import/Export.
 
 ## How definitions are loaded
 
 At startup the app picks the first source that is available:
 
-1. **Central store** — the master Supabase row (when `SUPABASE` is configured in
-   `index.html`). This is the source of truth; it always wins on load, so every
-   user gets the latest published definitions automatically.
-2. **Local edits** saved in your browser (only when no store is configured, or
+1. **GitHub** — `definitions.json` in the repo named by `GITHUB_REPO` in
+   `index.html`, read through the GitHub API (or `raw.githubusercontent.com` if
+   the API refuses). This is the source of truth; it always wins on load, so
+   every user gets the latest published definitions automatically.
+2. **Local edits** saved in your browser (only when GitHub can't be reached, or
    as an *unpublished draft* you choose to resume).
 3. A **URL** you previously loaded from, or one passed as `?defs=<url>`.
 4. The bundled **`definitions.json`** sitting next to `index.html`.
 5. If none load, an empty state offers **Import** / **Load from URL** / start blank.
 
-> With the central store on, the master row is fetched over HTTPS regardless of
-> how the page is opened — so it even works from a `file://` copy. The bundled
-> `definitions.json` is only used if the store is unreachable (offline).
+> GitHub is read over HTTPS however the page is opened — even from a `file://`
+> copy. The bundled `definitions.json` is only used if GitHub is unreachable
+> (offline).
 
-Two buttons in the header step outside that order on request: **Load from repo**
-pulls `definitions.json` straight from GitHub, and **Clear cache** forgets what
-the app has saved in this browser and reloads it fresh — see
+Two buttons in the header work on this from any tab: **Load from repo** pulls
+the published `definitions.json` from GitHub again, and **Clear cache** forgets
+what the app has saved in this browser and reloads it fresh — see
 [Header buttons](#header-buttons-load-from-repo--clear-cache).
 
 ## Header buttons: Load from repo / Clear cache
@@ -53,29 +55,22 @@ tab.
 
 ### Load from repo
 
-Loads `definitions.json` straight from the GitHub repo — the copy edited on
-github.com — into this browser, so a change made there is one click away rather
-than an Export → Import round trip.
+Loads the published `definitions.json` straight from GitHub — the same as
+**Reload latest** in Manage Tables, from any tab. Useful after someone publishes,
+or after an edit made directly on github.com.
 
-- **Where it reads.** The `GITHUB_REPO` constant near the top of the script in
-  `index.html` (next to `SUPABASE`) names the repo, branch and file:
-  `cdomotor-g/SoRT`, `main`, `definitions.json`.
 - **Current, not cached.** It asks the GitHub contents API, which returns the
   branch as it is right now. Anonymous API use is limited to 60 requests an hour
-  per network address (a whole office behind one address shares that), so when
-  the API refuses — or is blocked — it falls back to `raw.githubusercontent.com`
-  with a cache-busting query. That copy can run up to 5 minutes behind a brand-new
-  commit, and the message says so when it is the one used.
-- **It loads; it doesn't publish.** Like **Import JSON…**, the result is an
-  unpublished copy in this browser: the source chip reads *Definitions: loaded
-  from GitHub (browser only)*, and Manage Tables says the definitions are not
-  published yet. With the central store on, check the result and click
-  **Publish to central store** to give it to everyone.
+  per network address (a whole office behind one address shares that; with a
+  token connected it is 5,000), so when the API refuses — or is blocked — it
+  falls back to `raw.githubusercontent.com` with a cache-busting query. That copy
+  can run up to 5 minutes behind a brand-new commit, and the message says so when
+  it is the one used.
 - **Work in progress is safe.** Answers already filled in carry over to every
   row that still exists. If the browser holds unpublished edits, it asks before
-  replacing them. If GitHub can't be reached, or sends back something that isn't
-  a definitions file, nothing changes and the message says why. Each route gives
-  up after 15 s, so the button can't hang.
+  throwing them away. If GitHub can't be reached, or sends back something that
+  isn't a definitions file, nothing changes and the message says why. Each
+  request gives up after 10 s, so the button can't hang.
 
 ### Clear cache
 
@@ -85,12 +80,12 @@ with no DevTools to clear things by hand. It asks first, because the reload also
 clears anything filled in on the page.
 
 - **What goes:** every `sort.*` key in this browser's storage — the unpublished
-  draft (`sort.definitions.v1`) and a remembered *Load from URL* address
-  (`sort.definitionsUrl`).
-- **What stays:** the dark/light theme choice, and other apps' data — every
-  GitHub Pages site on one account shares an origin, so a blanket clear would
-  wipe theirs too. The published definitions (central store or
-  `definitions.json`) are never touched.
+  draft (`sort.definitions.v1`, and `sort.definitions.base`, the version it was
+  edited from) and a remembered *Load from URL* address (`sort.definitionsUrl`).
+- **What stays:** the dark/light theme choice, the GitHub connection (Disconnect
+  is how that goes), and other apps' data — every GitHub Pages site on one
+  account shares an origin, so a blanket clear would wipe theirs too. The
+  published `definitions.json` on GitHub is never touched.
 - **A fresh page, not a cached one.** GitHub Pages lets browsers reuse
   `index.html` for up to 10 minutes, so just after a deploy an ordinary visit can
   still get the old version. Clear cache re-fetches the page past the HTTP cache
@@ -165,31 +160,34 @@ across the top. Each cell is a checkbox — tick it to include that row in that
 table, untick it to remove it. It's the fastest way to see and change, at a
 glance, which shared rows appear where. (Only common rows appear in the map; a
 table's own one-off rows stay in *Manage Tables*.) Changes save to your browser
-and, with the central store on, go live for everyone when you **Publish**.
+and go live for everyone when you **Publish to GitHub**.
 
 ### Publishing your changes
 
-**With the central store on (recommended):**
-
 1. Make your changes in **Manage Tables** (auto-saved in your browser as you go).
-2. Click **Publish to central store**.
+2. Click **Publish to GitHub** and type a line saying what changed — it becomes
+   the commit message. (The very first time, you connect a GitHub token — see
+   [Publishing to GitHub](#publishing-to-github).)
 
-That's it — the master row is updated and everyone else picks it up the next
-time they open the app. No files to download, rename, or upload, and no "reset"
-step for other users. Extras you get for free:
+That's it — `definitions.json` in the repo is updated in one commit and everyone
+else picks it up the next time they open the app. No files to download, rename,
+or upload, and no "reset" step for other users. Extras you get for free:
 
 - **Reload latest** — throw away your local edits and reload the published copy.
-- **Conflict guard** — if someone else published while you were editing, Publish
-  is refused with a prompt to reload and re-apply, so nobody silently clobbers
-  another edit.
+- **Conflict guard** — if `definitions.json` changed on GitHub since you loaded it
+  (someone else published, or edited it on github.com), Publish is refused with a
+  prompt to reload and re-apply, so nobody silently clobbers another edit.
 - **Resume draft** — if you close the tab mid-edit, your unpublished draft is
-  offered back next time (you can resume or discard it).
-- **History / rollback** — every publish is archived (see the setup section), so
-  a bad change can be rolled back.
-- **Edited on GitHub?** Click **Load from repo** in the header, check the tables,
-  then **Publish to central store** — the store doesn't read GitHub by itself.
+  offered back next time (you can resume or discard it). A draft remembers which
+  published version it was made from, so the conflict guard still works days
+  later.
+- **Nothing to publish** — a copy identical to GitHub's (bar the date stamp) is
+  not committed.
+- **History / rollback** — every publish is a commit. **History & roll back ↗**
+  in Manage Tables opens the file's history on GitHub; to go back, revert that
+  commit on GitHub, or download the old version, **Import JSON…** it and publish.
 
-**With no store configured (offline mode):** edits are saved in your browser
+**Offline (`GITHUB_REPO.owner` left blank):** edits are saved in your browser
 only. Click **Export JSON**, upload the file to your shared location as
 `definitions.json`, and others use **Reset to published file** to pick it up.
 
@@ -253,115 +251,93 @@ as two tables in the report.
   that *is* copied into Word.
 - **Managed in its own tab.** The **Property Services** tab edits the table's
   title, note, questions and coordinate rows. Its shape lives under
-  `definitions.json → propertyServices` and publishes through the central store
+  `definitions.json → propertyServices` and publishes to GitHub
   like the rest (a built-in default is used if the loaded definitions do not yet
   carry one).
 
-## Central store (Supabase)
+## Publishing to GitHub
 
-The central store is a single row in a free [Supabase](https://supabase.com)
-project. No Azure / M365 app registration and no per-user accounts are required —
-the app talks to Supabase's REST API with the public **anon** key, and
-[Row Level Security](https://supabase.com/docs/guides/auth/row-level-security)
-controls what that key may do.
+The published definitions are `definitions.json` in this repo. The app reads it
+with no sign-in (the repo is public) and publishes by committing to it through
+the GitHub API, straight onto `main`. The repo, branch and file are the
+`GITHUB_REPO` constant near the top of the script in `index.html`:
 
-### One-time setup
+```js
+const GITHUB_REPO = {
+  owner:     "cdomotor-g",
+  repo:      "SoRT",
+  branch:    "main",
+  path:      DEFINITIONS_FILE,    // "definitions.json"
+  timeoutMs: 10000
+};
+```
 
-1. Create a free Supabase project.
-2. In the **SQL Editor**, run the following. Paste the current contents of
-   `definitions.json` where indicated to seed the first row.
+### Connecting (once per computer)
 
-   ```sql
-   -- Master table: one row holds the whole definitions document.
-   create table definitions (
-     id         int primary key,
-     doc        jsonb        not null,
-     version    int          not null default 1,
-     updated_at timestamptz  not null default now()
-   );
+Publishing needs a GitHub token that is allowed to change the repo. The first
+time you click **Publish to GitHub** (or **Connect…** in Manage Tables) the app
+walks you through it:
 
-   -- Archive of every past version, for audit / rollback.
-   create table definitions_history (
-     history_id  bigint generated always as identity primary key,
-     id          int,
-     doc         jsonb,
-     version     int,
-     archived_at timestamptz default now()
-   );
-   -- SECURITY DEFINER lets this trigger write to the (RLS-locked) history
-   -- table on behalf of the anon caller, without exposing that table.
-   create function log_definitions_history() returns trigger
-   language plpgsql
-   security definer
-   set search_path = public
-   as $$
-   begin
-     insert into definitions_history(id, doc, version)
-     values (old.id, old.doc, old.version);
-     return new;
-   end;
-   $$;
-   create trigger definitions_history_trg
-     before update on definitions
-     for each row execute function log_definitions_history();
+1. **Create a token on GitHub ↗** opens GitHub's *new fine-grained token* page
+   with the name (*SoRT publishing*), a one-year expiry and **Contents: Read and
+   write** already filled in. Under **Repository access** pick **Only select
+   repositories** → **SoRT**, then **Generate token**.
+2. Copy the token and paste it into the app. It checks the token before keeping
+   it — whose it is, and that it can write to the repo — and says exactly what to
+   change if not. (The write check creates an empty git blob that no commit points
+   at, so it changes no file and no history.)
 
-   -- Seed the single master row (id = 1). Paste definitions.json below.
-   insert into definitions (id, doc, version) values (1, '<PASTE definitions.json HERE>'::jsonb, 1);
-
-   -- Row Level Security: allow the public anon key to read and update the row.
-   alter table definitions enable row level security;
-   create policy "read definitions"   on definitions for select using (true);
-   create policy "update definitions" on definitions for update using (true) with check (true);
-   ```
-
-3. In **Project Settings → API**, copy the **Project URL** and the **anon /
-   public** key.
-4. Open `index.html` and fill in the `SUPABASE` block near the top:
-
-   ```js
-   const SUPABASE = {
-     url:     "https://YOURPROJECT.supabase.co",
-     anonKey: "eyJhbGciOi...",   // the public anon key
-     table:   "definitions",
-     rowId:   1,
-     publishPassphrase: ""       // optional; see below
-   };
-   ```
-
-5. Host `index.html` anywhere your users can reach (GitHub Pages, a web server,
-   a SharePoint page, even a shared drive). Done.
+Manage Tables then shows **GitHub: @you** with a **Disconnect** button. Leave
+**Remember on this computer** ticked to stay connected; untick it and the token
+is forgotten when the tab closes.
 
 ### Notes on access & security
 
-- The **anon key is meant to be public** — it ships in the browser. RLS is what
-  protects the data, so the policies above are the real access control. To make
-  the store **read-only for everyone** and manage edits yourself, drop the
-  `update` policy; to lock writes to signed-in editors, replace `using (true)`
-  with a check against `auth.role()` / `auth.uid()` and turn on Supabase Auth
-  (email magic-link works without any app registration).
-- `publishPassphrase` adds a prompt before publishing. It is a speed-bump to
-  stop accidental edits, **not** real security (anyone with the anon key can
-  still write per your RLS policy). Leave it `""` to let any editor publish.
-- **Rollback:** every publish copies the previous document into
-  `definitions_history`. To restore one, copy its `doc` back onto the master row
-  (`update definitions set doc = (...), version = version + 1 where id = 1;`).
-- **Keep a dump.** A paused or deleted project takes the store with it, and the
-  only thing standing behind it is the bundled `definitions.json`. Download a
-  backup from the dashboard now and then, drop it in `backups/`, and run
-  `node backups/extract-definitions.mjs backups/<dump>` to refresh the offline
-  fallback from it — see [backups/README.md](backups/README.md). The same script
-  unpacks `definitions_history`, so rollback still works with the store down.
+- **The token lives in this browser only** — never in the repo, and it is only
+  ever sent to GitHub. Anyone who can use this browser profile could publish with
+  it, so give it the least it needs: **only the SoRT repository**, only
+  **Contents: Read and write**, with an expiry. **Disconnect** removes it from the
+  browser; revoke it on GitHub (*Settings → Developer settings → Personal access
+  tokens → Fine-grained tokens*) to kill it everywhere.
+- Every GitHub Pages site on one account shares an origin
+  (`cdomotor-g.github.io`), and so shares browser storage. Only host pages there
+  you trust — another one could read the token — which is one more reason to keep
+  it scoped to this repo.
+- **Who can publish is who GitHub lets write to the repo.** Anyone can read; a
+  token only works for accounts with write access, and there is no shared key or
+  passphrase to leak.
+- **Rate limits.** Reading uses the GitHub API: 60 requests an hour per network
+  address anonymously, 5,000 with a token connected. When the API refuses, the app
+  reads `raw.githubusercontent.com` instead (up to 5 minutes behind a new commit).
+- **Branch protection.** Publishing commits straight to `main`. Protecting `main`
+  so that only pull requests can change it would stop Publish working.
+- **GitHub Pages.** Each publish is a commit to `main`, so Pages redeploys the
+  site copy of `definitions.json` a minute or two later. The app itself reads
+  through the API, so a publish is live for everyone at once.
 
 ### Troubleshooting
 
-- **Publish fails with `new row violates row-level security policy for table
-  "definitions_history"`** — the history trigger can't write to the RLS-locked
-  history table. Make the trigger function `SECURITY DEFINER` (re-run the
-  `create or replace function log_definitions_history() …` block above; it swaps
-  the function in place, no other changes needed).
-- **`HTTP 401: Invalid API key` / `No API key found`** — the `anonKey` or `url`
-  in the `SUPABASE` block is wrong, mismatched, or a placeholder. Re-copy both
-  from Project Settings → API (URL must have no trailing slash).
+- **"definitions.json changed on GitHub since you loaded it"** — someone
+  published, or the file was edited on github.com, after you loaded it. Click
+  **Reload latest**, re-apply your change, and publish again.
+- **"The connected token can't change cdomotor-g/SoRT"** — the token can read
+  the repo but not write to it: on GitHub, edit the token so **Repository access**
+  includes **SoRT** and **Contents** is **Read and write**.
+- **"GitHub didn't accept the saved token"** — it has expired or been revoked.
+  The app forgets it; **Connect…** with a new one.
+- **"Reload failed … nothing was changed"** after an edit on github.com — the
+  file on GitHub no longer makes sense to the app (a slip in a hand edit). Your
+  unpublished edits are untouched; fix the file on GitHub, or revert that commit
+  from its history. Until then the app starts from the copy in this browser or
+  the bundled `definitions.json`.
+
+### The retired Supabase store
+
+The app used to keep the definitions in a Supabase database row. That is gone
+from the app — Supabase paused the free project whenever it sat idle, which
+suited an app that changes rarely very badly. Its last dump is kept in
+`backups/` for the record (see [backups/README.md](backups/README.md)), and the
+Supabase project itself can be deleted.
 
 ## Definition format
 
@@ -456,7 +432,7 @@ editor, available for both table rows and common rows). Documents that predate
 at all, the app seeds the well-known coordinate rows (`coords`, `relocation`,
 `riverCoords`, `riverRelocation`) with sensible defaults so the map works out of
 the box — exactly as it seeds a default Property Services block. Publish once to
-bake those defaults (or your own) into the central store.
+bake those defaults (or your own) into `definitions.json` on GitHub.
 
 ## Site Map
 
@@ -730,7 +706,7 @@ frames the pins while it is still outstanding.
 >   default, the warmer/thicker contour line, the "N metre" sublayer-name probe,
 >   and the bottom-of-map build-progress bar (start → milestone → trickle →
 >   settle/hide → reset, and that it never captures pointer events). Hermetic:
->   the store, the Esri CDN and every QLD host are blocked.
+>   GitHub, the Esri CDN and every QLD host are blocked.
 > - `tests/map-build-progress.test.mjs` — §A6.1: the build-progress bar must not
 >   finish before the contours have drawn. A tracked layer that hasn't drawn holds
 >   the bar even when the view has gone quiet; the hold follows the layer's *layer

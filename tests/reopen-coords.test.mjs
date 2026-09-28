@@ -9,8 +9,8 @@
  * `resolveMapPins`, `parseCoord`) after a real DOM edit to the coordinate input.
  *
  * It is deliberately hermetic: it never opens the WebGL view and never touches the
- * QLD services or the Esri CDN — the A3 logic makes no network calls. The central
- * store is blocked so the bundled definitions.json loads (same as the verify
+ * QLD services or the Esri CDN — the A3 logic makes no network calls. GitHub
+ * is blocked so the bundled definitions.json loads (same as the verify
  * skill). Nothing here stubs a QLD service response.
  *
  * Run:
@@ -78,7 +78,7 @@ const browser = await chromium.launch(launchOpts);
 try {
   const ctx = await browser.newContext();
   // Force the bundled definitions.json (keep the run hermetic).
-  await ctx.route('**://*.supabase.co/**', r => r.abort());
+  await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());
   const page = await ctx.newPage();
   await page.goto(base, { waitUntil: 'domcontentloaded' });
 

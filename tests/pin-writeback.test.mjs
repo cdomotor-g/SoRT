@@ -9,7 +9,7 @@
  * These edit the user's coordinates, so they get their own guard. The test drives
  * the real `finalizePinDrag` / `undoPinMove` / `renderDistanceSuggestion` code by
  * simulating the drop with a stand-in graphic — no WebGL view, no QLD services,
- * no Esri CDN, nothing stubbed on the QLD side. The central store is blocked so
+ * no Esri CDN, nothing stubbed on the QLD side. GitHub is blocked so
  * the bundled definitions.json loads.
  *
  * Run: see tests/README.md (same invocation as reopen-coords.test.mjs).
@@ -60,7 +60,7 @@ const browser = await chromium.launch(launchOpts);
 
 try {
   const ctx = await browser.newContext();
-  await ctx.route('**://*.supabase.co/**', r => r.abort());
+  await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());
   const page = await ctx.newPage();
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));

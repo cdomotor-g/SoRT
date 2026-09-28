@@ -14,7 +14,7 @@ It exercises the real `syncPinsForReopen` / `refreshPins` / `resolveMapPins` /
 `parseCoord` code paths after a genuine `input` event on the coordinate field. It
 is hermetic: it never opens the WebGL view and never calls the QLD services or the
 Esri CDN (the A3 logic makes no network requests), and it does not stub any QLD
-service response. The central store is blocked so the bundled `definitions.json`
+service response. GitHub is blocked so the bundled `definitions.json`
 loads.
 
 ### Run
@@ -105,7 +105,7 @@ Guards the Site Map's visual behaviour:
   events** (so the map is never locked while it loads).
 
 It drives the real page globals (`SITE_MAP_CONFIG`, `contourRenderer`,
-`buildSiteMapModal`, `mapBuild*`) and is fully hermetic — the central store, the
+`buildSiteMapModal`, `mapBuild*`) and is fully hermetic — GitHub, the
 Esri CDN and every QLD host are blocked, and the progress lifecycle is exercised
 directly, so no WebGL view or network is needed. The timing-sensitive assertions
 poll (`waitForFunction`) rather than sleep, so the run is not flaky. Same
@@ -361,7 +361,7 @@ Guards the two free-text changes:
   escaped around them, and that the plain-text/TSV fallback keeps one table row on
   one line by collapsing breaks to `; `.
 
-Hermetic — the central store is blocked and nothing else is fetched (no map, no
+Hermetic — GitHub is blocked and nothing else is fetched (no map, no
 QLD services, no Esri CDN); the definitions under test are applied through the
 app's own `applyDefinitions`. Same invocation as the others:
 
@@ -371,24 +371,71 @@ PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/field-default-text.test.mjs
 ```
 
+## `github-publish.test.mjs` — GitHub as the definitions store
+
+The published definitions are `definitions.json` in the repo; Supabase is gone.
+The test runs the app against a **fake GitHub** (network interception, built to
+answer like the real REST API) and asserts:
+
+- **Startup** reads the file from the contents API (raw), as the *published*
+  copy, and remembers its exact text — the base Publish checks against. The
+  retired Supabase store is never contacted.
+- **Nothing to publish** — a copy identical to GitHub's, bar the date stamp, is
+  not committed (and no token is asked for).
+- **Connecting** — Publish with no token opens *Connect to GitHub*, whose link
+  pre-fills a fine-grained token (name, owner, one-year expiry, Contents write)
+  and says which repository to pick. An empty, rejected (401) or **read-only**
+  token is refused with the reason and nothing is kept; the write check is an
+  empty, unreferenced git blob, never a commit. *Remember* picks localStorage vs
+  sessionStorage, and *Disconnect* forgets the token.
+- **A publish, end to end** — a commit-message prompt, then a GET of the current
+  file (JSON, for its sha) and a PUT, both with the token; the commit carries the
+  typed message, targets `main`, quotes the sha it replaces, and its content is
+  **exactly** what Export would download, UTF-8 intact through base64 (emoji,
+  en dashes). Afterwards the definitions are the published copy, no draft is left,
+  and the editor stays on the table being worked on.
+- **Never overwriting someone else's edit** — a file changed on GitHub since it
+  was loaded is refused before anything is written (edits kept; *Reload latest*
+  then re-apply works), and GitHub's own 409 reads the same. A draft resumed in a
+  later session publishes against the version it was **made from**, so a change
+  made on GitHub overnight is caught too; a draft with no known base asks before
+  replacing the file.
+- **A published file broken by a hand edit** (valid JSON, but unusable) —
+  *Reload latest* reports it and changes nothing: the unpublished draft and its
+  base survive, and the edits stay on screen.
+- **Tokens that stop working** — a 403 explains the token needs *Contents: Read
+  and write* (and keeps it); a 401 says it was rejected, forgets it and shows
+  GitHub as not connected, keeping the edits. A connected token is sent on reads
+  too, and a rejected one doesn't stop anyone reading (retried without it).
+
+Hermetic — GitHub is the fake, raw.githubusercontent.com is blocked, and nothing
+else is fetched. Same invocation as the others:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium \
+  node tests/github-publish.test.mjs
+```
+
 ## `header-cache-repo.test.mjs` — the *Load from repo* and *Clear cache* buttons
 
 Guards the two header buttons.
 
 - **Load from repo** reads `definitions.json` from the GitHub contents API (asking
-  for the raw file) and falls back to `raw.githubusercontent.com`, cache-busted,
-  when the API is rate-limited. The test asserts the repo copy is applied as an
-  **unpublished browser copy** (origin `repo`, the source chip, the Manage Tables
-  note — and no bogus "draft from a previous session" banner), that answers on
-  rows that still exist carry over, that nothing is sent to the central store,
-  that it **asks before replacing unpublished edits** (and not over an untouched
-  repo load), and that an unreachable GitHub, a response that isn't a definitions
-  file, or a host that never answers (the per-route timeout) leaves everything
-  exactly as it was, with a message naming each route's failure.
+  for the raw file, anonymously when nothing is connected) and falls back to
+  `raw.githubusercontent.com`, cache-busted, when the API is rate-limited. The
+  test asserts it is applied as the **published** copy (origin `remote`, the
+  source chip, no draft left behind, nothing pending in Manage Tables), that
+  answers on rows that still exist carry over, that it **asks before throwing
+  away unpublished edits** (and not when there are none), and that an unreachable
+  GitHub, a response that isn't a definitions file, or a host that never answers
+  (the per-request timeout) leaves everything exactly as it was, with a message
+  naming each route's failure.
 - **Clear cache** asks first; *Cancel* changes nothing. *OK* removes every
-  `sort.*` key except the theme — other apps' keys on the same origin survive —
-  even with an edit's autosave still pending, re-fetches the page with
-  `cache:"reload"` before reloading, and the fresh page says so.
+  `sort.*` key except the theme and the GitHub connection — other apps' keys on
+  the same origin survive — even with an edit's autosave still pending,
+  re-fetches the page with `cache:"reload"` before reloading, and the fresh page
+  says so (and loads the published copy from GitHub).
 - **Against a real HTTP cache.** Network interception switches Chromium's cache
   off, so the last section runs in a second browser with no interception (only
   `127.0.0.1` resolves) and serves the app the way GitHub Pages does
@@ -396,8 +443,9 @@ Guards the two header buttons.
   visit still gets the old page — and that Clear cache brings up the new one, for
   good.
 
-Hermetic — the central store is blocked, both GitHub hosts are stubbed, and the
-real-cache section never leaves 127.0.0.1. Same invocation as the others:
+Hermetic — both GitHub hosts are stubbed, the retired Supabase store must never
+be contacted, and the real-cache section never leaves 127.0.0.1. Same
+invocation as the others:
 
 ```bash
 PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
@@ -424,7 +472,7 @@ table width, two-column rows at the **1/3 : 2/3** split the user asked for — w
 the cm CSS width and the px `width` attribute agreeing, the column widths adding
 up to the table width, and no percentage cell width left anywhere.
 
-Hermetic — the central store is blocked and nothing else is fetched (no map, no
+Hermetic — GitHub is blocked and nothing else is fetched (no map, no
 QLD services, no Esri CDN). Same invocation as the others:
 
 ```bash
@@ -470,7 +518,7 @@ two reasons the re-frame did not reach the screen:
   anchor is actually in the middle of the view — bounded by
   `SITE_MAP_CONFIG.frameAttempts`, and a rejected goTo always counts as a miss.
 
-Hermetic — the central store, the Esri CDN and every QLD host are blocked, and no
+Hermetic — GitHub, the Esri CDN and every QLD host are blocked, and no
 WebGL view is created. Same invocation as the others:
 
 ```bash

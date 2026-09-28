@@ -25,7 +25,7 @@
  *   - compositeScreenshot() throws rather than export pins-on-white;
  *   - the diagnostics name the coverage and the suspension state.
  *
- * Hermetic: no WebGL, no Esri CDN, no QLD services. The central store is blocked
+ * Hermetic: no WebGL, no Esri CDN, no QLD services. GitHub is blocked
  * so the bundled definitions.json loads. Same invocation as the other tests
  * (see tests/README.md).
  */
@@ -75,7 +75,7 @@ const browser = await chromium.launch(launchOpts);
 
 try {
   const ctx = await browser.newContext();
-  await ctx.route('**://*.supabase.co/**', r => r.abort());
+  await ctx.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());
   const page = await ctx.newPage();
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));

@@ -23,7 +23,7 @@
  *     button is gone;
  *   - the diagnostics name which picture the copy would use and how it was made.
  *
- * Hermetic: no WebGL, no Esri CDN, no QLD services. The central store is blocked
+ * Hermetic: no WebGL, no Esri CDN, no QLD services. GitHub is blocked
  * so the bundled definitions.json loads. Same invocation as the other tests
  * (see tests/README.md).
  */
@@ -74,7 +74,7 @@ const context = await browser.newContext();
 const page = await context.newPage();
 const pageErrors = [];
 page.on('pageerror', e => pageErrors.push(e.message));
-await context.route('**://*.supabase.co/**', r => r.abort());
+await context.route(/api\.github\.com|raw\.githubusercontent\.com/, r => r.abort());
 
 try{
   await page.goto(base, { waitUntil: 'domcontentloaded' });

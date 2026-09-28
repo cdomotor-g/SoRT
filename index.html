@@ -506,6 +506,23 @@
     flex:1; min-width:180px; border:1px solid var(--line); border-radius:6px;
     padding:8px 10px; font-size:.87rem; font-family:inherit;
   }
+  .modal-foot .grow{ flex:1; }
+
+  /* GitHub connection: the Manage Tables indicator and the Connect dialog. */
+  .gh-conn{ display:inline-flex; align-items:center; gap:6px; font-size:.8rem; color:var(--ink-soft); }
+  .gh-conn b{ color:var(--ink); }
+  .gh-connect .modal-body p,
+  .gh-connect .modal-body ol{ margin:0 0 10px; font-size:.87rem; line-height:1.5; }
+  .gh-connect .modal-body ol{ padding-left:20px; }
+  .gh-connect .modal-body li{ margin-bottom:4px; }
+  .gh-connect .gh-token{
+    width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px;
+    font-family:Consolas, "Courier New", monospace; font-size:.85rem;
+    background:var(--card); color:var(--ink);
+  }
+  .gh-connect .gh-remember{ display:flex; align-items:center; gap:6px; font-size:.84rem; margin:10px 0; }
+  .gh-connect .modal-body .gh-note{ font-size:.78rem; color:var(--ink-soft); }
+  .gh-connect .gh-error{ color:var(--danger); font-size:.84rem; font-weight:600; min-height:1.2em; }
 
   /* ===================== PROPERTY SERVICES (separate table) ===================== */
   /* A deliberately distinct block sitting at the bottom of the Scope Builder.
@@ -1079,10 +1096,12 @@
    editing the app. This file provides:
      • the end-user "Scope Builder" (unchanged behaviour), and
      • a "Manage Tables" CRUD editor for the definitions.
-   Definitions are read from a central Supabase row when the SUPABASE config
-   below is filled in (edit → Publish → everyone gets it on next load). If it
-   is left blank the app falls back to the bundled definitions.json plus
-   manual Import/Export, i.e. the original offline behaviour.
+   The published definitions are definitions.json in the GitHub repo named by
+   GITHUB_REPO below: the app reads it on startup and "Publish to GitHub"
+   commits edits back to it (edit → Publish → everyone gets it on next load).
+   With GITHUB_REPO.owner left blank the app falls back to the bundled
+   definitions.json plus manual Import/Export, i.e. the original offline
+   behaviour.
 
    Definition shape:
    {
@@ -1108,7 +1127,9 @@
    ========================================================================= */
 
 const LS_DEFS = "sort.definitions.v1";   // saved (edited) definitions / unpublished draft
+const LS_DEFS_BASE = "sort.definitions.base";   // the published text that draft was edited from
 const LS_URL  = "sort.definitionsUrl";   // remembered "load from URL" source
+const LS_GITHUB = "sort.github";         // connected GitHub token + login (see connectGithub)
 const DEFINITIONS_FILE = "definitions.json";
 
 /* Migration fallback for the Site Map pins (§4). The durable mechanism is the
@@ -1129,7 +1150,7 @@ const DEFAULT_MAP_PINS = {
    at the bottom of the Scope Builder for every station type and copied into Word
    as its own table. Its shape lives under defs.propertyServices so it can be
    managed without touching code; this DEFAULT is the built-in fallback used when
-   the loaded definitions (e.g. the central store) do not yet carry one.
+   the loaded definitions (e.g. an older definitions.json) do not yet carry one.
 
    Row kinds:
      coordGroup    — a titled sub-table of coordinate rows {key,label,source?,default?}
@@ -1165,47 +1186,37 @@ const DEFAULT_PROPERTY_SERVICES = {
   ]
 };
 
-/* ===================== CENTRAL STORE (SUPABASE) =====================
-   Fill these in to turn on the shared central store. One master JSON row
-   lives in a Supabase table; the app reads it on startup and writes back
-   when someone clicks "Publish to central store". See README for the exact
-   table + policy setup.
-     • Leave `url` or `anonKey` blank to stay in offline mode (bundled
-       definitions.json + Import/Export), i.e. the original behaviour.
-     • `anonKey` is the PUBLIC "anon" key — it is designed to be shipped to
-       the browser; Row Level Security is what actually protects the data.  */
-const SUPABASE = {
-  url:      "https://gggahciaeooxolqzfpra.supabase.co",             // e.g. "https://abcdefgh.supabase.co"  (no trailing slash)
-  anonKey:  "sb_publishable_DvIAiM8j6w_7hCyUImXwyQ_w3OwnoVb",             // the public anon key from Project Settings → API
-  table:    "definitions",  // table holding the master row
-  rowId:    1,              // primary-key id of the single master row
-  // Optional friction before publishing. NOTE: this is a speed-bump, not real
-  // security (anyone with the anon key can write per your RLS policy). Leave
-  // "" to let anyone who can open this page publish.
-  publishPassphrase: ""
-};
-const REMOTE_ON = !!(SUPABASE.url && SUPABASE.anonKey);
-let remoteVersion = null;   // version of the row we last loaded (optimistic-lock check)
-
-/* ===================== GITHUB REPO ("Load from repo") =====================
-   Where the header's "Load from repo" button reads definitions.json — the copy
-   people edit on github.com. It only LOADS it into this browser (like Import):
-   nothing reaches the central store until someone clicks Publish. Two routes,
-   tried in order (see fetchDefsFromGithub):
-     • the GitHub contents API — the branch as it is right now, but anonymous
-       callers share 60 requests an hour per network address;
+/* ===================== GITHUB (the definitions store) =====================
+   The published definitions are definitions.json in this GitHub repo. The app
+   reads it on startup — no sign-in needed, the repo is public — and "Publish to
+   GitHub" commits edits straight back to it, so the file's commit history is
+   the audit trail and the way to roll back. Reads try, in order (see
+   fetchDefsFromGithub):
+     • the GitHub contents API — the branch as it is right now. Anonymous
+       callers share 60 requests an hour per network address; with a token
+       connected it is 5,000 an hour;
      • raw.githubusercontent.com — the fallback when the API refuses or is
-       blocked; its CDN can serve a copy up to 5 minutes old.                  */
+       blocked; its CDN can serve a copy up to 5 minutes old.
+   Publishing needs a GitHub token allowed to change this repo (a fine-grained
+   token with Contents: Read and write on just this repo). It is pasted in once
+   ("Connect GitHub…") and kept in this browser only — see connectGithub().
+   Leave `owner` blank to run offline: bundled definitions.json + Import/Export. */
 const GITHUB_REPO = {
   owner:     "cdomotor-g",
   repo:      "SoRT",
   branch:    "main",
   path:      DEFINITIONS_FILE,    // path of the definitions file inside the repo
-  timeoutMs: 15000                // per route, so a blocked host can't hang the button
+  timeoutMs: 10000                // per request, so a blocked host can't hang the app
 };
+const REMOTE_ON = !!(GITHUB_REPO.owner && GITHUB_REPO.repo);
+// The exact text of the published definitions.json the definitions on screen
+// were loaded (or edited) from. Publish refuses when GitHub no longer holds this
+// text — someone changed the file since — so nobody silently overwrites an edit.
+// null = not known (e.g. offline), and Publish asks before overwriting.
+let publishedText = null;
 
 let defs = null;          // active definitions used by the builder + editor
-let defsOrigin = "none";  // "remote" | "file" | "url" | "local" | "imported" | "repo" | "none"
+let defsOrigin = "none";  // "remote" | "file" | "url" | "local" | "imported" | "none"
 let mode = "builder";     // "builder" | "manage"
 
 /* ===================== DEFINITION HELPERS ===================== */
@@ -2315,10 +2326,21 @@ function uniqueId(base, taken){
   return id;
 }
 
-// Write the current definitions to the browser store (no origin change).
+// Write the current definitions to the browser store (no origin change),
+// with the published text they were edited from, so a draft resumed another
+// day still publishes against the version it started from.
 function writeLocal(){
-  try{ localStorage.setItem(LS_DEFS, JSON.stringify(defs)); }
+  try{
+    localStorage.setItem(LS_DEFS, JSON.stringify(defs));
+    if(publishedText != null) localStorage.setItem(LS_DEFS_BASE, publishedText);
+    else localStorage.removeItem(LS_DEFS_BASE);
+  }
   catch(e){ console.warn("Could not save to localStorage", e); }
+}
+// Forget the saved draft (and what it was edited from).
+function clearDraft(){
+  localStorage.removeItem(LS_DEFS);
+  localStorage.removeItem(LS_DEFS_BASE);
 }
 // An *edit* happened: persist (debounced) and mark the copy as locally edited.
 let persistTimer = null;
@@ -2389,11 +2411,11 @@ function renderManage(){
 
   const issues = collectIssues();
   const hasDraft = REMOTE_ON && !!localStorage.getItem(LS_DEFS);
-  // The definitions on screen exist only in this browser (edited, imported or
-  // loaded from GitHub) — so the saved draft IS what is showing, not a leftover.
-  const unpublished = ["local", "imported", "repo"].includes(defsOrigin);
+  // The definitions on screen exist only in this browser (edited or imported),
+  // so the saved draft IS what is showing, not a leftover.
+  const unpublished = ["local", "imported"].includes(defsOrigin);
   const actions = REMOTE_ON
-    ? `<button class="btn btn-primary" id="btnPublish">Publish to central store</button>
+    ? `<button class="btn btn-primary" id="btnPublish">Publish to GitHub</button>
        <button class="btn btn-secondary" id="btnReloadRemote">Reload latest</button>
        <button class="btn btn-secondary" id="btnExport">Export JSON</button>
        <button class="btn btn-secondary" id="btnImport">Import JSON…</button>`
@@ -2403,10 +2425,11 @@ function renderManage(){
        <button class="btn btn-secondary" id="btnReset">Reset to published file</button>`;
   const note = REMOTE_ON
     ? `<div class="admin-note">
-         Changes are saved in <b>this browser</b> as you type. Click <b>Publish to central store</b>
-         to share them — everyone else picks up the update automatically the next time they open the app.
-         ${defsOrigin === "repo" ? `<b>These definitions were loaded from GitHub and are not published yet.</b>`
-           : unpublished ? `<b>You have unpublished changes.</b>` : ""}
+         Changes are saved in <b>this browser</b> as you type. Click <b>Publish to GitHub</b> to commit
+         them to <code>${escapeHtml(GITHUB_REPO.path)}</code> in <b>${escapeHtml(GITHUB_REPO.owner + "/" + GITHUB_REPO.repo)}</b> —
+         everyone else picks up the update automatically the next time they open the app.
+         <a href="${escapeHtml(githubHistoryUrl())}" target="_blank" rel="noopener">History &amp; roll back ↗</a>
+         ${unpublished ? `<b>You have unpublished changes.</b>` : ""}
        </div>`
     : `<div class="admin-note">
          <b>Heads up:</b> changes here are saved in <b>this browser only</b>. When you are happy,
@@ -2425,6 +2448,7 @@ function renderManage(){
       ${actions}
       <span class="grow"></span>
       <span class="status-msg" id="mStatus"></span>
+      ${REMOTE_ON ? githubConnectionHtml() : ""}
     </div>
     ${note}
     ${draftBanner}
@@ -2470,6 +2494,7 @@ function renderManage(){
     bind("btnReloadRemote", reloadFromRemote);
     bind("btnResumeDraft", resumeDraft);
     bind("btnDiscardDraft", discardDraft);
+    wireGithubConnection();
   }else{
     bind("btnUrl", promptLoadUrl);
     bind("btnReset", resetToPublished);
@@ -3380,11 +3405,19 @@ function mStatus(msg, isError){
   if(!el) return;
   el.textContent = msg;
   el.style.color = isError ? "var(--danger)" : "var(--accent-dark)";
-  setTimeout(()=>{ if(el) el.textContent = ""; }, 4000);
+  // One timer per status line, so "Publishing…"'s timer can't wipe the result
+  // that replaces it; errors stay up long enough to read.
+  clearTimeout(el._clearTimer);
+  el._clearTimer = setTimeout(()=>{ el.textContent = ""; }, isError ? 12000 : 6000);
+}
+
+// definitions.json as a file: what Export downloads and Publish commits.
+function definitionsFileText(){
+  return JSON.stringify(exportableDefinitions(), null, 2) + "\n";
 }
 
 function exportDefinitions(){
-  const data = JSON.stringify(exportableDefinitions(), null, 2) + "\n";
+  const data = definitionsFileText();
   const blob = new Blob([data], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -3428,10 +3461,11 @@ function promptLoadUrl(){
 async function loadFromUrl(url, remember){
   try{
     mStatus("Loading…");
-    const d = await fetchDefs(url);
+    const { doc, text } = await fetchDefsWithText(url);
     if(remember) localStorage.setItem(LS_URL, url);
-    localStorage.removeItem(LS_DEFS);   // URL is authoritative until edited
-    applyDefinitions(d, "url");
+    clearDraft();                       // URL is authoritative until edited
+    applyDefinitions(doc, "url");
+    publishedText = text;
     mStatus("Loaded from URL.");
   }catch(err){
     mStatus("Load failed: " + err.message, true);
@@ -3440,85 +3474,30 @@ async function loadFromUrl(url, remember){
 
 function resetToPublished(){
   if(!confirm("Discard local edits and reload the published definitions file? This clears your in-browser copy.")) return;
-  localStorage.removeItem(LS_DEFS);
+  clearDraft();
   localStorage.removeItem(LS_URL);
   boot(true);
 }
 
-async function fetchDefs(url, init){
+// Fetch a definitions file, keeping its exact text alongside the parsed doc —
+// Publish compares GitHub's copy against the text the edits started from.
+async function fetchDefsWithText(url, init){
   const res = await fetch(url, Object.assign({ cache:"no-store" }, init));
-  if(!res.ok) throw new Error("HTTP " + res.status);
-  const json = await res.json();
+  if(!res.ok){
+    const e = new Error("HTTP " + res.status);
+    e.status = res.status;
+    throw e;
+  }
+  const text = await res.text();
+  let json = null;
+  try{ json = JSON.parse(text); }catch(_){}
   if(!json || typeof json !== "object" || !Array.isArray(json.tables)){
     throw new Error("not a valid definitions file");
   }
-  return json;
+  return { doc: json, text };
 }
-
-/* ---- Load from repo (header button) ----
-   definitions.json straight from GitHub (see GITHUB_REPO). The API route reads
-   the branch as it is right now; the raw CDN is the fallback, with a throwaway
-   query so no cache in between can answer for it. */
-function githubDefinitionRoutes(){
-  const g = GITHUB_REPO;
-  const seg = s => String(s).split("/").map(encodeURIComponent).join("/");
-  return [
-    { via:"api", label:"GitHub API",
-      url:`https://api.github.com/repos/${seg(g.owner)}/${seg(g.repo)}/contents/${seg(g.path)}?ref=${encodeURIComponent(g.branch)}`,
-      init:{ headers:{ Accept:"application/vnd.github.raw" } } },   // the file itself, not the JSON envelope
-    { via:"raw", label:"raw.githubusercontent.com",
-      url:`https://raw.githubusercontent.com/${seg(g.owner)}/${seg(g.repo)}/${seg(g.branch)}/${seg(g.path)}?nocache=${Date.now()}` }
-  ];
-}
-
-// The first route that returns a valid definitions document wins. Each one is
-// bounded by GITHUB_REPO.timeoutMs; if none works, the error gives every
-// route's reason.
-async function fetchDefsFromGithub(){
-  const failures = [];
-  for(const route of githubDefinitionRoutes()){
-    const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(()=> ctrl.abort(), GITHUB_REPO.timeoutMs) : null;
-    try{
-      const doc = await fetchDefs(route.url, Object.assign({}, route.init, ctrl ? { signal: ctrl.signal } : {}));
-      return { doc, via: route.via };
-    }catch(e){
-      const why = (e && e.name === "AbortError")
-        ? "no response within " + Math.round(GITHUB_REPO.timeoutMs / 1000) + " s"
-        : (e && e.message) || String(e);
-      failures.push(route.label + ": " + why);
-    }finally{
-      if(timer) clearTimeout(timer);
-    }
-  }
-  throw new Error(failures.join("; "));
-}
-
-async function loadFromGithub(){
-  // Unpublished edits (applied, or waiting as a draft) are the one thing this
-  // can lose, so ask first — unless the copy in this browser is itself an
-  // untouched repo load (any edit re-labels it "local").
-  if(localStorage.getItem(LS_DEFS) && defsOrigin !== "repo" &&
-     !confirm("Load the latest definitions from GitHub?\n\nThis replaces the unpublished definition edits saved in this browser.")) return;
-  setHeaderBusy(loadRepoBtn, "Loading…");
-  try{
-    const { doc, via } = await fetchDefsFromGithub();
-    clearTimeout(persistTimer);          // a pending autosave must not re-label it "local"
-    applyDefinitions(doc, "repo");       // answers on rows that still exist carry over
-    writeLocal();                        // keep it: an unpublished copy, like an Import…
-    localStorage.removeItem(LS_URL);     // …which also forgets a remembered URL
-    const g = GITHUB_REPO;
-    appToast(
-      (via === "api" ? "Loaded the latest definitions" : "Loaded the definitions") +
-      ` from GitHub (${g.owner}/${g.repo}, ${g.branch}).` +
-      (via === "api" ? "" : " GitHub’s file cache can be up to 5 minutes behind, so if a change you have just made is missing, try again shortly.") +
-      (REMOTE_ON ? " They are in this browser only — Publish to central store (Manage Tables) to share them." : "")
-    );
-  }catch(err){
-    appToast("Couldn’t load definitions from GitHub — " + err.message, true);
-  }finally{
-    setHeaderBusy(loadRepoBtn, null);
-  }
+async function fetchDefs(url, init){
+  return (await fetchDefsWithText(url, init)).doc;
 }
 
 // Set new definitions from any source and refresh everything.
@@ -3536,11 +3515,10 @@ function applyDefinitions(raw, origin){
 
 function renderSourceChip(){
   const map = {
-    remote: ["", "Definitions: central store (published)"],
+    remote: ["", "Definitions: GitHub (published)"],
     file:   ["", "Definitions: published file"],
     url:    ["", "Definitions: loaded from URL"],
     imported:["local", "Definitions: imported file (browser only)"],
-    repo:   ["local", "Definitions: loaded from GitHub (browser only)"],
     local:  ["local", "Definitions: unpublished changes in this browser"],
     none:   ["none", "No definitions loaded"]
   };
@@ -3584,7 +3562,7 @@ function renderMap(){
   const issues = collectIssues();
 
   const publishActions = REMOTE_ON
-    ? `<button class="btn btn-primary" id="btnPublishMap">Publish to central store</button>
+    ? `<button class="btn btn-primary" id="btnPublishMap">Publish to GitHub</button>
        <button class="btn btn-secondary" id="btnReloadMap">Reload latest</button>`
     : `<button class="btn btn-primary" id="btnExportMap">Export JSON</button>`;
 
@@ -4004,7 +3982,7 @@ function renderPsManage(){
   if(!defs){ psManageView.innerHTML = renderNoDefsHtml(); wireNoDefs(); return; }
   const ps = defs.propertyServices;
   const actions = REMOTE_ON
-    ? `<button class="btn btn-primary" id="psPublish">Publish to central store</button>
+    ? `<button class="btn btn-primary" id="psPublish">Publish to GitHub</button>
        <button class="btn btn-secondary" id="psReload">Reload latest</button>
        <button class="btn btn-secondary" id="psExport">Export JSON</button>`
     : `<button class="btn btn-primary" id="psExport">Export JSON</button>
@@ -4280,114 +4258,420 @@ document.querySelectorAll(".mode-btn").forEach(b=>{
   b.addEventListener("click", ()=>setMode(b.dataset.mode));
 });
 
-/* ===================== CENTRAL STORE (SUPABASE) ===================== */
-function sbHeaders(extra){
-  return Object.assign({
-    "apikey": SUPABASE.anonKey,
-    "Authorization": "Bearer " + SUPABASE.anonKey
-  }, extra || {});
+/* ===================== GITHUB STORE ===================== */
+// Base64 <-> text for the contents API. btoa/atob only speak Latin-1 and the
+// file carries emoji and en dashes, so both go through UTF-8 bytes.
+function utf8ToBase64(text){
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for(let i = 0; i < bytes.length; i += 0x8000){
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+function base64ToUtf8(b64){
+  const bin = atob(String(b64 || "").replace(/\s+/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
 }
 
-// Turn a failed Supabase response into an Error carrying its real message.
-// (e.g. "HTTP 401: Invalid API key" instead of a bare "HTTP 401".)
-async function sbError(res){
-  let detail = "";
+function githubSeg(s){ return String(s).split("/").map(encodeURIComponent).join("/"); }
+function githubRepoApiUrl(){
+  return `https://api.github.com/repos/${githubSeg(GITHUB_REPO.owner)}/${githubSeg(GITHUB_REPO.repo)}`;
+}
+function githubContentsUrl(){ return `${githubRepoApiUrl()}/contents/${githubSeg(GITHUB_REPO.path)}`; }
+function githubHistoryUrl(){
+  const g = GITHUB_REPO;
+  return `https://github.com/${githubSeg(g.owner)}/${githubSeg(g.repo)}/commits/${githubSeg(g.branch)}/${githubSeg(g.path)}`;
+}
+
+/* ---- the connected account ----
+   A fine-grained token, pasted in once via "Connect GitHub…" and kept in this
+   browser only: localStorage when "Remember on this computer" is ticked, else
+   sessionStorage (gone when the tab closes). Clear cache leaves it alone —
+   Disconnect is how it goes. */
+function githubAuth(){
+  for(const store of [localStorage, sessionStorage]){
+    try{
+      const v = JSON.parse(store.getItem(LS_GITHUB) || "null");
+      if(v && v.token) return v;
+    }catch(_){}
+  }
+  return null;
+}
+function githubToken(){
+  const auth = githubAuth();
+  return auth ? auth.token : "";
+}
+function saveGithubAuth(auth, remember){
+  forgetGithubAuth();
+  (remember ? localStorage : sessionStorage).setItem(LS_GITHUB, JSON.stringify(auth));
+}
+function forgetGithubAuth(){
+  try{ localStorage.removeItem(LS_GITHUB); }catch(_){}
+  try{ sessionStorage.removeItem(LS_GITHUB); }catch(_){}
+}
+
+// One GitHub REST call, bounded by GITHUB_REPO.timeoutMs. A failure throws an
+// Error carrying the HTTP status and GitHub's own message.
+async function githubApi(url, opts){
+  const { token, method, body } = opts || {};
+  const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(()=> ctrl.abort(), GITHUB_REPO.timeoutMs) : null;
+  const headers = { Accept: "application/vnd.github+json" };
+  if(token) headers.Authorization = "Bearer " + token;
+  if(body) headers["Content-Type"] = "application/json";
   try{
-    const text = await res.text();
-    try{ const j = JSON.parse(text); detail = j.message || j.msg || j.error_description || j.error || j.hint || text; }
-    catch(_){ detail = text; }
-  }catch(_){}
-  detail = String(detail || "").trim().slice(0, 300);
-  return new Error("HTTP " + res.status + (detail ? ": " + detail : ""));
+    const res = await fetch(url, {
+      method: method || "GET", headers, cache: "no-store",
+      body: body ? JSON.stringify(body) : undefined,
+      signal: ctrl ? ctrl.signal : undefined
+    });
+    const data = await res.json().catch(()=> null);
+    if(!res.ok){
+      const e = new Error("HTTP " + res.status + (data && data.message ? " — " + data.message : ""));
+      e.status = res.status;
+      throw e;
+    }
+    return data;
+  }catch(e){
+    if(e && e.name === "AbortError") throw new Error("GitHub did not respond within " + Math.round(GITHUB_REPO.timeoutMs / 1000) + " s");
+    throw e;
+  }finally{
+    if(timer) clearTimeout(timer);
+  }
 }
 
-// Read the single master row. Sets remoteVersion for the optimistic-lock check.
-async function remoteLoad(){
-  const url = `${SUPABASE.url}/rest/v1/${encodeURIComponent(SUPABASE.table)}` +
-              `?id=eq.${encodeURIComponent(SUPABASE.rowId)}&select=doc,version,updated_at`;
-  const res = await fetch(url, { headers: sbHeaders(), cache:"no-store" });
-  if(!res.ok) throw await sbError(res);
-  const rows = await res.json();
-  if(!rows.length) throw new Error("no master row (id=" + SUPABASE.rowId + ") in table " + SUPABASE.table);
-  const row = rows[0];
-  if(!row.doc || typeof row.doc !== "object" || !Array.isArray(row.doc.tables)){
-    throw new Error("stored value is not a valid definitions object");
-  }
-  remoteVersion = row.version;
-  return row.doc;
+/* ---- reading the published copy ----
+   The API reads the branch as it is right now — with the connected token when
+   there is one (5,000 calls an hour rather than 60 shared per network
+   address); raw.githubusercontent.com is the fallback, with a throwaway query
+   so no cache in between can answer for it. A token GitHub no longer accepts
+   must not stop anyone reading, so a 401 on its attempt retries without it. */
+function githubDefinitionRoutes(){
+  const g = GITHUB_REPO;
+  const api = githubContentsUrl() + "?ref=" + encodeURIComponent(g.branch);
+  const rawFile = { Accept: "application/vnd.github.raw" };   // the file itself, not the JSON envelope
+  const token = githubToken();
+  const routes = [];
+  if(token) routes.push({ via:"api", label:"GitHub API", url:api,
+                          init:{ headers:Object.assign({ Authorization:"Bearer " + token }, rawFile) } });
+  routes.push({ via:"api", label: token ? "GitHub API without the token" : "GitHub API", url:api,
+                init:{ headers:rawFile }, onlyAfter401: !!token });
+  routes.push({ via:"raw", label:"raw.githubusercontent.com",
+                url:`https://raw.githubusercontent.com/${githubSeg(g.owner)}/${githubSeg(g.repo)}/${githubSeg(g.branch)}/${githubSeg(g.path)}?nocache=${Date.now()}` });
+  return routes;
 }
 
-// Publish a doc, but only if nobody else has published since we loaded.
-// Throws err.conflict === true when the version has moved on.
-async function remotePublish(doc){
-  if(remoteVersion == null){
-    // We never successfully loaded a version, so we can't safely overwrite.
-    throw new Error("load the latest before publishing");
+// The first route that returns a valid definitions document wins, as
+// { doc, text, via }. Each is bounded by GITHUB_REPO.timeoutMs; if none
+// works, the error gives every route's reason.
+async function fetchDefsFromGithub(){
+  const failures = [];
+  let last = null;
+  for(const route of githubDefinitionRoutes()){
+    if(route.onlyAfter401 && !(last && last.status === 401)) continue;
+    const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(()=> ctrl.abort(), GITHUB_REPO.timeoutMs) : null;
+    try{
+      const got = await fetchDefsWithText(route.url, Object.assign({}, route.init, ctrl ? { signal: ctrl.signal } : {}));
+      return { doc: got.doc, text: got.text, via: route.via };
+    }catch(e){
+      last = e;
+      const why = (e && e.name === "AbortError")
+        ? "no response within " + Math.round(GITHUB_REPO.timeoutMs / 1000) + " s"
+        : (e && e.message) || String(e);
+      failures.push(route.label + ": " + why);
+    }finally{
+      if(timer) clearTimeout(timer);
+    }
   }
-  const next = remoteVersion + 1;
-  const url = `${SUPABASE.url}/rest/v1/${encodeURIComponent(SUPABASE.table)}` +
-              `?id=eq.${encodeURIComponent(SUPABASE.rowId)}&version=eq.${encodeURIComponent(remoteVersion)}`;
-  const res = await fetch(url, {
-    method: "PATCH",
-    headers: sbHeaders({ "Content-Type":"application/json", "Prefer":"return=representation" }),
-    body: JSON.stringify({ doc: doc, version: next, updated_at: new Date().toISOString() })
-  });
-  if(!res.ok) throw await sbError(res);
-  const rows = await res.json();
-  if(!rows.length){
-    const err = new Error("someone else published first");
-    err.conflict = true;
-    throw err;
+  throw new Error(failures.join("; "));
+}
+
+/* ---- publishing ----
+   Commit `text` as the new definitions.json, guarded twice against
+   overwriting someone else's change:
+     1. read what GitHub holds now — refused (err.conflict) unless it is still
+        the text these edits started from (`force` skips this when that base is
+        unknown and the user chose to overwrite);
+     2. replace it quoting that version's blob sha — GitHub itself refuses
+        (409) if the file moved on in between.
+   Resolves to GitHub's commit object. */
+async function remotePublish(text, message, force){
+  const token = githubToken();
+  const cur = await githubApi(githubContentsUrl() + "?ref=" + encodeURIComponent(GITHUB_REPO.branch), { token });
+  if(!force){
+    if(!cur || cur.encoding !== "base64") throw new Error("GitHub didn’t send the current file to check against");
+    if(base64ToUtf8(cur.content) !== publishedText){
+      const e = new Error("definitions.json changed on GitHub since you loaded it");
+      e.conflict = true;
+      throw e;
+    }
   }
-  remoteVersion = rows[0].version;
-  return rows[0].doc;
+  try{
+    const res = await githubApi(githubContentsUrl(), { token, method: "PUT", body: {
+      message, content: utf8ToBase64(text), sha: cur.sha, branch: GITHUB_REPO.branch
+    }});
+    return res && res.commit;
+  }catch(e){
+    if(e.status === 409) e.conflict = true;
+    throw e;
+  }
+}
+
+// Is `text` what GitHub already has? The date stamp Export/Publish write into
+// meta.updated doesn't count as a change on its own.
+function sameAsPublished(text){
+  if(publishedText == null) return false;
+  if(text === publishedText) return true;
+  try{
+    const mine = JSON.parse(text), theirs = JSON.parse(publishedText);
+    if(mine.meta) mine.meta.updated = (theirs.meta || {}).updated;
+    return JSON.stringify(mine, null, 2) + "\n" === publishedText;
+  }catch(_){ return false; }
 }
 
 async function publishToRemote(){
-  if(!REMOTE_ON){ mStatus("No central store is configured.", true); return; }
+  if(!REMOTE_ON){ mStatus("No GitHub repo is configured.", true); return; }
   const issues = collectIssues();
   if(issues.length){ mStatus("Fix the listed problems before publishing.", true); return; }
-  if(SUPABASE.publishPassphrase){
-    const pass = prompt("Enter the publish passphrase:");
-    if(pass === null) return;
-    if(pass !== SUPABASE.publishPassphrase){ mStatus("Wrong passphrase — not published.", true); return; }
+  const text = definitionsFileText();
+  if(sameAsPublished(text)){ mStatus("Nothing to publish — GitHub already has these definitions."); return; }
+  if(!githubToken()){
+    if(!(await connectGithub())) return;
+    if(mode === "manage") renderManage();  // show who is now connected
   }
+  // With no known base there is nothing to check GitHub's copy against, so
+  // overwriting it is the user's call.
+  const force = publishedText == null;
+  if(force && !confirm("Replace definitions.json on GitHub with these definitions?\n\n" +
+       "SoRT can't tell which published version they started from, so it can't check whether " +
+       "someone has changed the file on GitHub since.")) return;
+  const message = prompt("Describe the change — it becomes the commit message in the repo’s history:",
+                         "Update definitions from SoRT");
+  if(message === null) return;
   mStatus("Publishing…");
   try{
-    const saved = await remotePublish(exportableDefinitions());
-    applyDefinitions(saved, "remote");
-    localStorage.removeItem(LS_DEFS);   // the draft is now the published copy
-    mStatus("Published to the central store — everyone gets it on next load.");
-  }catch(err){
-    if(err.conflict){
-      mStatus("Someone else published since you loaded. Click “Reload latest”, re-apply your change, then publish again. (Your edits are still saved in this browser.)", true);
+    const commit = await remotePublish(text, message.trim() || "Update definitions from SoRT", force);
+    publishedText = text;
+    if(definitionsFileText() === text){    // nothing was edited while it was on its way
+      clearTimeout(persistTimer);
+      clearDraft();
+      defsOrigin = "remote";
+      renderSourceChip();
+      setMode(mode);                       // re-render in place, keeping the selection
     }else{
-      mStatus("Publish failed: " + err.message + " — your changes are still saved locally.", true);
+      writeLocal();                        // later edits stay unpublished, now on top of this commit
+    }
+    mStatus("Published to GitHub" + (commit && commit.sha ? " (commit " + commit.sha.slice(0, 7) + ")" : "") +
+            " — everyone gets it the next time they open the app.");
+  }catch(err){
+    const kept = " Your edits are still saved in this browser.";
+    if(err.conflict){
+      mStatus("definitions.json changed on GitHub since you loaded it. Click “Reload latest”, " +
+              "re-apply your change, then publish again." + kept, true);
+    }else if(err.status === 401){
+      forgetGithubAuth();
+      if(mode === "manage") renderManage();
+      mStatus("GitHub didn’t accept the saved token — it may have expired or been revoked. " +
+              "Connect again, then publish." + kept, true);
+    }else if(err.status === 403 || err.status === 404){
+      mStatus(`The connected token can’t change ${GITHUB_REPO.owner}/${GITHUB_REPO.repo} (${err.message}). ` +
+              "It needs Contents: Read and write on that repository." + kept, true);
+    }else{
+      mStatus("Publish failed: " + err.message + "." + kept, true);
     }
   }
 }
 
-async function reloadFromRemote(){
-  if(!confirm("Discard local edits and reload the latest published definitions? This clears your unpublished changes in this browser.")) return;
-  localStorage.removeItem(LS_DEFS);
+/* ---- loading the published copy (Reload latest / Load from repo) ---- */
+// Would loading the published copy throw away unpublished edits? Ask.
+function confirmDiscardDraft(){
+  return !localStorage.getItem(LS_DEFS) ||
+    confirm("Load the latest definitions from GitHub?\n\nThis discards the unpublished edits saved in this browser.");
+}
+// The published copy, fresh from GitHub, replaces whatever this browser holds —
+// only once it has arrived and applied cleanly, so a failed load (GitHub down,
+// or a hand edit on github.com that broke the file) changes nothing and loses
+// no draft. Resolves to the route that answered ("api" | "raw").
+async function loadPublished(){
+  const { doc, text, via } = await fetchDefsFromGithub();
+  const draft = localStorage.getItem(LS_DEFS), base = localStorage.getItem(LS_DEFS_BASE);
+  clearTimeout(persistTimer);              // a pending autosave must not bring the draft back
+  clearDraft();                            // before rendering, or Manage offers it back as a draft
   try{
-    applyDefinitions(await remoteLoad(), "remote");
-    mStatus("Reloaded the latest from the central store.");
-  }catch(err){
-    mStatus("Reload failed: " + err.message, true);
+    applyDefinitions(doc, "remote");
+  }catch(e){
+    if(draft != null) localStorage.setItem(LS_DEFS, draft);
+    if(base != null) localStorage.setItem(LS_DEFS_BASE, base);
+    throw e;
   }
+  publishedText = text;
+  return via;
+}
+function loadedFromGithubMessage(via){
+  const g = GITHUB_REPO;
+  return (via === "api" ? "Loaded the latest definitions" : "Loaded the definitions") +
+    ` from GitHub (${g.owner}/${g.repo}, ${g.branch}).` +
+    (via === "api" ? "" : " GitHub’s file cache can be up to 5 minutes behind, so if a change made just now is missing, try again shortly.");
+}
+
+// "Reload latest" in the editors.
+async function reloadFromRemote(){
+  if(!confirmDiscardDraft()) return;
+  mStatus("Loading…");
+  try{ mStatus(loadedFromGithubMessage(await loadPublished())); }
+  catch(err){ mStatus("Reload failed: " + err.message + " — nothing was changed.", true); }
+}
+
+// The header's "Load from repo": the same load, from any tab.
+async function loadFromGithub(){
+  if(!confirmDiscardDraft()) return;
+  setHeaderBusy(loadRepoBtn, "Loading…");
+  try{ appToast(loadedFromGithubMessage(await loadPublished())); }
+  catch(err){ appToast("Couldn’t load definitions from GitHub — " + err.message + ". Nothing was changed.", true); }
+  finally{ setHeaderBusy(loadRepoBtn, null); }
 }
 
 function resumeDraft(){
   const draft = localStorage.getItem(LS_DEFS);
   if(!draft){ renderManage(); return; }
-  try{ applyDefinitions(JSON.parse(draft), "local"); mStatus("Resumed your unpublished draft."); }
-  catch(e){ localStorage.removeItem(LS_DEFS); mStatus("The saved draft was corrupt and has been discarded.", true); }
+  try{
+    applyDefinitions(JSON.parse(draft), "local");
+    publishedText = localStorage.getItem(LS_DEFS_BASE);   // the version it was edited from (null: unknown)
+    mStatus("Resumed your unpublished draft.");
+  }
+  catch(e){ clearDraft(); mStatus("The saved draft was corrupt and has been discarded.", true); }
 }
 function discardDraft(){
-  localStorage.removeItem(LS_DEFS);
-  mStatus("Discarded the unpublished draft.");
+  clearDraft();
   renderManage();
+  mStatus("Discarded the unpublished draft.");
+}
+
+/* ---- Connect GitHub… ---- */
+function githubConnectionHtml(){
+  const auth = githubAuth();
+  return auth
+    ? `<span class="gh-conn" title="Publish commits to GitHub as this account">GitHub: <b>@${escapeHtml(auth.login || "connected")}</b>
+         <button type="button" class="mini-btn" id="btnGithubDisconnect">Disconnect</button></span>`
+    : `<span class="gh-conn">GitHub: not connected
+         <button type="button" class="mini-btn" id="btnGithubConnect">Connect…</button></span>`;
+}
+function wireGithubConnection(){
+  const connect = document.getElementById("btnGithubConnect");
+  if(connect) connect.addEventListener("click", async ()=>{
+    if(!(await connectGithub())) return;
+    renderManage();
+    mStatus("Connected to GitHub — Publish now commits to " + GITHUB_REPO.owner + "/" + GITHUB_REPO.repo + ".");
+  });
+  const disconnect = document.getElementById("btnGithubDisconnect");
+  if(disconnect) disconnect.addEventListener("click", ()=>{
+    if(!confirm("Disconnect from GitHub?\n\nThe token is removed from this browser. To publish again you'll " +
+                "need to paste it — or a new one — back in.")) return;
+    forgetGithubAuth();
+    renderManage();
+    mStatus("Disconnected — the GitHub token was removed from this browser.");
+  });
+}
+
+// Ask for a fine-grained token and check it before keeping it: whose it is,
+// and that it can write to the repo — by creating an empty git blob, an
+// object no commit points at (the repo's files and history don't change) that
+// still needs Contents: write. Resolves true once connected, false if the
+// user backs out.
+function connectGithub(){
+  return new Promise(resolve=>{
+    const g = GITHUB_REPO, repo = g.owner + "/" + g.repo;
+    const createUrl = "https://github.com/settings/personal-access-tokens/new?" + new URLSearchParams({
+      name: "SoRT publishing",
+      description: "Lets SoRT publish " + g.path + " to " + repo,
+      target_name: g.owner,
+      expires_in: "366",
+      contents: "write"
+    });
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal gh-connect" role="dialog" aria-modal="true" aria-labelledby="ghConnectTitle">
+        <div class="modal-head">
+          <h3 id="ghConnectTitle">Connect to GitHub</h3>
+          <button type="button" class="icon-btn modal-close" title="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p>Publishing commits <code>${escapeHtml(g.path)}</code> straight into <b>${escapeHtml(repo)}</b>, so it
+             needs a GitHub token that is allowed to change that repo. You only do this once on each computer.</p>
+          <ol>
+            <li><a href="${escapeHtml(createUrl)}" target="_blank" rel="noopener">Create a token on GitHub ↗</a> —
+                its name, a one-year expiry and <b>Contents: Read and write</b> are filled in for you. Under
+                <b>Repository access</b> pick <b>Only select repositories</b> → <b>${escapeHtml(g.repo)}</b>, then
+                <b>Generate token</b>.</li>
+            <li>Copy the token and paste it here:</li>
+          </ol>
+          <input type="password" class="gh-token" aria-label="GitHub token" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+          <label class="gh-remember"><input type="checkbox" class="gh-remember-chk" checked> Remember on this computer</label>
+          <p class="gh-note">The token stays in this browser: it isn’t saved in the repo or sent anywhere but GitHub.
+             Anyone using this browser profile could publish with it — <b>Disconnect</b> in Manage Tables removes it.</p>
+          <div class="gh-error" role="alert"></div>
+        </div>
+        <div class="modal-foot">
+          <span class="grow"></span>
+          <button type="button" class="btn btn-secondary gh-cancel">Cancel</button>
+          <button type="button" class="btn btn-primary gh-save">Connect</button>
+        </div>
+      </div>`;
+    const input = overlay.querySelector(".gh-token");
+    const errEl = overlay.querySelector(".gh-error");
+    const save  = overlay.querySelector(".gh-save");
+    let done = false;
+    const finish = ok => {
+      if(done) return;
+      done = true;
+      document.removeEventListener("keydown", onKey);
+      overlay.remove();
+      resolve(ok);
+    };
+    const onKey = e => { if(e.key === "Escape") finish(false); };
+    const connect = async ()=>{
+      const token = input.value.trim();
+      if(!token){ errEl.textContent = "Paste the token first."; input.focus(); return; }
+      errEl.textContent = "";
+      save.disabled = true;
+      save.textContent = "Checking…";
+      try{
+        let user;
+        try{ user = await githubApi("https://api.github.com/user", { token }); }
+        catch(e){
+          throw new Error(e.status === 401 ? "GitHub didn’t accept that token — check you copied all of it."
+                                           : "Couldn’t reach GitHub to check the token (" + e.message + ").");
+        }
+        try{ await githubApi(githubRepoApiUrl() + "/git/blobs", { token, method: "POST", body: { content: "", encoding: "utf-8" } }); }
+        catch(e){
+          throw new Error(e.status === 403 || e.status === 404
+            ? `That token can’t change ${repo}. On GitHub, edit the token: Repository access → Only select ` +
+              `repositories → ${g.repo}, and Contents → Read and write.`
+            : "Couldn’t check that the token can publish (" + e.message + ").");
+        }
+        if(done) return;                   // closed while it was checking: keep nothing
+        saveGithubAuth({ token, login: (user && user.login) || "" }, overlay.querySelector(".gh-remember-chk").checked);
+        finish(true);
+      }catch(e){
+        errEl.textContent = e.message;
+        save.disabled = false;
+        save.textContent = "Connect";
+      }
+    };
+    save.addEventListener("click", connect);
+    input.addEventListener("keydown", e => { if(e.key === "Enter") connect(); });
+    overlay.querySelector(".gh-cancel").addEventListener("click", ()=> finish(false));
+    overlay.querySelector(".modal-close").addEventListener("click", ()=> finish(false));
+    overlay.addEventListener("click", e => { if(e.target === overlay) finish(false); });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(overlay);
+    input.focus();
+  });
 }
 
 /* ============================================================================
@@ -4403,7 +4687,7 @@ function discardDraft(){
    Word copy still produces the tables. Nothing here may break the existing copy.
    ========================================================================== */
 
-// Map *services* live here as a documented constant (like SUPABASE) so an
+// Map *services* live here as a documented constant (like GITHUB_REPO) so an
 // endpoint move is a one-line edit. WHICH ROWS feed the map is data-driven via
 // row.mapPin (§4) — deliberately not hardcoded here.
 const SITE_MAP_CONFIG = {
@@ -7541,36 +7825,51 @@ async function captureOffscreen(table){
 
 /* ===================== BOOTSTRAP ===================== */
 async function boot(forceFile){
-  // 0. Central store leads: when configured, the published row is the source
-  //    of truth. A local copy is only an *unpublished draft* the editor
+  // 0. GitHub leads: when configured, the published definitions.json is the
+  //    source of truth. A local copy is only an *unpublished draft* the editor
   //    resumes on purpose (see the Manage toolbar) — it never silently wins.
   if(REMOTE_ON){
     try{
-      applyDefinitions(await remoteLoad(), "remote");
+      const { doc, text } = await fetchDefsFromGithub();
+      applyDefinitions(doc, "remote");
+      publishedText = text;
       return;
     }catch(e){
-      console.warn("Central store unavailable — using offline fallback.", e);
+      console.warn("GitHub unavailable — using offline fallback.", e);
       // fall through to the offline chain so the tool still works offline
     }
   }
+  // Offline, Publish checks GitHub's copy against whatever the definitions
+  // below were loaded from (see publishedText).
+  publishedText = null;
   // 1. Local edits win (unless we are explicitly resetting to the file).
   if(!forceFile){
     const saved = localStorage.getItem(LS_DEFS);
     if(saved){
-      try{ applyDefinitions(JSON.parse(saved), "local"); return; }
+      try{
+        applyDefinitions(JSON.parse(saved), "local");
+        publishedText = localStorage.getItem(LS_DEFS_BASE);
+        return;
+      }
       catch(e){ console.warn("Corrupt local definitions, ignoring.", e); }
     }
     // 2. Remembered URL (e.g. a SharePoint link).
     const url = new URLSearchParams(location.search).get("defs") || localStorage.getItem(LS_URL);
     if(url){
-      try{ const d = await fetchDefs(url); applyDefinitions(d, "url"); return; }
+      try{
+        const { doc, text } = await fetchDefsWithText(url);
+        applyDefinitions(doc, "url");
+        publishedText = text;
+        return;
+      }
       catch(e){ console.warn("Remembered URL failed, falling back to file.", e); }
     }
   }
-  // 3. Bundled sibling file.
+  // 3. Bundled sibling file (on GitHub Pages, the deployed copy of the repo's).
   try{
-    const d = await fetchDefs(DEFINITIONS_FILE);
-    applyDefinitions(d, "file");
+    const { doc, text } = await fetchDefsWithText(DEFINITIONS_FILE);
+    applyDefinitions(doc, "file");
+    publishedText = text;
     return;
   }catch(e){
     console.warn("Could not load " + DEFINITIONS_FILE, e);
@@ -7652,12 +7951,14 @@ function setHeaderBusy(btn, busyLabel){
 
 // Only SoRT's own keys: every GitHub Pages site on one account shares an
 // origin, and so one localStorage — a blanket clear() would wipe other apps'
-// data too. The theme is a preference, not a cache, so it stays.
+// data too. The theme and the GitHub connection are settings, not cache, so
+// they stay (Disconnect is how the token goes).
 function clearAppStorage(){
+  const keep = [LS_THEME, LS_GITHUB];
   const doomed = [];
   for(let i = 0; i < localStorage.length; i++){
     const k = localStorage.key(i);
-    if(k && k.indexOf("sort.") === 0 && k !== LS_THEME) doomed.push(k);
+    if(k && k.indexOf("sort.") === 0 && !keep.includes(k)) doomed.push(k);
   }
   doomed.forEach(k=> localStorage.removeItem(k));
 }
@@ -7678,8 +7979,9 @@ async function clearAppCache(){
     "This deletes what SoRT has saved in this browser — unpublished definition edits and any " +
     "remembered definitions URL — and reloads the app fresh from the server. Anything filled in " +
     "on this page will be cleared.\n\n" +
-    (REMOTE_ON ? "The published definitions in the central store are not affected."
-               : "The published " + DEFINITIONS_FILE + " is not affected.")
+    (REMOTE_ON ? "The published definitions on GitHub are not affected, and your GitHub connection " +
+                 "and theme are kept."
+               : "The published " + DEFINITIONS_FILE + " is not affected, and your theme is kept.")
   )) return;
   setHeaderBusy(clearCacheBtn, "Clearing…");
   clearTimeout(persistTimer);            // a pending autosave would write the draft straight back
@@ -7692,6 +7994,7 @@ async function clearAppCache(){
 
 loadRepoBtn.title = `Load the latest definitions from GitHub (${GITHUB_REPO.owner}/${GITHUB_REPO.repo}, ${GITHUB_REPO.branch})`;
 loadRepoBtn.addEventListener("click", loadFromGithub);
+if(!REMOTE_ON) loadRepoBtn.style.display = "none";   // offline: no repo to load from
 clearCacheBtn.addEventListener("click", clearAppCache);
 
 // Back from a Clear cache reload: say it worked (otherwise it just looks reloaded).
