@@ -37,6 +37,11 @@ python3 -m http.server 8642 --bind 127.0.0.1 &   # serve from the repo root
   live in `#commonRowList`.
 - Table Map: `.mode-btn[data-mode="map"]`, grid `table.map-grid`.
 - Source chip `#sourceLabel` shows which definitions source loaded.
+- Site Map side panel: `#siteMapBtn` opens it; `.smap-pin-list .smap-pin[data-pin-key]`
+  lists every `mapPin` row of the active table, entered or not (`.smap-pin--empty`),
+  and `.smap-pin-input` + Enter writes back into the form. The Esri CDN is unreachable
+  from the sandbox, so drive it against a stand-in view — see
+  `tests/map-location-entry.test.mjs` for the recipe.
 - Header buttons: `#loadRepoBtn` (stub `https://api.github.com/**` and
   `https://raw.githubusercontent.com/**` with `ctx.route`; the outcome shows
   in the `#appToast` toast) and `#clearCacheBtn` (accept its `confirm`; the

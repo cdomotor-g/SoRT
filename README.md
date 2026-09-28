@@ -441,8 +441,9 @@ current table's coordinates over Queensland Government aerial imagery, LiDAR
 contours (5 m by default), the road reserve (the cadastre's road parcels, filled a
 translucent sandy colour), and **railway lines** (heavy rail, sidings, sugar-cane
 and tourist lines, like the QLD Globe *Road and rail* layer). Pins come from every
-row with a `mapPin` (above): `coords` always, `relocation` when it is not "No",
-and — on the Water Level table — `riverCoords` / `riverRelocation`.
+row of the current table with a `mapPin` (above): `coords` always, `relocation`
+when it is not "No", `riverCoords` / `riverRelocation` on the Water Level tables,
+and the TBRG location on the Repeater / Gateway table.
 
 - **Framing** — the view is *constructed at the anchor pin's coordinate* (not a
   default state/CBD extent that a later `goTo` corrects), so it opens on the site
@@ -465,8 +466,25 @@ and — on the Water Level table — `riverCoords` / `riverRelocation`.
   for debugging the map on a locked-down PC with no browser DevTools — if the map
   misbehaves, open it, copy, and paste it back. Every external call is bounded by
   a timeout (see `SITE_MAP_CONFIG.timeouts`), so no service can ever hang the modal.
+- **Every location, entered or not** — the side panel (*Locations*) lists every
+  location the current table has, whether or not a coordinate has been typed into
+  the form, so the first entry can be made on the map. Some users skip the form
+  and start here. Only the table's own `mapPin` rows are listed, so each station
+  type offers just its own locations: the Rainfall table has the current location
+  and the relocation site, the Water Level tables add the river-line termination
+  and its relocation, and the Repeater / Gateway table adds the TBRG location. A
+  gated row follows its gate (no relocation site while Relocation is "No"). A
+  location with nothing entered shows an empty field that says which table row it
+  fills. Type a coordinate there and the pin drops, the map frames it, and the value
+  is written into that row of the form. The row's preview, the progress bar and the
+  Property Services mirror follow, and the toast offers **Undo**. Opening the map
+  with nothing entered puts the cursor in the first location. A commit keeps the
+  focus in the panel, so clicking or tabbing on to the next location takes one
+  click.
 - **Row-selection panel** — tick/untick which pins show; the view re-fits as you
-  do (until you pan or zoom, after which **Reset view** restores auto-fit).
+  do (until you pan or zoom, after which **Reset view** restores auto-fit). A tick
+  box stays disabled until its location has a valid coordinate, and a location
+  that gets its first one (or has a bad one fixed) shows straight away.
 - **Legend on the map** — the legend (each pin's label *and* its coordinate) and
   the contour caption are drawn **on the map itself**, in the same corners the
   exported picture puts them, rather than in the side panel. That is what makes
@@ -497,7 +515,10 @@ and — on the Water Level table — `riverCoords` / `riverRelocation`.
   A bad entry is refused with an inline message (and a lat/lon **swap** hint when
   the pair looks reversed), and *invalid* pins are editable too, so a mistyped
   coordinate can be fixed straight from the map. Clearing the field removes the pin
-  (undoably). This is the keyboard counterpart to *Move pins*.
+  (undoably). Only a change is written: tabbing through a field or pressing Escape
+  leaves the table's text as it was typed in the form. The field shows the
+  coordinate in the app's canonical format, which need not match that text. This
+  is the keyboard counterpart to *Move pins*.
 - **Build progress** — a thin progress bar along the bottom edge of the map (with
   a small label that names what is still drawing — "Building map…", "Drawing
   contours…") shows how much of the *whole* map is still being generated: imagery,
@@ -718,6 +739,12 @@ frames the pins while it is still outstanding.
 >   panel **text field** writes back to the scope row (undoable), refuses a bad
 >   value with an inline message and a swap hint, keeps *invalid* pins editable,
 >   and treats an empty entry as "remove the pin". Hermetic (no view, no network).
+> - `tests/map-location-entry.test.mjs` — every location in the side panel,
+>   entered or not: each table lists only its own locations (no river line on
+>   Rainfall), and a first entry typed on the map lands in the form, preview,
+>   progress and Property Services, shows its pin and frames it. Also covers focus
+>   moving to the next location in one click, and a panel rebuild never committing
+>   (or losing) text still being typed. Hermetic (stand-in view, no network).
 > - `tests/rail-road-source.test.mjs` — §C1 rail: `resolveRailLayers()` keeps only
 >   the railway sublayers of the OtherTransport service (never aviation/ports, never
 >   group layers); §A7 road: `resolveRoadSource()` prefers the cadastre's dedicated

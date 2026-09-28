@@ -526,3 +526,56 @@ PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
 PW_CHROMIUM=/opt/pw-browsers/chromium \
   node tests/map-reopen-refit.test.mjs
 ```
+
+## `map-location-entry.test.mjs` — every location in the Site Map panel, entered or not
+
+Users skip the scope form and expect to make the first coordinate entry in the
+Site Map. The side panel used to list only the locations that already held a
+value, so on a fresh table there was nothing to type into. It now lists every
+location the active table declares a `mapPin` for, entered or not, and only
+those. The test drives the real `openSiteMap` / `resolveMapPins` / `refreshPins`
+/ `renderSiteMapPanel` / `commitPinCoordEntry` code with real keyboard and mouse
+input, and asserts:
+
+- **Per station type** — Rainfall lists the current location and the relocation
+  site and nothing else (no river line / orifice on a rain-only station). The Water
+  Level and DLGWV tables add the river-line termination and its relocation, and
+  Repeater / Gateway adds the TBRG location. The relocation gate still applies:
+  no relocation entry while Relocation is "No", and one while it is unanswered.
+- **A fresh table** — every entry is an empty field with a disabled, unticked box
+  and a note naming the table row it fills. The panel says that entries made there
+  go into the table, nothing is drawn, and the cursor starts in the first
+  location.
+- **The first entry, back into the form** — typing a coordinate and pressing Enter
+  writes the canonical value to the scope row. The form field, the row preview, the
+  progress count and the Property Services mirror all show it. The pin is drawn
+  (not left switched off, as a location that had nothing to draw used to be) and
+  the map frames it. The toast says the value was added to the table, and Undo
+  takes the location back to "not entered". River-line entries land in the
+  water-level table's own rows and its Property Services "Subsidiary (orifice
+  line)".
+- **Moving on in one click** — committing rebuilds the list, which used to swallow
+  the click on the next location's field. Focus now lands on the field that was
+  clicked, and Tab moves on to the Set button.
+- **Rebuilds never commit** — Chrome fires `blur` on a focused field while the
+  rebuild is removing it, and it used to commit the field's old text (after an
+  undo it put the undone value straight back). Text still being typed survives a
+  rebuild, with the caret kept, and is not written until the user commits it.
+  Escape abandons it.
+- **Only a change is written** — tabbing through a field whose table text is not
+  in canonical form (more decimals, DMS) leaves that text alone: no toast and no
+  re-frame.
+- **A bad value fixed on the map shows its pin**, and the **Word copy** carries a
+  location entered only on the map, in the scope table and in Property Services.
+- **Diagnostics** count the locations (placed / unreadable / not entered yet), and
+  a table with no location rows says so.
+
+Hermetic: GitHub, the Esri CDN and every QLD host are blocked, and the map view is
+a stand-in that records drawn pins and `goTo` calls (no WebGL). Same invocation as
+the others:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium \
+  node tests/map-location-entry.test.mjs
+```

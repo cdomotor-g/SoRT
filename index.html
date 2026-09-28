@@ -773,6 +773,10 @@
   }
   .smap-pin:hover{ border-color:var(--accent); }
   .smap-pin--invalid{ opacity:.85; background:var(--danger-soft); border-color:#e9c4c0; }
+  /* A location this table has that nobody has entered yet: listed so the first
+     entry can be made from the map, but visibly not on it. */
+  .smap-pin--empty{ border-style:dashed; }
+  .smap-pin--empty .smap-dot{ opacity:.4; }
   .smap-pin > input[type="checkbox"]{ margin-top:3px; flex:none; cursor:pointer; }
   .smap-dot{ width:12px; height:12px; border-radius:50%; margin-top:3px; flex:none; box-shadow:0 0 0 1px rgba(0,0,0,.15); }
   .smap-pin-text{ display:flex; flex-direction:column; gap:3px; min-width:0; flex:1; }
@@ -794,6 +798,7 @@
   .smap-pin-msg:empty{ display:none; }
   .smap-pin-msg--err{ color:var(--danger); }
   .smap-pin-msg--warn{ color:var(--amber); }
+  .smap-pin-msg--hint{ color:var(--ink-soft); }
   .smap-anchor{
     font-size:.6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--accent-dark);
     background:var(--accent-soft); border-radius:8px; padding:1px 5px; margin-left:4px; font-weight:700;
@@ -4854,7 +4859,9 @@ const siteMap = {
   dragGraphic: null,        // pin graphic being dragged (B1)
   lastPinEdit: null,        // { tableId, rowId, field, prevValue } for undo (B1)
   measureWidget: null,      // DistanceMeasurement2D widget instance (B2)
-  pins: [],                 // resolved pin descriptors for the current table
+  pins: [],                 // resolved pin descriptors for the current table (entered or not)
+  panelCommitting: false,   // a side-panel coordinate is being written back (renderSiteMapPanel)
+  panelRebuilding: false,   // the side panel is clearing its old controls (renderSiteMapPanel)
   triggerEl: null,
   // The picture destined for the Word copy (§7.3, §7.5). `source` records HOW it
   // was made — "capture" means the user pressed the button while looking at the
@@ -4971,10 +4978,15 @@ function mapPinGatePasses(table, requires){
   return true;
 }
 
-// Resolve the pins for a table into descriptors. Rows gated out (e.g. relocation
-// = "No") are dropped; rows with a present-but-invalid coordinate are KEPT and
-// flagged so the panel can show the parse error rather than silently dropping
-// them (§4). Empty coordinate = no pin.
+// Resolve a table's locations into pin descriptors — EVERY row of this table that
+// declares a mapPin, whether or not a coordinate has been entered, so the side
+// panel lists all of this station type's locations and the first entry can be
+// made right there (users skip the form and expect to start on the map). Only
+// this table's rows are read, so a rain-only station never offers a river-line
+// (orifice) location. A row with nothing entered is an `empty` entry: listed and
+// typeable, never drawn. Rows gated out (e.g. relocation = "No") are dropped;
+// rows with a present-but-invalid coordinate are KEPT and flagged so the panel
+// can show the parse error rather than silently dropping them (§4).
 function resolveMapPins(table){
   if(!table) return [];
   const out = [];
@@ -4983,21 +4995,29 @@ function resolveMapPins(table){
     if(!mp || !mp.field) return;
     if(!mapPinGatePasses(table, mp.requires)) return;
     const raw = readRowCoordRaw(table, row.id, mp.field).trim();
-    if(!raw) return;                       // empty = no pin
-    const parsed = parseCoord(raw);
+    const fields = row.fields || [];
+    const field = fields.find(f=> f.key === mp.field);
+    // A pin aimed at a field its row doesn't have would write an entry nowhere
+    // the form shows, so it is only listed while something already holds a value.
+    if(!raw && !field) return;
+    const parsed = raw ? parseCoord(raw) : { ok:false };
     out.push({
       key: row.id,
       rowId: row.id,
       field: mp.field,                       // which field this pin writes back to (B1/B4)
+      // Where an entry made on the map lands in the scope table, named as the
+      // builder shows it (with the field when the row has more than one).
+      target: (row.item || row.id) + (field && field.label && fields.length > 1 ? " › " + field.label : ""),
       label: mp.label || row.item || row.id,
       colour: mp.colour || "red",
       anchor: !!mp.anchor,
       defaultOn: mp.defaultOn !== false,
       raw,
+      empty: !raw,                           // nothing entered yet — listed, never drawn
       ok: !!parsed.ok,
       lat: parsed.ok ? parsed.lat : null,
       lon: parsed.ok ? parsed.lon : null,
-      error: parsed.ok ? "" : (parsed.error || "Invalid coordinate"),
+      error: (raw && !parsed.ok) ? (parsed.error || "Invalid coordinate") : "",
       warn: parsed.warn || ""
     });
   });
@@ -5005,14 +5025,18 @@ function resolveMapPins(table){
 }
 
 // Merge freshly-resolved pins with any existing on/off toggles so a re-resolve
-// (e.g. the user typed a new coordinate) keeps the panel choices.
+// (e.g. the user typed a new coordinate) keeps the panel choices. Only a choice
+// the user could have made carries over: the tick box is disabled until a pin
+// has a valid coordinate, so a location getting its FIRST one — typed into an
+// empty entry, or a bad value fixed — starts from its default and shows, rather
+// than inheriting the "off" it sat on while it had nothing to draw.
 function refreshPins(table){
   const prev = {};
-  siteMap.pins.forEach(p=>{ prev[p.key] = p.on; });
-  siteMap.pins = resolveMapPins(table).map(p=>({
-    ...p,
-    on: (p.key in prev) ? prev[p.key] : (p.ok && p.defaultOn)
-  }));
+  siteMap.pins.forEach(p=>{ prev[p.key] = p; });
+  siteMap.pins = resolveMapPins(table).map(p=>{
+    const was = prev[p.key];
+    return { ...p, on: (was && was.ok) ? was.on : (p.ok && p.defaultOn) };
+  });
   return siteMap.pins;
 }
 
@@ -6425,8 +6449,17 @@ function commitPinCoordEntry(pinKey, rawInput){
     showPinCoordError(pinKey, (parsed.error || "Couldn't read that as coordinates.") + hint);
     return false;
   }
+  // The field shows a valid pin in canonical form, which need not match the text
+  // stored in the table (typed there as DMS, or to more decimals) — so merely
+  // tabbing through it must not rewrite the table, toast and re-frame the map.
+  if(pin.ok && coordEq(parsed, pin)) return false;
   const newStr = formatCoord(parsed.lat, parsed.lon);
-  writePinCoord(table, pin, newStr, (pin.label || "Pin") + " set to " + newStr, { reframe:true });
+  // A location entered here for the first time lands in the table too — say so,
+  // for the users who start on the map and never saw the form.
+  const msg = current
+    ? (pin.label || "Pin") + " set to " + newStr
+    : (pin.label || "Pin") + " added: " + newStr + " — also filled in on “" + (pin.target || pin.label) + "” in the table";
+  writePinCoord(table, pin, newStr, msg, { reframe:true });
   return true;
 }
 
@@ -6438,6 +6471,7 @@ function showPinCoordError(pinKey, msg){
   if(!row) return;
   const msgEl = row.querySelector(".smap-pin-msg");
   if(msgEl){ msgEl.textContent = msg; msgEl.className = "smap-pin-msg smap-pin-msg--err"; }
+  row.classList.remove("smap-pin--empty");
   row.classList.add("smap-pin--invalid");
 }
 
@@ -6657,7 +6691,7 @@ function buildSiteMapModal(){
           </div>
         </div>
         <aside class="smap-panel">
-          <div class="smap-panel-head">Pins on the map</div>
+          <div class="smap-panel-head">Locations</div>
           <div class="smap-pin-list"></div>
           <div class="smap-extras"></div>
           <!-- Capture card (§7.5): the action, what it needs from the user, and a
@@ -6824,6 +6858,9 @@ function diagnosticsText(){
   L.push("");
   L.push("Anchor pin:   " + anchorStr);
   L.push("Active pins:  " + pins.length);
+  const placed = siteMap.pins.filter(p=> p.ok).length, unentered = siteMap.pins.filter(p=> p.empty).length;
+  L.push("Locations:    " + siteMap.pins.length + " for this table — " + placed + " placed, " +
+    (siteMap.pins.length - placed - unentered) + " unreadable, " + unentered + " not entered yet");
   L.push("View centre:  " + centreStr + "     Scale: " + scaleStr + mismatch);
   L.push("");
   L.push("External dependencies:");
@@ -6890,19 +6927,58 @@ function renderDiagnostics(){
   if(pre) pre.textContent = diagnosticsText();
 }
 
+// Every focusable control in the side panel carries data-role, inside a row that
+// carries data-pin-key, so it can be found again after the list is rebuilt. A
+// rebuild destroys whatever had the focus — the field after an Enter, or the
+// field the user just clicked into — so these hand the focus (and any text still
+// being typed) to its replacement instead of dropping it on the page.
+function panelFocusTarget(el){
+  const host = siteMap.panelHost;
+  if(!el || !host || !host.contains(el) || !el.dataset || !el.dataset.role) return null;
+  const row = el.closest(".smap-pin");
+  if(!row) return null;
+  const t = { key: row.dataset.pinKey, role: el.dataset.role };
+  // Text typed but not committed survives the rebuild (the first zoom of the map
+  // re-renders the panel mid-typing); a commit's own rebuild shows what was saved.
+  if(el.dataset.role === "coord" && !siteMap.panelCommitting && el.value !== el.defaultValue){
+    t.value = el.value; t.selStart = el.selectionStart; t.selEnd = el.selectionEnd;
+  }
+  return t;
+}
+function restorePanelFocus(t){
+  if(!t || !siteMap.panelHost) return;
+  const el = siteMap.panelHost.querySelector('.smap-pin[data-pin-key="' + cssEscape(t.key) + '"] [data-role="' + t.role + '"]');
+  if(!el || el.disabled) return;
+  if(t.value != null) el.value = t.value;
+  try{
+    el.focus();
+    if(t.value != null && el.setSelectionRange) el.setSelectionRange(t.selStart, t.selEnd);
+  }catch(_){}
+}
+
 function renderSiteMapPanel(){
   if(!siteMap.panelHost) return;
   const host = siteMap.panelHost;
-  host.innerHTML = "";
+  const keepFocus = panelFocusTarget(document.activeElement);
+  // Removing the focused field fires its blur while it is still in the page, and
+  // that blur must not commit the field's old text: after an undo it would put
+  // the undone value straight back. The rebuild is not the user moving on.
+  siteMap.panelRebuilding = true;
+  try{ host.innerHTML = ""; }
+  finally{ siteMap.panelRebuilding = false; }
   if(!siteMap.pins.length){
-    host.innerHTML = `<div class="smap-empty">No coordinates entered in this table yet. Add a coordinate to a mapped row to see a pin.</div>`;
+    host.innerHTML = `<div class="smap-empty">This table has no locations to put on the map.</div>`;
+  } else if(!siteMap.pins.some(p=> p.ok)){
+    // Nothing entered anywhere yet: the users who skip the form start here.
+    host.innerHTML = `<div class="smap-empty">Nothing on the map yet. Type the coordinates in below — each one drops its pin on the map and is filled in on the scope table too.</div>`;
   }
   siteMap.pins.forEach(p=>{
     const row = document.createElement("div");
-    row.className = "smap-pin" + (p.ok ? "" : " smap-pin--invalid");
+    row.className = "smap-pin" + (p.ok ? "" : (p.empty ? " smap-pin--empty" : " smap-pin--invalid"));
     row.dataset.pinKey = p.key;      // for the live drag readout (§B1) + text-entry (§C2)
     const cb = document.createElement("input");
-    cb.type = "checkbox"; cb.checked = !!p.on; cb.disabled = !p.ok;
+    cb.type = "checkbox"; cb.dataset.role = "toggle";
+    cb.checked = !!(p.on && p.ok); cb.disabled = !p.ok;
     cb.title = p.ok ? "Show or hide this pin" : "Enter a valid coordinate to show this pin";
     cb.addEventListener("change", ()=>{
       p.on = cb.checked;
@@ -6918,45 +6994,78 @@ function renderSiteMapPanel(){
     txt.className = "smap-pin-text";
     txt.innerHTML = `<span class="smap-pin-label">${escapeHtml(p.label)}${p.anchor ? ' <span class="smap-anchor">centre</span>' : ""}</span>`;
 
-    // Editable coordinate field (§C2): type a coordinate to move the pin. Prefilled
-    // with the canonical value for a valid pin, or the raw (unparseable) text so a
-    // bad coordinate can be corrected in place. Commits on Enter, on blur, or the Set
-    // button, through the same parseCoord path as every other coordinate in the app.
+    // Editable coordinate field (§C2): type a coordinate to move the pin — or, for a
+    // location with nothing entered yet, to place it. Prefilled with the canonical
+    // value for a valid pin, or the raw (unparseable) text so a bad coordinate can
+    // be corrected in place. Commits on Enter, on blur, or the Set button, through
+    // the same parseCoord path as every other coordinate in the app, and writes back
+    // to the scope row's field.
     const editRow = document.createElement("div");
     editRow.className = "smap-pin-editrow";
     const input = document.createElement("input");
-    input.type = "text"; input.className = "smap-pin-input";
-    input.value = p.ok ? formatCoord(p.lat, p.lon) : p.raw;
+    input.type = "text"; input.className = "smap-pin-input"; input.dataset.role = "coord";
+    // defaultValue is what was rendered, so typed-but-uncommitted text can be told
+    // apart from it (panelFocusTarget) and Escape can put it back.
+    input.defaultValue = p.ok ? formatCoord(p.lat, p.lon) : p.raw;
+    input.value = input.defaultValue;
+    input.placeholder = "e.g. -27.47, 153.02";      // short enough to show whole in the panel
     input.setAttribute("aria-label", p.label + " coordinate (latitude, longitude)");
     input.setAttribute("inputmode", "decimal");
     input.spellcheck = false;
     const applyBtn = document.createElement("button");
     applyBtn.type = "button"; applyBtn.className = "smap-pin-apply"; applyBtn.textContent = "Set";
+    applyBtn.dataset.role = "apply";
     applyBtn.title = "Apply this coordinate to the pin (and the scope table)";
     // isConnected guard: a successful commit re-renders the panel (replacing this
     // input), so the button's mousedown-blur-then-click can't fire a second commit.
-    const commit = ()=>{ if(!input.isConnected) return; commitPinCoordEntry(p.key, input.value); };
+    // Returns true when the commit wrote (and so rebuilt the list).
+    const commit = ()=>{
+      if(!input.isConnected) return false;
+      siteMap.panelCommitting = true;
+      try{ return commitPinCoordEntry(p.key, input.value); }
+      finally{ siteMap.panelCommitting = false; }
+    };
     input.addEventListener("keydown", (e)=>{
       if(e.key === "Enter"){ e.preventDefault(); commit(); }
-      else if(e.key === "Escape"){ input.value = p.ok ? formatCoord(p.lat, p.lon) : p.raw; input.blur(); }
+      else if(e.key === "Escape"){ input.value = input.defaultValue; input.blur(); }
     });
-    input.addEventListener("blur", commit);
-    // Clear a stale inline error as soon as the user starts correcting the value.
-    input.addEventListener("input", ()=>{ const m = row.querySelector(".smap-pin-msg"); if(m && m.textContent){ m.textContent = ""; m.className = "smap-pin-msg"; } });
+    input.addEventListener("blur", (e)=>{
+      if(siteMap.panelRebuilding) return;   // the list is replacing this field, not the user leaving it
+      // Committing rebuilds the list, destroying the control the focus was on its
+      // way to — the next location's field, this row's Set — so the click or Tab
+      // would land nowhere and every move to the next location would take two
+      // clicks. Once the browser has given up on the old control, hand the focus
+      // to its replacement (unless it has genuinely gone somewhere else).
+      const heading = panelFocusTarget(e.relatedTarget);
+      if(!commit() || !heading) return;
+      setTimeout(()=>{
+        const a = document.activeElement;
+        if(e.relatedTarget.isConnected || (a && a !== document.body)) return;
+        restorePanelFocus(heading);
+      }, 0);
+    });
+    // Clear a stale inline error/warning as soon as the user starts correcting the
+    // value. The "not entered yet" hint stays: it says where the entry will go.
+    input.addEventListener("input", ()=>{ const m = row.querySelector(".smap-pin-msg"); if(m && m.textContent && !m.classList.contains("smap-pin-msg--hint")){ m.textContent = ""; m.className = "smap-pin-msg"; } });
     applyBtn.addEventListener("click", commit);
     editRow.appendChild(input); editRow.appendChild(applyBtn);
     txt.appendChild(editRow);
 
     // Inline message: parse error for an invalid pin, a range warning for a
-    // valid-but-suspect one (e.g. looks swapped for a Queensland site).
+    // valid-but-suspect one (e.g. looks swapped for a Queensland site), and for a
+    // location not entered yet, where an entry made here lands in the table.
     const msg = document.createElement("span");
-    msg.className = "smap-pin-msg" + (p.ok ? (p.warn ? " smap-pin-msg--warn" : "") : " smap-pin-msg--err");
-    msg.textContent = p.ok ? (p.warn || "") : (p.error || "Invalid coordinate");
+    msg.className = "smap-pin-msg" + (p.ok ? (p.warn ? " smap-pin-msg--warn" : "")
+                                           : (p.empty ? " smap-pin-msg--hint" : " smap-pin-msg--err"));
+    msg.textContent = p.ok ? (p.warn || "")
+                    : p.empty ? "Not entered yet — goes into “" + (p.target || p.label) + "” in the table."
+                    : (p.error || "Invalid coordinate");
     txt.appendChild(msg);
 
     row.appendChild(cb); row.appendChild(dot); row.appendChild(txt);
     host.appendChild(row);
   });
+  restorePanelFocus(keepFocus);
 
   renderOnMapFurniture();            // legend + contour stamp, ON the map (§7.5)
   renderDistanceSuggestion();        // §B4 relocation-distance suggestion
@@ -7105,8 +7214,12 @@ async function openSiteMap(triggerEl){
   if(autoCaptureTimer){ clearTimeout(autoCaptureTimer); autoCaptureTimer = null; }
   siteMap.overlay.classList.remove("hidden");
   renderSiteMapPanel();
-  const closeBtn = siteMap.overlay.querySelector(".smap-close");
-  if(closeBtn) closeBtn.focus();
+  // With nothing entered yet, the first job is typing where the site is, so start
+  // in the first location's field; otherwise on the close button, as before.
+  const firstEntry = !siteMap.pins.some(p=> p.ok) &&
+    siteMap.panelHost.querySelector('.smap-pin [data-role="coord"]');
+  const startEl = firstEntry || siteMap.overlay.querySelector(".smap-close");
+  if(startEl) startEl.focus();
 
   siteMap.statusHost.hidden = false;
   siteMap.statusHost.textContent = "Loading map…";
