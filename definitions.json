@@ -461,11 +461,11 @@
           "item": "Infrastructure options",
           "instruction": "",
           "type": "single",
+          "icon": "⚙️",
           "options": [
             "Full footing",
             "Reduced footing"
-          ],
-          "icon": "⚙️"
+          ]
         },
         {
           "shared": "coords"
@@ -575,11 +575,11 @@
           "item": "Infrastructure options",
           "instruction": "",
           "type": "single",
+          "icon": "⚙️",
           "options": [
-            "Standard enclosure, fixtures, and fittings",
-            "Stainless steel enclosure, capillary conduit, fixtures, and fittings"
-          ],
-          "icon": "⚙️"
+            "Standard enclosure, fixtures, and fittings.",
+            "Stainless steel enclosure, capillary conduit, fixtures, and fittings."
+          ]
         },
         {
           "shared": "coords"
