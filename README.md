@@ -564,11 +564,19 @@ and the TBRG location on the Repeater / Gateway table.
   everywhere they are reported, because an unattended picture should never be
   mistaken for a checked one.
 
-- **Choosing the framing — press 📸 Copy map image** (in the Site Map header).
+- **Choosing the framing — press 📸 Capture Map** (in the Site Map header).
   This is the *better* picture, not the required one. It takes a picture of the map
   area **exactly as it is on screen**, puts that picture on the clipboard (paste
   anywhere with Ctrl+V) *and* attaches it to **Copy table for Word**, ticking
   *"Include site map in copied output"* for you.
+
+  Until you have, **🗺 Site Map** in the toolbar and **📸 Capture Map** in the
+  map header both carry a **red ring**. Pressing 📸 Capture Map takes its ring off
+  straight away (it comes back if the capture fails); a successful capture takes
+  the ring off 🗺 Site Map too. Change **any coordinate** — in the form, in the
+  map's side panel, or by dragging a pin — and both rings come back, because the
+  picture now shows the old location. Panning or zooming doesn't; a picture the
+  app made by itself doesn't count as captured.
 
   What you have to do is deliberately short: **frame the map, let it finish
   drawing, press the button.** The panel then shows a **thumbnail of the exact

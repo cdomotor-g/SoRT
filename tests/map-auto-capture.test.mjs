@@ -196,7 +196,7 @@ try{
   check('tick: the chip says the picture is coming, not that the user must go and make it', /made automatically/i.test(ticked.armedText) && !/No map picture captured yet/i.test(ticked.armedText));
   check('tick: while it runs the chip says so', ticked.busyBusy && /Making the map picture/i.test(ticked.busyText));
   check('tick: when it lands the chip reports a ready picture, made automatically', ticked.chipOk && /Map picture ready/.test(ticked.chipText) && /made automatically/i.test(ticked.chipText));
-  check('tick: the modal card says the same, and still offers a framed capture', /Made automatically/i.test(ticked.cardText) && /Copy map image/.test(ticked.cardText));
+  check('tick: the modal card says the same, and still offers a framed capture', /Made automatically/i.test(ticked.cardText) && /Capture Map/.test(ticked.cardText));
   check('tick: diagnostics record that nobody has looked at it', /Picture for the Word copy: made automatically/.test(ticked.diag));
 
   // ---- 2. the copy carries the map, with 📸 never pressed --------------------

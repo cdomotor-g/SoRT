@@ -960,6 +960,14 @@
     appearance:none; border:none; background:transparent; color:inherit; font:inherit;
     text-decoration:underline; cursor:pointer; padding:0;
   }
+  /* "Capture the map" nudge: a red ring on 🗺 Site Map until a picture has been
+     captured with 📸 Capture Map, and on 📸 Capture Map until it is pressed. Both
+     come back when a coordinate changes (renderCaptureNudge). A ring, not a fill,
+     so each button keeps its own look; `.btn` in the selectors outranks the
+     secondary button's hover border. */
+  .btn.needs-capture, .btn.needs-capture:hover{
+    border-color:var(--danger); box-shadow:0 0 0 2px var(--danger);
+  }
 
   /* Auto-calculated relocation distance suggestion in the pin panel (§B4). */
   .smap-distsuggest{
@@ -2170,7 +2178,7 @@ async function copyTable(){
     } else {
       // Pins exist but no usable picture: never paste a blank rectangle — omit
       // the image and say what to do about it (A2 "fail loudly", §7.5).
-      mapNote = " (map not included — the picture could not be made automatically; open 🗺 Site Map and press “📸 Copy map image”)";
+      mapNote = " (map not included — the picture could not be made automatically; open 🗺 Site Map and press “📸 Capture Map”)";
     }
   }
 
@@ -2232,9 +2240,9 @@ copyBtn.addEventListener("click", copyTable);
 
 // Site Map button (opens the modal) + the "include map in copy" tickbox and the
 // chip that reports whether a map picture is ready (§7.5). The old toolbar
-// "Copy map image" button has moved INTO the modal, where the map is actually on
-// screen: capturing from out here meant capturing a map nobody could see, which
-// is how blank maps kept reaching Word.
+// "Copy map image" button has moved INTO the modal (now 📸 Capture Map), where
+// the map is actually on screen: capturing from out here meant capturing a map
+// nobody could see, which is how blank maps kept reaching Word.
 const siteMapBtn = document.getElementById("siteMapBtn");
 if(siteMapBtn) siteMapBtn.addEventListener("click", ()=> openSiteMap(siteMapBtn));
 const includeMapChk = document.getElementById("includeMapChk");
@@ -2291,7 +2299,7 @@ function renderMapStateChip(){
     label.textContent = "Map picture is made automatically on copy — or ";
     act.textContent = "capture it now";
   }
-  act.title = "Open the Site Map, frame it, then press “Copy map image”";
+  act.title = "Open the Site Map, frame it, then press “Capture Map”";
   act.addEventListener("click", ()=> openSiteMap(act));
   mapStateChip.appendChild(label);
   mapStateChip.appendChild(act);
@@ -4923,6 +4931,52 @@ let autoCaptureRun = null;      // Promise of the capture currently running, or 
 let autoCaptureTimer = null;    // pending (debounced) scheduleAutoCapture
 let autoCaptureFailed = false;  // the last automatic attempt produced no picture
 
+/* ---- "capture the map" nudge ------------------------------------------------
+   A red ring on 🗺 Site Map until the user has captured a picture with 📸 Capture
+   Map, and on 📸 Capture Map until it is pressed (it comes back if that capture
+   fails). Both rings return as soon as any coordinate changes, because the
+   captured picture then shows the old locations. Only the button counts: an
+   automatic picture is one nobody has framed or looked at (§7.5).
+   A coordinate change is spotted by comparing a signature of every location the
+   active table carries, so it doesn't matter which route changed one — a builder
+   field, the side panel, a pin drag, undo, Clear table, a gate showing a new
+   location, a table switch. It is a latch: changing a value and changing it back
+   still owes a capture, since the picture was dropped on the first change. */
+const captureNudge = { sig: null, pressed: false, captured: false };
+const SITE_MAP_BTN_TITLE = "Open the site map for this table's coordinates";
+
+function locationsSignature(table, pins){
+  if(!table) return "";
+  return table.id + "|" + pins.map(p=> p.rowId + "=" +
+    (p.ok ? Math.round(p.lat*1e6) + "," + Math.round(p.lon*1e6) : p.raw)).join(";");
+}
+// Re-read the locations and reset the nudge if any have changed since it was
+// last looked at. Returns whether this table has any locations at all — a table
+// with nothing to map has nothing to capture, so it is never ringed.
+function syncCaptureNudge(){
+  const table = activeTable();
+  const pins = table ? resolveMapPins(table) : [];
+  const sig = locationsSignature(table, pins);
+  if(sig !== captureNudge.sig){
+    captureNudge.sig = sig;
+    captureNudge.pressed = false;
+    captureNudge.captured = false;
+  }
+  return pins.length > 0;
+}
+function renderCaptureNudge(){
+  const owed = syncCaptureNudge() && !captureNudge.captured;
+  const mapBtn = document.getElementById("siteMapBtn");
+  if(mapBtn){
+    mapBtn.classList.toggle("needs-capture", owed);
+    mapBtn.title = owed
+      ? SITE_MAP_BTN_TITLE + " — no map captured since the coordinates last changed: open it and press 📸 Capture Map"
+      : SITE_MAP_BTN_TITLE;
+  }
+  const capBtn = siteMap.overlay && siteMap.overlay.querySelector(".smap-capture");
+  if(capBtn) capBtn.classList.toggle("needs-capture", owed && !captureNudge.pressed);
+}
+
 // Live module state. The MapView is kept alive between opens and re-fitted
 // rather than re-instantiated (§6). Screenshot is cached and invalidated on any
 // change to pins, coordinates, contour interval, or extent (§7.3).
@@ -6758,7 +6812,7 @@ function buildSiteMapModal(){
         <button type="button" class="btn btn-secondary smap-reset" style="padding:6px 12px;">Reset view</button>
         <button type="button" class="btn btn-secondary smap-move" title="Turn on to drag pins to a new location — the coordinate is written back to the table" aria-pressed="false" style="padding:6px 12px;">Move pins: off</button>
         <button type="button" class="btn btn-secondary smap-measure" title="Measure geodesic distance between points on the map" aria-pressed="false" style="padding:6px 12px;">Measure</button>
-        <button type="button" class="btn btn-primary smap-capture" title="Take a picture of the map exactly as you see it here — copies it to the clipboard and attaches it to “Copy table for Word”" style="padding:6px 12px;">📸 Copy map image</button>
+        <button type="button" class="btn btn-primary smap-capture" title="Take a picture of the map exactly as you see it here — copies it to the clipboard and attaches it to “Copy table for Word”" style="padding:6px 12px;">📸 Capture Map</button>
         <button type="button" class="icon-btn smap-close" title="Close" aria-label="Close">✕</button>
       </div>
       <div class="smap-banners"></div>
@@ -6787,7 +6841,7 @@ function buildSiteMapModal(){
                HERE rather than discovered after pasting into Word. -->
           <div class="smap-capture-card">
             <div class="smap-panel-head">Picture for the Word copy</div>
-            <p class="smap-capture-how">Frame the map how you want it, wait for it to finish drawing, then press <strong>📸 Copy map image</strong> above. That takes a picture of <em>this map area, exactly as you see it</em> — legend and all. You don’t have to: with <em>Include site map in copied output</em> ticked a picture is made for you automatically. Pressing the button is how you choose the framing — and see the result before it reaches a document.</p>
+            <p class="smap-capture-how">Frame the map how you want it, wait for it to finish drawing, then press <strong>📸 Capture Map</strong> above. That takes a picture of <em>this map area, exactly as you see it</em> — legend and all. You don’t have to: with <em>Include site map in copied output</em> ticked a picture is made for you automatically. Pressing the button is how you choose the framing — and see the result before it reaches a document.</p>
             <div class="smap-capture-state">Nothing captured yet.</div>
             <img class="smap-capture-thumb hidden" alt="Preview of the captured map picture">
             <div class="smap-capture-thumbnote hidden">This is exactly what gets pasted. If it looks wrong, re-frame the map and capture again.</div>
@@ -6822,6 +6876,7 @@ function buildSiteMapModal(){
   // actually looked at reaches the Word copy.
   const captureBtn = overlay.querySelector(".smap-capture");
   if(captureBtn) captureBtn.addEventListener("click", ()=> captureVisibleMap(captureBtn));
+  renderCaptureNudge();
 
   const diagCopyBtn = overlay.querySelector(".smap-diag-copy");
   if(diagCopyBtn) diagCopyBtn.addEventListener("click", async ()=>{
@@ -7388,6 +7443,7 @@ function invalidateScreenshot(){
   autoCaptureFailed = false;     // a new picture is owed; the last verdict is moot
   renderCaptureCard();
   renderMapStateChip();
+  renderCaptureNudge();          // every coordinate edit passes through here
   // Keep the copy armed (§7.6): a picture that has just gone stale while the tick
   // box is on is replaced in the background, so Copy doesn't have to wait for a
   // whole map to load. Only while the map is SHUT — with the modal open the user
@@ -7422,6 +7478,12 @@ async function captureVisibleMap(btn){
     renderCaptureCard("No pins are showing, so there is nothing to capture. Tick a pin (or enter a coordinate) first.", "err");
     return null;
   }
+
+  // Pressed: the red ring comes off now (and goes back on if this fails).
+  syncCaptureNudge();
+  captureNudge.pressed = true;
+  const nudgeSig = captureNudge.sig;
+  renderCaptureNudge();
 
   const card = siteMap.captureCard;
   const restoreLabel = btn ? btn.textContent : null;
@@ -7460,6 +7522,11 @@ async function captureVisibleMap(btn){
     includeMapCopy = true;
     if(includeMapChk) includeMapChk.checked = true;
     autoCaptureFailed = false;   // there is a picture now, however it was made
+    // ...and the Site Map ring comes off — unless a coordinate changed while the
+    // map was drawing, in which case this picture already shows the old one.
+    syncCaptureNudge();
+    if(captureNudge.sig === nudgeSig) captureNudge.captured = true;
+    renderCaptureNudge();
 
     let clipOk = false;
     if(clipWrite){ try{ await clipWrite; clipOk = true; }catch(_){ clipOk = false; } }
@@ -7489,6 +7556,8 @@ async function captureVisibleMap(btn){
     renderCaptureCard(/nearly empty|no image data|did not decode|no dimensions/i.test(why)
       ? "The map hadn't finished drawing, so the picture came out blank — nothing was copied. Wait for the progress bar at the bottom of the map to finish, then press the button again."
       : "Couldn't capture the map (" + why + "). Nothing was copied — open Map diagnostics below for the detail.", "err");
+    captureNudge.pressed = false;   // nothing captured — the button still needs pressing
+    renderCaptureNudge();
     renderMapStateChip();
     renderDiagnostics();
     return null;
@@ -7517,10 +7586,10 @@ function renderCaptureCard(msg, kind){
       text = "✓ Captured " + fmtClock(shot.at) + " — attached to “Copy table for Word”.";
       tone = "ok";
     }else if(shot.source === "capture"){
-      text = "The map has changed since you captured it. Press “📸 Copy map image” again so the picture matches what you see.";
+      text = "The map has changed since you captured it. Press “📸 Capture Map” again so the picture matches what you see.";
       tone = "stale";
     }else if(ready){
-      text = "✓ Made automatically " + fmtClock(shot.at) + " — attached to “Copy table for Word”. Press “📸 Copy map image” for one you have framed and looked at yourself.";
+      text = "✓ Made automatically " + fmtClock(shot.at) + " — attached to “Copy table for Word”. Press “📸 Capture Map” for one you have framed and looked at yourself.";
       tone = "ok";
     }else{
       text = "Nothing captured yet — a picture is made automatically when you copy, with whatever framing the map has then.";

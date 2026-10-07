@@ -148,7 +148,7 @@ try{
       stateText: document.querySelector('.smap-capture-state').textContent,
       stateOk: document.querySelector('.smap-capture-state').classList.contains('smap-capture-state--ok'),
       thumbShown: !thumb.classList.contains('hidden') && (thumb.getAttribute('src')||'').startsWith('data:image/png'),
-      btnRestored: btn.disabled === false && /Copy map image/.test(btn.textContent),
+      btnRestored: btn.disabled === false && /Capture Map/.test(btn.textContent),
       diag: diagnosticsText()
     };
   });

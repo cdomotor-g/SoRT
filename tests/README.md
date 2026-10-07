@@ -300,6 +300,31 @@ PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
   node tests/map-capture-button.test.mjs
 ```
 
+## `map-capture-nudge.test.mjs` — the red "capture the map" rings
+
+Guards the red rings on **🗺 Site Map** (toolbar) and **📸 Capture Map** (Site
+Map header):
+
+- both are ringed from the start while the table has locations to map, and the
+  button reads *Capture Map* (it used to read *Copy map image*);
+- pressing 📸 Capture Map drops its ring at once; a successful capture drops the
+  🗺 Site Map ring too;
+- a pan/zoom or an edit to a non-coordinate field leaves them off;
+- changing **any** coordinate — the builder field, or a pin written back from the
+  map (`writePinCoord`) — brings both back, and changing it back again does not
+  clear them;
+- a failed capture re-rings 📸 Capture Map and leaves 🗺 Site Map ringed, and an
+  automatic picture never counts as captured.
+
+Hermetic — the stand-in view recipe from `map-capture-button.test.mjs`. Same
+invocation:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/map-capture-nudge.test.mjs
+```
+
 ## `map-auto-capture.test.mjs` — §7.6 "the tick box is enough"
 
 The test above guards that a capture the user *makes* is honest. This one guards
