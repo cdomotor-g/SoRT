@@ -249,6 +249,15 @@ as two tables in the report.
   Water Level table.
 - **Auto date**, and a fixed **Note** (the Property Services due-diligence text)
   that *is* copied into Word.
+- **Custom comments.** Every row has a **+ Add comment** link (like **+ Add
+  note** in the scope table) for a comment about that row, and an **Additional
+  comments** box at the foot of the table takes anything that isn't about one
+  row. Both are copied into Word: a row's comment goes in its answer cell on its
+  own line under the answer (a coordinate group gets a *Comment* row of its own),
+  and Additional comments becomes a row just above the Note — left out when
+  blank. A comment doesn't count as an answer, so a highlighted row stays
+  highlighted until it is answered. **Reset this table** clears comments along
+  with the rest of the table's answers.
 - **Managed in its own tab.** The **Property Services** tab edits the table's
   title, note, questions and coordinate rows. Its shape lives under
   `definitions.json → propertyServices` and publishes to GitHub

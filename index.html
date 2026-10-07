@@ -631,6 +631,15 @@
     font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; font-weight:700;
     color:var(--ink-soft); display:block; margin-bottom:4px;
   }
+  /* Free-text comments: "+ Add comment" under any answerable row, and the
+     always-visible "Additional comments" row at the foot of the table. Both
+     copy into Word with the table. */
+  .ps-controls .note-toggle{ margin-top:6px; }
+  .ps-comment-hint{ font-size:.74rem; color:var(--ink-soft); margin-top:4px; font-style:italic; }
+  .ps-comment-input{
+    width:100%; border:1px solid var(--line); border-radius:6px; padding:7px 9px;
+    font-size:.87rem; font-family:inherit; min-height:70px; resize:vertical;
+  }
   :root[data-theme="dark"] .ps-block{ border-color:var(--accent); }
   :root[data-theme="dark"] .ps-datefield input{ background:#0f1a20; color:var(--ink); }
 
@@ -1485,8 +1494,10 @@ function reconcileState(){
     // Preserve this table's Property Services answers across reconciliation.
     const prevPs = state[t.id] && state[t.id].__ps;
     next[t.id].__ps = {
-      answers: (prevPs && prevPs.answers) || {},
-      dirty:   (prevPs && prevPs.dirty)   || {}
+      answers:  (prevPs && prevPs.answers)  || {},
+      dirty:    (prevPs && prevPs.dirty)    || {},
+      comments: (prevPs && prevPs.comments) || {},
+      general:  (prevPs && prevPs.general)  || ""
     };
   });
   state = next;
@@ -2305,7 +2316,7 @@ resetBtn.addEventListener("click", ()=>{
   // Snapshot the current answers so the clear can be undone.
   clearedSnapshot = { tableId: table.id, data: JSON.parse(JSON.stringify(state[table.id])) };
   effectiveRows(table).forEach(r=>{ state[table.id][r.id] = emptyRowState(r); });
-  state[table.id].__ps = { answers:{}, dirty:{} };   // also clear Property Services
+  state[table.id].__ps = { answers:{}, dirty:{}, comments:{}, general:"" };   // also clear Property Services
   renderRows();
 });
 
@@ -3638,7 +3649,11 @@ function renderMap(){
    PROPERTY SERVICES  — separate table shown at the bottom of the Scope Builder
    and copied into Word as its own second table.
    -------------------------------------------------------------------------
-   Answers live in state[tableId].__ps = { answers:{key:val}, dirty:{key:true} }.
+   Answers live in state[tableId].__ps = { answers:{key:val}, dirty:{key:true},
+   comments:{rowId:text}, general:text } — `comments` are the per-row
+   "+ Add comment" boxes and `general` the "Additional comments" box at the
+   foot of the table. Comments are free text the user adds; they never count
+   as an answer to a highlighted row.
    Fields with a `source` mirror an answer from the active scope table (coords,
    relocation…). The mirror is *live until the user edits it*: the first manual
    change sets dirty[key], after which the entered value sticks (an override the
@@ -3661,12 +3676,18 @@ function todayStr(){
 }
 function psState(tableId){
   if(!state[tableId]) state[tableId] = {};
-  if(!state[tableId].__ps) state[tableId].__ps = { answers:{}, dirty:{} };
+  if(!state[tableId].__ps) state[tableId].__ps = { answers:{}, dirty:{}, comments:{}, general:"" };
   const ps = state[tableId].__ps;
   if(!ps.answers) ps.answers = {};
   if(!ps.dirty) ps.dirty = {};
+  if(!ps.comments) ps.comments = {};
+  if(typeof ps.general !== "string") ps.general = "";
   return ps;
 }
+// A row's "+ Add comment" text and the table-wide "Additional comments" text,
+// trimmed for output ("" when there is none).
+function psRowComment(table, rowId){ return String(psState(table.id).comments[rowId] || "").trim(); }
+function psGeneralComment(table){ return psState(table.id).general.trim(); }
 // Pull a value out of the active scope table's answers (field:null = selected).
 function psDerive(table, source){
   if(!source || !table) return "";
@@ -3737,6 +3758,8 @@ function renderPropertyServices(){
     <div class="ps-intro">
       This is its own table. Coordinates and the relocation answer are pre-filled from your
       answers above where possible — edit any box to override it. Highlighted rows still need an answer.
+      Use <b>+ Add comment</b> on any row, or <b>Additional comments</b> at the bottom, for anything
+      else Property Services should know — comments are copied into Word with the table.
     </div>`;
   const body = document.createElement("div");
   body.className = "ps-body";
@@ -3754,6 +3777,7 @@ function renderPropertyServices(){
     }
     body.appendChild(buildPsRow(table, row, wl));
   });
+  body.appendChild(buildPsGeneralComments(table));
 
   // Final note — appears here AND in the Word copy (unlike the per-row "driven
   // by above" note, which is HTML-only).
@@ -3876,6 +3900,57 @@ function buildPsRow(table, row, wl){
     controls.appendChild(wrap);
   }
 
+  appendPsCommentToggle(controls, table, row);
+  return rowEl;
+}
+
+// "+ Add comment" under a row — the same collapsible box as the scope table's
+// "+ Add note". Open on render whenever it already holds text.
+function appendPsCommentToggle(controls, table, row){
+  const ps = psState(table.id);
+  const has = !!String(ps.comments[row.id] || "").trim();
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "note-toggle ps-comment-toggle";
+  toggle.textContent = has ? "− Comment added" : "+ Add comment";
+  const box = document.createElement("div");
+  box.className = "note-box ps-comment-box" + (has ? " open" : "");
+  const ta = document.createElement("textarea");
+  ta.placeholder = "Any extra comment on this row for Property Services...";
+  ta.value = ps.comments[row.id] || "";
+  ta.addEventListener("input", ()=>{
+    const p = psState(table.id);
+    if(ta.value) p.comments[row.id] = ta.value; else delete p.comments[row.id];
+  });
+  box.appendChild(ta);
+  toggle.addEventListener("click", ()=>{
+    box.classList.toggle("open");
+    if(box.classList.contains("open")) ta.focus();
+  });
+  controls.appendChild(toggle);
+  controls.appendChild(box);
+}
+
+// The "Additional comments" row at the foot of the table: free text for
+// anything that doesn't belong to one row. Left out of the Word copy when blank.
+function buildPsGeneralComments(table){
+  const rowEl = document.createElement("div");
+  rowEl.className = "ps-row ps-row--comments";
+  const item = document.createElement("div");
+  item.className = "ps-rowitem";
+  item.innerHTML = `<div class="label">Additional comments</div>` +
+    `<div class="ps-comment-hint">Optional — copied into Word only when filled in.</div>`;
+  const controls = document.createElement("div");
+  controls.className = "ps-controls";
+  const ta = document.createElement("textarea");
+  ta.className = "ps-comment-input";
+  ta.id = "psGeneralComment";
+  ta.placeholder = "Anything else Property Services should know about this site...";
+  ta.value = psState(table.id).general;
+  ta.addEventListener("input", ()=>{ psState(table.id).general = ta.value; });
+  controls.appendChild(ta);
+  rowEl.appendChild(item);
+  rowEl.appendChild(controls);
   return rowEl;
 }
 
@@ -3934,23 +4009,29 @@ function buildPropertyServicesHtml(table){
   const labelCell = `${wordWAttr(0)} style="padding:6px 8px;${B}vertical-align:top;font-weight:bold;${wordWStyle(0)}"`;
   const spanCell = (extra)=> `colspan="2"${wordWAttr()} style="${extra}padding:6px 8px;${B}${wordWStyle()}"`;
   let rows = `<tr><td colspan="2"${wordWAttr()} style="background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;${B}${wordWStyle()}">${escapeHtml(ps.title)}</td></tr>`;
+  // An answer cell: the answer, then the row's comment (if any) on its own line.
+  const answer = (value, comment)=> [value, comment].filter(Boolean).map(escapeHtmlLines).join("<br>");
   ps.rows.forEach(row=>{
+    const comment = psRowComment(table, row.id);
     if(row.kind === "coordGroup"){
       rows += `<tr><td ${spanCell("background:#e8e8e8;font-weight:bold;")}>${escapeHtml(row.label)}</td></tr>`;
       (row.coords||[]).forEach(c=>{
         const v = psEffectiveText(table, `${row.id}.${c.key}`, c.source, c.default);
         rows += `<tr><td ${labelCell}>${escapeHtml(c.label)}</td><td ${cell}>${escapeHtml(v)}</td></tr>`;
       });
+      if(comment) rows += `<tr><td ${labelCell}>Comment</td><td ${cell}>${escapeHtmlLines(comment)}</td></tr>`;
     } else if(row.kind === "question"){
-      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${escapeHtml(psQuestionValue(table, row))}</td></tr>`;
+      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${answer(psQuestionValue(table, row), comment)}</td></tr>`;
     } else if(row.kind === "text"){
-      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${escapeHtmlLines(psEffectiveText(table, row.id, row.source, ""))}</td></tr>`;
+      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}</td><td ${cell}>${answer(psEffectiveText(table, row.id, row.source, ""), comment)}</td></tr>`;
     } else if(row.kind === "sectionHeader"){
       rows += `<tr><td ${spanCell("background:#f0f0f0;font-style:italic;font-weight:bold;")}>${escapeHtml(row.label)}</td></tr>`;
     } else if(row.kind === "date"){
-      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}:</td><td ${cell}>${escapeHtml(psEffectiveText(table, row.id, null, todayStr()))}</td></tr>`;
+      rows += `<tr><td ${labelCell}>${escapeHtml(row.label)}:</td><td ${cell}>${answer(psEffectiveText(table, row.id, null, todayStr()), comment)}</td></tr>`;
     }
   });
+  const general = psGeneralComment(table);
+  if(general) rows += `<tr><td ${labelCell}>Additional comments</td><td ${cell}>${escapeHtmlLines(general)}</td></tr>`;
   if(ps.note){
     rows += `<tr><td ${spanCell("font-weight:bold;")}>Note</td></tr>`;
     rows += `<tr><td ${spanCell("")}>${escapeHtmlLines(ps.note)}</td></tr>`;
@@ -3960,20 +4041,27 @@ function buildPropertyServicesHtml(table){
 function buildPropertyServicesText(table){
   const ps = psDef();
   let out = `${ps.title}\n`;
+  // One line per row, so the comment joins the answer with "; " (as the scope
+  // table joins a row's several answers).
+  const answer = (value, comment)=> [value, comment].filter(Boolean).map(flattenLines).join("; ");
   ps.rows.forEach(row=>{
+    const comment = psRowComment(table, row.id);
     if(row.kind === "coordGroup"){
       out += `${row.label}\n`;
       (row.coords||[]).forEach(c=>{ out += `\t${c.label}\t${psEffectiveText(table, `${row.id}.${c.key}`, c.source, c.default)}\n`; });
+      if(comment) out += `\tComment\t${flattenLines(comment)}\n`;
     } else if(row.kind === "question"){
-      out += `${row.label}\t${psQuestionValue(table, row)}\n`;
+      out += `${row.label}\t${answer(psQuestionValue(table, row), comment)}\n`;
     } else if(row.kind === "text"){
-      out += `${row.label}\t${flattenLines(psEffectiveText(table, row.id, row.source, ""))}\n`;
+      out += `${row.label}\t${answer(psEffectiveText(table, row.id, row.source, ""), comment)}\n`;
     } else if(row.kind === "sectionHeader"){
       out += `${row.label}\n`;
     } else if(row.kind === "date"){
-      out += `${row.label}:\t${psEffectiveText(table, row.id, null, todayStr())}\n`;
+      out += `${row.label}:\t${answer(psEffectiveText(table, row.id, null, todayStr()), comment)}\n`;
     }
   });
+  const general = psGeneralComment(table);
+  if(general) out += `Additional comments\t${flattenLines(general)}\n`;
   if(ps.note) out += `Note\n${ps.note}\n`;
   return out;
 }

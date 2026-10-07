@@ -579,3 +579,33 @@ PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
 PW_CHROMIUM=/opt/pw-browsers/chromium \
   node tests/map-location-entry.test.mjs
 ```
+
+## `ps-comments.test.mjs` — custom comments in the Property Services table
+
+Guards the free-text comments users can add to the Property Services table:
+
+- **+ Add comment on a row.** Every answerable row (question, free text,
+  coordinate group, date) carries a collapsible comment box — section headers do
+  not. The test types into the boxes the way a user does and asserts the comment
+  is stored against its row, that it lands in that row's answer cell in Word on
+  its own line under the answer (a coordinate group gets its own *Comment* row
+  inside the group instead), and that the plain-text fallback joins answer and
+  comment with `; `. A comment is not an answer: a highlighted row stays
+  highlighted.
+- **Additional comments.** The box at the foot of the table is copied as its own
+  row just above the fixed Note, escaped and with its line breaks kept — and left
+  out of Word entirely while blank.
+- **Lifecycle.** Comments survive a re-render and `reconcileState` (a row holding
+  one re-renders open, labelled *Comment added*), reach the clipboard through the
+  real **Copy for Word**, and **Reset this table** clears them. With no comments
+  the copied Property Services table is byte-identical to before the feature.
+
+Hermetic — GitHub is blocked and nothing else is fetched (no map, no QLD
+services, no Esri CDN); it drives the bundled `definitions.json` on the Water
+Level table, which carries every row kind. Same invocation as the others:
+
+```bash
+PLAYWRIGHT_PKG=/abs/path/to/node_modules/playwright \
+PW_CHROMIUM=/opt/pw-browsers/chromium-*/chrome-linux/chrome \
+  node tests/ps-comments.test.mjs
+```
