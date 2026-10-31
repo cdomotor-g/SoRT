@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, editor, map. They use the live Flood-Net
+   Scenarios: station, copy, playbook, editor, layout, map. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
@@ -103,6 +103,8 @@ const scenarios = {
     ok((html.match(/<table/g) || []).length >= 2, 'scope and Property Services tables copied');
     ok(/1441013\/1/.test(html) && /transfer ACMA licence/.test(html), 'licence and its follow-up in the copy');
     ok(/ACTION – Property Services/.test(html), 'bridge action in the Property Services table');
+    ok(/Rainfall Table — Fifteen Mile AL \(540601\)/.test(html), 'station name and number on the scope table heading');
+    ok(/Property Services Instruction — Fifteen Mile AL \(540601\)/.test(html), 'and on the Property Services heading');
     await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.station-card', { timeout: 40000 });
     ok((await p.$eval('[data-fk="acmaLicence::f::licenceNo"]', e => e.value)) === '1441013/1', 'session survives a reload');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
@@ -149,6 +151,19 @@ const scenarios = {
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
+  async layout(b) {
+    const p = await page(b);
+    await p.pick('540601');
+    ok(!(await p.evaluate(() => document.body.classList.contains('layout-side'))), 'map above the questions by default');
+    await p.click('#layoutBtn');
+    ok(await p.evaluate(() => getComputedStyle(document.querySelector('#map-card')).position === 'fixed'), 'the switch puts the map beside the questions');
+    await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.station-card', { timeout: 40000 });
+    ok(await p.evaluate(() => document.body.classList.contains('layout-side')), 'the choice is remembered');
+    await p.click('#layoutBtn');
+    ok(await p.evaluate(() => getComputedStyle(document.querySelector('#map-card')).position !== 'fixed'), 'and switches back');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
   async map(b) {
     const p = await page(b, { map: true });
     await p.pick('abergowrie bridge');
@@ -169,7 +184,8 @@ const scenarios = {
     await p.click('.top .copy-btn');
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 90000 });
     const html = await p.clip();
-    ok(/<img/.test(html) && /Survey marks near the station/.test(html), 'map picture and survey marks table copied');
+    ok(/<img/.test(html), 'map picture copied');
+    ok(/Survey marks near Abergowrie Bridge AL \(532028\)/.test(html), 'survey marks table copied, headed with the station');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   }

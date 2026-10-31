@@ -364,7 +364,7 @@
       h('label', { class: 'fld' }, h('span', { class: 'fld-label' }, 'Forum outcome'), oc),
       h('label', { class: 'fld fld-grow' }, h('span', { class: 'fld-label' }, 'Outcome note'), ocn)));
     root.appendChild(h('div', { class: 'ticks' },
-      tick('header', 'Title, date and attendees'), tick('station', 'Station row'), tick('empty', 'Rows with nothing filled in'),
+      tick('header', 'Title, date and attendees', 'The station’s name and number are on every table’s heading either way'), tick('empty', 'Rows with nothing filled in'),
       tick('followUps', 'Follow-up actions'), tick('map', 'Map picture'), tick('marks', 'Survey marks table'), tick('ps', 'Property Services table')));
   }
   function renderPreview() {
@@ -452,6 +452,23 @@
     if (!dlg.open) dlg.showModal();
   }
 
+  /* ---------------- layout: map above, or beside, the questions ---------------- */
+  const LS_LAYOUT = 'sortv2.layout';
+  function setLayout(side) {
+    document.body.classList.toggle('layout-side', side);
+    U.LS.set(LS_LAYOUT, side ? 'side' : 'top');
+    const b = $('#layoutBtn');
+    if (b) { b.textContent = side ? '⇅ Map above the questions' : '⇆ Map beside the questions'; b.setAttribute('aria-pressed', String(side)); }
+    measureTop();
+  }
+  function measureTop() { const t = $('.top'); if (t) document.documentElement.style.setProperty('--top-h', `${t.offsetHeight}px`); }
+  function initLayout() {
+    const b = $('#layoutBtn');
+    if (b) b.addEventListener('click', () => setLayout(!document.body.classList.contains('layout-side')));
+    G.addEventListener('resize', measureTop);
+    setLayout(U.LS.get(LS_LAYOUT) === 'side');
+  }
+
   /* ---------------- theme ---------------- */
   function initTheme() {
     const btn = $('#themeBtn');
@@ -474,7 +491,7 @@
     if (S.mapView) { S.mapView.station(A); S.mapView.sync(A); }
   }
   async function boot() {
-    initTheme();
+    initTheme(); initLayout();
     S.form.bind(A);
     try { await loadDefs(); }
     catch (e) { $('#bootMsg').textContent = e.message; $('#bootMsg').classList.add('error'); return; }

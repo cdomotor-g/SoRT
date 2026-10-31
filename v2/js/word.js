@@ -33,11 +33,14 @@
   const td1 = (html, extra) => `<td${wAttr(1)} style="vertical-align:top;padding:6px 8px;${B}${extra || ''}${wStyle(1)}">${html}</td>`;
   const span = (html, extra) => `<tr><td colspan="2"${wAttr()} style="padding:6px 8px;${B}${extra || ''}${wStyle()}">${html}</td></tr>`;
 
+  // The station, on every copied table's heading and in the picture's legend —
+  // a breadcrumb so a paste into the wrong report is plain to whoever reads it.
   function stationLine(s) {
     const st = s.station;
     if (!st || !st.name) return '';
-    return [st.name, st.number].filter(Boolean).join(' – ');
+    return st.number ? `${st.name} (${st.number})` : st.name;
   }
+  const withStation = (title, s) => stationLine(s) ? `${title} — ${stationLine(s)}` : title;
   function attendeesLine(s) {
     const a = (s.forum.attendees || []).join(', ');
     return a + (s.forum.outOfSession ? `${a ? ' ' : ''}(out of session – scope builder only)` : '');
@@ -56,14 +59,14 @@
     const s = ctx.session, inc = s.include, tpl = ctx.tpl || {};
     let head = '';
     if (inc.header) {
-      head += span('SoRT Forum Agreed Remediation', 'background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;');
+      head += span(esc(withStation('SoRT Forum Agreed Remediation', s)), 'background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;');
       head += span(`<b>SoRT Forum Date:</b> ${esc(U().dmy(s.forum.date) || 'dd/mm/yyyy')}`);
       head += span(`<b>SoRT Forum Attendees:</b> ${esc(attendeesLine(s))}`);
-      if (inc.station && stationLine(s)) head += span(`<b>Station:</b> ${esc(stationLine(s))}`);
       const outcome = s.outcome && ((ctx.defs.session || {}).outcomes || []).find(o => o.code === s.outcome);
       if (outcome) head += span(`<b>SoRT Forum Outcome:</b> ${esc(outcome.label)}${s.outcomeNote ? ' — ' + escL(s.outcomeNote) : ''}`);
-      head += span(`<i><b>${esc(tpl.title || tpl.label || '')}</b></i>`);
     }
+    // The table's own title carries the station even with the header left out.
+    head += span(`<i><b>${esc(withStation(tpl.title || tpl.label || '', s))}</b></i>`);
     head += `<tr>${td0('Item', 'background:#e8e8e8;')}${td1('Details', 'background:#e8e8e8;font-weight:bold;')}</tr>`;
     let rows = '';
     scopeRows(ctx).forEach(r => { rows += `<tr>${td0(esc(r.q.label))}${td1(r.lines.map(escL).join('<br>'))}</tr>`; });
@@ -80,12 +83,11 @@
     const s = ctx.session, inc = s.include, tpl = ctx.tpl || {};
     let out = '';
     if (inc.header) {
-      out += 'SoRT Forum Agreed Remediation\n';
+      out += `${withStation('SoRT Forum Agreed Remediation', s)}\n`;
       out += `SoRT Forum Date: ${U().dmy(s.forum.date) || 'dd/mm/yyyy'}\n`;
       out += `SoRT Forum Attendees: ${attendeesLine(s)}\n`;
-      if (inc.station && stationLine(s)) out += `Station: ${stationLine(s)}\n`;
-      out += `${tpl.title || tpl.label || ''}\n\n`;
     }
+    out += `${withStation(tpl.title || tpl.label || '', s)}\n\n`;
     out += 'Item\tDetails\n';
     scopeRows(ctx).forEach(r => { out += `${r.q.label}\t${r.lines.map(U().flat).join('; ')}\n`; });
     if (inc.followUps) openFollowUps(ctx, 'scope').forEach(f => { out += `Follow-up\t${f.owner}: ${f.text}${f.link ? ' ' + f.link.url : ''}\n`; });
@@ -103,7 +105,7 @@
     if (!marks.length) return '';
     const th = (t, i) => `<td width="${MARK_COLS[i].px}" style="background:#e8e8e8;font-weight:bold;padding:4px 6px;${B}width:${MARK_COLS[i].cm}cm;">${t}</td>`;
     const tdm = (t, i) => `<td width="${MARK_COLS[i].px}" style="vertical-align:top;padding:4px 6px;${B}width:${MARK_COLS[i].cm}cm;">${t}</td>`;
-    let rows = `<tr><td colspan="6"${wAttr()} style="background:#1f2d3d;color:#fff;font-weight:bold;padding:6px 8px;${B}${wStyle()}">Survey marks near the station</td></tr>`;
+    let rows = `<tr><td colspan="6"${wAttr()} style="background:#1f2d3d;color:#fff;font-weight:bold;padding:6px 8px;${B}${wStyle()}">${esc(stationLine(s) ? `Survey marks near ${stationLine(s)}` : 'Survey marks near the station')}</td></tr>`;
     rows += `<tr>${['', 'Mark', 'Type', 'Condition', 'From station', 'Coordinates'].map(th).join('')}</tr>`;
     marks.forEach(m => {
       const type = m.ahd != null ? `Benchmark · ${m.ahd} m AHD` : 'PSM (no AHD height)';
@@ -117,7 +119,7 @@
   function marksText(s) {
     const marks = shownMarks(s);
     if (!marks.length) return '';
-    return 'Survey marks near the station\n' + marks.map(m =>
+    return `${stationLine(s) ? `Survey marks near ${stationLine(s)}` : 'Survey marks near the station'}\n` + marks.map(m =>
       `${m.ref}\t${m.name}\t${m.ahd != null ? `Benchmark ${m.ahd} m AHD` : 'PSM'}\t${m.condition || ''}${m.lastVisit ? ', last visited ' + m.lastVisit : ''}\t${m.away || ''}\t${U().formatCoord(m.lat, m.lon)}\t${m.report || ''}`).join('\n') + '\n';
   }
 
@@ -127,7 +129,7 @@
     const cell = `${wAttr(1)} style="padding:6px 8px;${B}vertical-align:top;${wStyle(1)}"`;
     const label = `${wAttr(0)} style="padding:6px 8px;${B}vertical-align:top;font-weight:bold;${wStyle(0)}"`;
     const answer = (...parts) => parts.filter(Boolean).map(escL).join('<br>');
-    let rows = span(esc(ps.title), 'background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;');
+    let rows = span(esc(withStation(ps.title, ctx.session)), 'background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;');
     ps.rows.forEach(row => {
       if (!R().test(ctx, row.showIf)) return;
       const comment = String(p.comments[row.id] || '').trim();
@@ -158,7 +160,7 @@
   function psText(ctx) {
     const ps = ctx.defs.propertyServices, p = R().psState(ctx.session);
     const answer = (...parts) => parts.filter(Boolean).map(U().flat).join('; ');
-    let out = `${ps.title}\n`;
+    let out = `${withStation(ps.title, ctx.session)}\n`;
     ps.rows.forEach(row => {
       if (!R().test(ctx, row.showIf)) return;
       const comment = String(p.comments[row.id] || '').trim();
@@ -221,5 +223,5 @@
     return 'plain';
   }
 
-  S.word = { build, scopeHtml, psHtml, marksHtml, toClipboard, WORD_TABLE_CM };
+  S.word = { build, scopeHtml, psHtml, marksHtml, toClipboard, stationLine, WORD_TABLE_CM };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -890,7 +890,10 @@
 
   /* ---------------- legend, contour stamp, edge pointers (on screen; the picture repeats them) ---------------- */
   function legendItems() {
-    const items = shownPins().map(p => ({ kind: 'pin', colour: rgb(p.colour), label: p.label, sub: U().formatCoord(p.lat, p.lon) }));
+    const items = [];
+    const st = S.word && S.word.stationLine(M.app.session);
+    if (st) items.push({ kind: 'title', colour: [21, 37, 49], label: st });
+    shownPins().forEach(p => items.push({ kind: 'pin', colour: rgb(p.colour), label: p.label, sub: U().formatCoord(p.lat, p.lon) }));
     const ctx = M.app.ctx, fs = features();
     if (fs.some(f => f.kind === 'circle')) { const f = fs.find(x => x.kind === 'circle'); const r = Number(R().eff(ctx, f.q).fields.radius) || 0; if (r) items.push({ kind: 'circle', colour: DRAW_RGB, label: `Vegetation clearance (${r} m radius)` }); }
     const trees = fs.filter(f => f.kind === 'tree');
@@ -908,7 +911,7 @@
     el.innerHTML = '';
     const items = legendItems();
     el.hidden = !items.length;
-    items.forEach(i => el.appendChild(h('div', { class: 'lg' }, h('span', { class: `lg-sym lg-${i.kind}`, style: { '--c': `rgb(${i.colour.join(',')})` } }),
+    items.forEach(i => el.appendChild(i.kind === 'title' ? h('div', { class: 'lg-title' }, i.label) : h('div', { class: 'lg' }, h('span', { class: `lg-sym lg-${i.kind}`, style: { '--c': `rgb(${i.colour.join(',')})` } }),
       h('span', null, h('b', null, i.label), i.sub ? h('span', { class: 'lg-sub' }, i.sub) : null))));
   }
   function stampText() { return M.contour === 'off' ? '' : `Contours: ${M.contour} m LiDAR${M.view && M.view.scale > CFG.dynamicMinScale ? ' (zoom in to see them)' : ''}`; }
@@ -1022,6 +1025,7 @@
       items.forEach(i => {
         const cx = pad * 2.1, cy = y + fs * 0.55, col = `rgb(${i.colour.join(',')})`;
         x.fillStyle = col; x.strokeStyle = col; x.lineWidth = 2 * sc;
+        if (i.kind === 'title') { x.fillStyle = '#152531'; x.font = `bold ${fs}px Segoe UI, Arial, sans-serif`; x.fillText(i.label, pad * 1.2, y); y += rowH(i); return; }
         if (i.kind === 'pin') { x.beginPath(); x.arc(cx, cy, fs * 0.42, 0, Math.PI * 2); x.fill(); }
         else if (i.kind === 'mark') { x.beginPath(); x.arc(cx, cy, fs * 0.38, 0, Math.PI * 2); x.stroke(); }
         else if (i.kind === 'bridge') { x.beginPath(); x.moveTo(cx, cy - fs * .45); x.lineTo(cx + fs * .45, cy); x.lineTo(cx, cy + fs * .45); x.lineTo(cx - fs * .45, cy); x.closePath(); x.fill(); }
