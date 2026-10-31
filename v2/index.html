@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SoRT Scope Builder (v2 beta)</title>
+<meta name="description" content="Build SoRT Forum scope tables for the FWIN assessment reports — v2 beta.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='8'%20fill='%230f6e6a'/%3E%3Ctext%20x='50%25'%20y='50%25'%20font-size='36'%20font-weight='700'%20text-anchor='middle'%20dominant-baseline='central'%20fill='%23ffffff'%20font-family='Segoe%20UI,Arial,sans-serif'%3ES%3C/text%3E%3C/svg%3E">
+<script>
+  /* Theme before first paint (the key is shared with v1, so a choice follows you). */
+  (function () {
+    try {
+      var saved = localStorage.getItem('sort.theme');
+      var dark = saved ? saved === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
+  })();
+</script>
+<!-- Every script and the stylesheet carry ?v=<stamp>; bump it (all of them at
+     once) on any change, or browsers keep the old copy for up to 10 minutes. -->
+<link rel="stylesheet" href="app.css?v=20261031a">
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">S</span>
+      <div>
+        <h1>SoRT Scope Builder</h1>
+        <div class="sub"><span class="beta" title="Version 2, in testing. Version 1 is unchanged at the usual address.">v2 beta</span><span id="stationChip">No station yet</span></div>
+      </div>
+    </div>
+    <div class="top-progress" aria-live="polite">
+      <div class="bar"><div id="progressFill"></div></div>
+      <div id="progressText" class="muted"></div>
+    </div>
+    <div class="top-acts">
+      <button type="button" class="btn btn-primary copy-btn" title="Copy the scope table, map and Property Services table, ready to paste into the report">Copy for Word</button>
+      <button type="button" class="btn" id="sessionsBtn" title="Sessions saved in this browser — open, start new, forget">Sessions</button>
+      <button type="button" class="icon-btn" id="themeBtn" aria-label="Toggle dark mode">🌙</button>
+    </div>
+  </div>
+</header>
+<div id="banner" class="banner" role="status" hidden></div>
+
+<main class="wrap">
+  <div id="bootMsg" class="card">Loading the questions…</div>
+  <section class="card" id="forum" aria-label="Forum"></section>
+  <section class="card" id="station" aria-label="Station"></section>
+  <section class="card" id="map-card" aria-label="Map">
+    <header class="sec-head"><h2>Map</h2><span class="hint" id="mapHint">Check the station’s position, then mark the other points.</span></header>
+    <div id="mapMount"><div class="map-placeholder">The map comes in the next beta update — the rest of the page works without it.</div></div>
+  </section>
+  <div id="form"></div>
+  <div id="ps"></div>
+  <section class="card" id="output" aria-label="Follow-ups and output">
+    <header class="sec-head"><h2>Follow-ups and output</h2></header>
+    <h3>Follow-ups the answers raise</h3>
+    <div id="followups"></div>
+    <div id="outputControls"></div>
+    <div class="out-acts">
+      <button type="button" class="btn btn-primary copy-btn">Copy for Word</button>
+      <span id="playbookActs"></span>
+      <button type="button" class="btn" id="downloadBtn" title="Save this session as a file (to send, or to open on another computer)">Download session</button>
+    </div>
+    <h3>Preview — what will paste into Word</h3>
+    <div id="preview" class="paper" aria-label="Preview of the copy"></div>
+  </section>
+  <footer class="foot"><span id="savedChip"></span> · <span id="defsChip"></span> · <a href="../">Version 1</a></footer>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<dialog id="sessionsDlg" aria-labelledby="sessionsTitle">
+  <div class="dlg-head"><h2 id="sessionsTitle">Sessions in this browser</h2><button type="button" class="icon-btn" id="sessionsClose" aria-label="Close">✕</button></div>
+  <div class="dlg-body" id="sessionsList"></div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-primary" id="newSessionBtn">New session</button>
+    <label class="btn file-btn">Open a session file…<input type="file" id="importInput" accept="application/json,.json"></label>
+  </div>
+</dialog>
+
+<script src="js/util.js?v=20261031a"></script>
+<script src="js/schema.js?v=20261031a"></script>
+<script src="js/rules.js?v=20261031a"></script>
+<script src="js/store.js?v=20261031a"></script>
+<script src="js/floodnet.js?v=20261031a"></script>
+<script src="js/word.js?v=20261031a"></script>
+<script src="js/form.js?v=20261031a"></script>
+<script src="js/app.js?v=20261031a"></script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+/* SoRT v2 — word.js
+   The tables that paste into the assessment report. Same shape as v1 — the
+   scope table, then the map picture, then the Property Services table — with
+   v1's hard-won Word geometry (fixed layout, absolute widths on every cell, a
+   <colgroup>), because Word's autofit otherwise squashes the left column to a
+   character wide. New in v2: a Station row in the header, a Follow-up Actions
+   row, the survey marks under the map picture, and Property Services actions. */
+(function (G) {
+  'use strict';
+  const S = G.SoRT = G.SoRT || {};
+  const U = () => S.util, R = () => S.rules, sch = () => S.schema;
+
+  const WORD_TABLE_CM = 16;            // A4 portrait text width (21 cm − 2 × 2.5 cm)
+  const WORD_COL_SPLIT = [1 / 3, 2 / 3];
+  const CM_TO_PX = 96 / 2.54;
+  const wp = cm => { const r = Math.round(cm * 100) / 100; return { cm: r, px: Math.round(r * CM_TO_PX) }; };
+  const COLS = WORD_COL_SPLIT.map(f => wp(WORD_TABLE_CM * f));
+  const FULL = wp(WORD_TABLE_CM);
+  const w = i => (i == null ? FULL : COLS[i]);
+  const wStyle = i => `width:${w(i).cm}cm;`;
+  const wAttr = i => ` width="${w(i).px}"`;
+  const B = 'border:1px solid #999;';
+  const FONT = 'font-family:Calibri,Arial,sans-serif;font-size:11pt;';
+  const TABLE = `border-collapse:collapse;table-layout:fixed;width:${FULL.cm}cm;${FONT}`;
+  const tableOpen = (cols) => {
+    const cg = (cols || COLS).map(c => `<col style="width:${c.cm}cm;">`).join('');
+    return `<table${wAttr()} style="${TABLE}"><colgroup>${cg}</colgroup>`;
+  };
+  const GAP = `<p style="margin:12px 0 0;font-family:Calibri,Arial,sans-serif;">&nbsp;</p>`;
+  const esc = s => U().esc(s), escL = s => U().escLines(s);
+
+  const td0 = (html, extra) => `<td${wAttr(0)} style="font-weight:bold;vertical-align:top;padding:6px 8px;${B}${extra || ''}${wStyle(0)}">${html}</td>`;
+  const td1 = (html, extra) => `<td${wAttr(1)} style="vertical-align:top;padding:6px 8px;${B}${extra || ''}${wStyle(1)}">${html}</td>`;
+  const span = (html, extra) => `<tr><td colspan="2"${wAttr()} style="padding:6px 8px;${B}${extra || ''}${wStyle()}">${html}</td></tr>`;
+
+  function stationLine(s) {
+    const st = s.station;
+    if (!st || !st.name) return '';
+    return [st.name, st.number].filter(Boolean).join(' – ');
+  }
+  function attendeesLine(s) {
+    const a = (s.forum.attendees || []).join(', ');
+    return a + (s.forum.outOfSession ? `${a ? ' ' : ''}(out of session – scope builder only)` : '');
+  }
+
+  // ---- the scope table -------------------------------------------------------
+  function scopeRows(ctx) {
+    const inc = ctx.session.include;
+    return R().visibleQuestions(ctx).filter(q => q.word !== false).map(q => ({ q, lines: R().outputLines(ctx, q) }))
+      .filter(r => r.lines.length || inc.empty);
+  }
+  function openFollowUps(ctx, table) {
+    return R().followUps(ctx).filter(f => !f.done && f.table === table);
+  }
+  function scopeHtml(ctx) {
+    const s = ctx.session, inc = s.include, tpl = ctx.tpl || {};
+    let head = '';
+    if (inc.header) {
+      head += span('SoRT Forum Agreed Remediation', 'background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;');
+      head += span(`<b>SoRT Forum Date:</b> ${esc(U().dmy(s.forum.date) || 'dd/mm/yyyy')}`);
+      head += span(`<b>SoRT Forum Attendees:</b> ${esc(attendeesLine(s))}`);
+      if (inc.station && stationLine(s)) head += span(`<b>Station:</b> ${esc(stationLine(s))}`);
+      const outcome = s.outcome && ((ctx.defs.session || {}).outcomes || []).find(o => o.code === s.outcome);
+      if (outcome) head += span(`<b>SoRT Forum Outcome:</b> ${esc(outcome.label)}${s.outcomeNote ? ' — ' + escL(s.outcomeNote) : ''}`);
+      head += span(`<i><b>${esc(tpl.title || tpl.label || '')}</b></i>`);
+    }
+    head += `<tr>${td0('Item', 'background:#e8e8e8;')}${td1('Details', 'background:#e8e8e8;font-weight:bold;')}</tr>`;
+    let rows = '';
+    scopeRows(ctx).forEach(r => { rows += `<tr>${td0(esc(r.q.label))}${td1(r.lines.map(escL).join('<br>'))}</tr>`; });
+    if (inc.followUps) {
+      const fu = openFollowUps(ctx, 'scope');
+      if (fu.length) {
+        const lines = fu.map(f => `• <b>${esc(f.owner)}:</b> ${esc(f.text)}${f.link ? ` <a href="${esc(f.link.url)}">${esc(f.link.label)}</a>` : ''}`);
+        rows += `<tr>${td0('Follow-up Actions', 'background:#fff2cc;')}${td1(lines.join('<br>'), 'background:#fff2cc;')}</tr>`;
+      }
+    }
+    return `${tableOpen()}${head}${rows}</table>`;
+  }
+  function scopeText(ctx) {
+    const s = ctx.session, inc = s.include, tpl = ctx.tpl || {};
+    let out = '';
+    if (inc.header) {
+      out += 'SoRT Forum Agreed Remediation\n';
+      out += `SoRT Forum Date: ${U().dmy(s.forum.date) || 'dd/mm/yyyy'}\n`;
+      out += `SoRT Forum Attendees: ${attendeesLine(s)}\n`;
+      if (inc.station && stationLine(s)) out += `Station: ${stationLine(s)}\n`;
+      out += `${tpl.title || tpl.label || ''}\n\n`;
+    }
+    out += 'Item\tDetails\n';
+    scopeRows(ctx).forEach(r => { out += `${r.q.label}\t${r.lines.map(U().flat).join('; ')}\n`; });
+    if (inc.followUps) openFollowUps(ctx, 'scope').forEach(f => { out += `Follow-up\t${f.owner}: ${f.text}${f.link ? ' ' + f.link.url : ''}\n`; });
+    return out;
+  }
+
+  // ---- survey marks (under the map picture) --------------------------------------
+  const MARK_COLS = [1.2, 3.0, 3.3, 3.5, 2.0, 3.0].map(wp);
+  function shownMarks(s) {
+    const hidden = new Set(s.map.hiddenMarks || []);
+    return (s.map.marks || []).filter(m => !hidden.has(m.id));
+  }
+  function marksHtml(s) {
+    const marks = shownMarks(s);
+    if (!marks.length) return '';
+    const th = (t, i) => `<td width="${MARK_COLS[i].px}" style="background:#e8e8e8;font-weight:bold;padding:4px 6px;${B}width:${MARK_COLS[i].cm}cm;">${t}</td>`;
+    const tdm = (t, i) => `<td width="${MARK_COLS[i].px}" style="vertical-align:top;padding:4px 6px;${B}width:${MARK_COLS[i].cm}cm;">${t}</td>`;
+    let rows = `<tr><td colspan="6"${wAttr()} style="background:#1f2d3d;color:#fff;font-weight:bold;padding:6px 8px;${B}${wStyle()}">Survey marks near the station</td></tr>`;
+    rows += `<tr>${['', 'Mark', 'Type', 'Condition', 'From station', 'Coordinates'].map(th).join('')}</tr>`;
+    marks.forEach(m => {
+      const type = m.ahd != null ? `Benchmark · ${m.ahd} m AHD` : 'PSM (no AHD height)';
+      const cond = [m.condition, m.lastVisit ? `last visited ${m.lastVisit}` : ''].filter(Boolean).join(', ');
+      const mark = m.report ? `<a href="${esc(m.report)}">${esc(m.name)}</a>` : esc(m.name);
+      rows += `<tr>${[esc(m.ref), mark, esc(type), esc(cond), esc(m.away || ''), esc(U().formatCoord(m.lat, m.lon))].map(tdm).join('')}</tr>`;
+    });
+    const t = `<table${wAttr()} style="border-collapse:collapse;table-layout:fixed;width:${FULL.cm}cm;font-family:Calibri,Arial,sans-serif;font-size:9pt;"><colgroup>${MARK_COLS.map(c => `<col style="width:${c.cm}cm;">`).join('')}</colgroup>${rows}</table>`;
+    return t + `<p style="margin:2px 0 0;font-family:Calibri,Arial,sans-serif;font-size:8pt;color:#555;">Survey marks © State of Queensland (Department of Resources). Click a mark for its Survey Control Mark Report.</p>`;
+  }
+  function marksText(s) {
+    const marks = shownMarks(s);
+    if (!marks.length) return '';
+    return 'Survey marks near the station\n' + marks.map(m =>
+      `${m.ref}\t${m.name}\t${m.ahd != null ? `Benchmark ${m.ahd} m AHD` : 'PSM'}\t${m.condition || ''}${m.lastVisit ? ', last visited ' + m.lastVisit : ''}\t${m.away || ''}\t${U().formatCoord(m.lat, m.lon)}\t${m.report || ''}`).join('\n') + '\n';
+  }
+
+  // ---- Property Services --------------------------------------------------------
+  function psHtml(ctx) {
+    const ps = ctx.defs.propertyServices, p = R().psState(ctx.session);
+    const cell = `${wAttr(1)} style="padding:6px 8px;${B}vertical-align:top;${wStyle(1)}"`;
+    const label = `${wAttr(0)} style="padding:6px 8px;${B}vertical-align:top;font-weight:bold;${wStyle(0)}"`;
+    const answer = (...parts) => parts.filter(Boolean).map(escL).join('<br>');
+    let rows = span(esc(ps.title), 'background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;');
+    ps.rows.forEach(row => {
+      if (!R().test(ctx, row.showIf)) return;
+      const comment = String(p.comments[row.id] || '').trim();
+      if (row.kind === 'coordGroup') {
+        rows += span(esc(row.label), 'background:#e8e8e8;font-weight:bold;');
+        (row.coords || []).forEach(c => {
+          rows += `<tr><td ${label}>${esc(c.label)}</td><td ${cell}>${esc(R().psText(ctx, `${row.id}.${c.key}`, c.source, c.default))}</td></tr>`;
+        });
+        if (comment) rows += `<tr><td ${label}>Comment</td><td ${cell}>${escL(comment)}</td></tr>`;
+      } else if (row.kind === 'question') {
+        const detail = R().psDetail(ctx, row);
+        rows += `<tr><td ${label}>${esc(row.label)}</td><td ${cell}>${answer(R().psQuestionLabel(ctx, row), detail && `${row.detail.label}: ${detail}`, comment)}</td></tr>`;
+      } else if (row.kind === 'text') {
+        rows += `<tr><td ${label}>${esc(row.label)}</td><td ${cell}>${answer(R().psNA(ctx, row) ? 'NA' : R().psText(ctx, row.id, row.source, ''), comment)}</td></tr>`;
+      } else if (row.kind === 'sectionHeader') {
+        rows += span(esc(row.label), 'background:#f0f0f0;font-style:italic;font-weight:bold;');
+      } else if (row.kind === 'date') {
+        rows += `<tr><td ${label}>${esc(row.label)}:</td><td ${cell}>${answer(R().psText(ctx, row.id, null, U().dmy(ctx.session.forum.date)), comment)}</td></tr>`;
+      }
+    });
+    if (ctx.session.include.followUps) openFollowUps(ctx, 'ps').forEach(f => {
+      rows += `<tr><td ${label.replace('font-weight:bold;', 'font-weight:bold;background:#fff2cc;')}>ACTION – ${esc(f.owner)}</td><td ${cell.replace('vertical-align:top;', 'vertical-align:top;background:#fff2cc;')}>${esc(f.text)}</td></tr>`;
+    });
+    if (p.general.trim()) rows += `<tr><td ${label}>Additional comments</td><td ${cell}>${escL(p.general.trim())}</td></tr>`;
+    if (ps.note) { rows += span('Note', 'font-weight:bold;'); rows += span(escL(ps.note)); }
+    return `${tableOpen()}${rows}</table>`;
+  }
+  function psText(ctx) {
+    const ps = ctx.defs.propertyServices, p = R().psState(ctx.session);
+    const answer = (...parts) => parts.filter(Boolean).map(U().flat).join('; ');
+    let out = `${ps.title}\n`;
+    ps.rows.forEach(row => {
+      if (!R().test(ctx, row.showIf)) return;
+      const comment = String(p.comments[row.id] || '').trim();
+      if (row.kind === 'coordGroup') {
+        out += `${row.label}\n`;
+        (row.coords || []).forEach(c => { out += `\t${c.label}\t${R().psText(ctx, `${row.id}.${c.key}`, c.source, c.default)}\n`; });
+        if (comment) out += `\tComment\t${U().flat(comment)}\n`;
+      } else if (row.kind === 'question') {
+        const detail = R().psDetail(ctx, row);
+        out += `${row.label}\t${answer(R().psQuestionLabel(ctx, row), detail && `${row.detail.label}: ${detail}`, comment)}\n`;
+      } else if (row.kind === 'text') out += `${row.label}\t${answer(R().psNA(ctx, row) ? 'NA' : R().psText(ctx, row.id, row.source, ''), comment)}\n`;
+      else if (row.kind === 'sectionHeader') out += `${row.label}\n`;
+      else if (row.kind === 'date') out += `${row.label}:\t${answer(R().psText(ctx, row.id, null, U().dmy(ctx.session.forum.date)), comment)}\n`;
+    });
+    if (ctx.session.include.followUps) openFollowUps(ctx, 'ps').forEach(f => { out += `ACTION – ${f.owner}\t${f.text}\n`; });
+    if (p.general.trim()) out += `Additional comments\t${U().flat(p.general)}\n`;
+    if (ps.note) out += `Note\n${ps.note}\n`;
+    return out;
+  }
+
+  // ---- the whole copy ----------------------------------------------------------------
+  // picture: {dataUrl} or null — made by the map (map.js) before this is called.
+  function build(ctx, picture) {
+    const s = ctx.session, inc = s.include;
+    let html = scopeHtml(ctx), text = scopeText(ctx);
+    if (inc.map && picture && picture.dataUrl) {
+      html += GAP + `<div><img src="${picture.dataUrl}" alt="Site map" style="width:16cm;max-width:100%;height:auto;border:1px solid #999;"></div>`;
+      text += '\n\n[Site map image included]\n';
+    }
+    if (inc.map && inc.marks) {
+      const mh = marksHtml(s);
+      if (mh) { html += GAP + mh; text += '\n' + marksText(s); }
+    }
+    if (inc.ps) { html += GAP + psHtml(ctx); text += '\n\n' + psText(ctx); }
+    return { html, text };
+  }
+
+  async function toClipboard(html, text) {
+    try {
+      if (navigator.clipboard && G.ClipboardItem) {
+        await navigator.clipboard.write([new G.ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        })]);
+        return 'rich';
+      }
+    } catch (_) { /* fall through to the older route */ }
+    try {
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      box.innerHTML = html;
+      document.body.appendChild(box);
+      const range = document.createRange(); range.selectNodeContents(box);
+      const sel = G.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      const ok = document.execCommand('copy');
+      sel.removeAllRanges(); box.remove();
+      if (ok) return 'rich';
+    } catch (_) { /* fall through */ }
+    await navigator.clipboard.writeText(text);
+    return 'plain';
+  }
+
+  S.word = { build, scopeHtml, psHtml, marksHtml, toClipboard, WORD_TABLE_CM };
+})(typeof window !== 'undefined' ? window : globalThis);

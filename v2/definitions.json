@@ -1,0 +1,2225 @@
+{
+  "schema": "sort-definitions/2",
+  "version": 1,
+  "meta": {
+    "appTitle": "SoRT Forum Scope Builder",
+    "updated": "2026-10-31",
+    "note": "Seeded from v1 definitions.json by v2/tools/convert-v1.mjs; edited directly since. Codes are permanent: reword a label freely, never reuse a code."
+  },
+  "links": {
+    "scopeOfWorks": {
+      "label": "FWIN – ID – Scope of Works",
+      "url": "https://bom365.sharepoint.com/sites/int-FloodWarningInfrastructureNetworkProgram2/Shared%20Documents/Forms/Default.aspx?id=%2Fsites%2Fint%2DFloodWarningInfrastructureNetworkProgram2%2FShared%20Documents%2FAsset%20Management%2FFWIN%20%2D%20ID%20%2D%20Scope%20of%20Works&viewid=d017a792%2Db4d7%2D44f1%2Daa85%2D5417f09fbd0c"
+    }
+  },
+  "sections": [
+    {
+      "id": "station",
+      "title": "Station & complexity"
+    },
+    {
+      "id": "location",
+      "title": "Location & relocation"
+    },
+    {
+      "id": "sensors",
+      "title": "Sensors & river line"
+    },
+    {
+      "id": "comms",
+      "title": "Comms & radio"
+    },
+    {
+      "id": "works",
+      "title": "Site works"
+    },
+    {
+      "id": "notes",
+      "title": "Notes & photos"
+    }
+  ],
+  "session": {
+    "outcomes": [
+      {
+        "code": "complete",
+        "label": "SoRT complete"
+      },
+      {
+        "code": "more_data",
+        "label": "More data required"
+      },
+      {
+        "code": "site_visit",
+        "label": "Additional site visit required"
+      },
+      {
+        "code": "revisit",
+        "label": "Set back to SoRT – revisit"
+      },
+      {
+        "code": "deferred",
+        "label": "Deferred"
+      }
+    ]
+  },
+  "questions": {
+    "fadeMargin": {
+      "label": "Fade Margin >20db",
+      "section": "comms",
+      "hint": "(If station is ERRTS)",
+      "icon": "📶",
+      "type": "single",
+      "options": [
+        {
+          "code": "yes",
+          "label": "Yes"
+        },
+        {
+          "code": "no",
+          "label": "No"
+        },
+        {
+          "code": "na",
+          "label": "NA"
+        }
+      ],
+      "defaultWhen": [
+        {
+          "when": {
+            "any": [
+              {
+                "q": "comms",
+                "tag": "cellular"
+              },
+              {
+                "q": "comms",
+                "tag": "satellite"
+              }
+            ]
+          },
+          "value": "na"
+        }
+      ],
+      "hintFrom": "station.fadeMargin"
+    },
+    "commsChange": {
+      "label": "Comms Change",
+      "section": "comms",
+      "icon": "☎️",
+      "type": "single",
+      "hint": "(Worked out from Current Comms and the Comms Option — change it if it is wrong)",
+      "options": [
+        {
+          "code": "none",
+          "label": "No change"
+        },
+        {
+          "code": "cellular_to_errts",
+          "label": "Cellular → ERRTS",
+          "tags": [
+            "to_errts"
+          ]
+        },
+        {
+          "code": "satellite_to_errts",
+          "label": "Satellite → ERRTS",
+          "tags": [
+            "to_errts"
+          ]
+        },
+        {
+          "code": "errts_to_satellite",
+          "label": "ERRTS → Satellite"
+        },
+        {
+          "code": "errts_to_cellular",
+          "label": "ERRTS → Cellular"
+        },
+        {
+          "code": "cellular_to_satellite",
+          "label": "Cellular → Satellite"
+        },
+        {
+          "code": "satellite_to_cellular",
+          "label": "Satellite → Cellular"
+        }
+      ],
+      "derive": {
+        "kind": "commsChange",
+        "from": "currentComms",
+        "to": "comms",
+        "families": [
+          "cellular",
+          "satellite",
+          "errts"
+        ]
+      },
+      "fields": [
+        {
+          "code": "reason",
+          "label": "Reason",
+          "type": "text",
+          "showIf": {
+            "q": "commsChange",
+            "isNot": "none"
+          }
+        },
+        {
+          "code": "newAlertIds",
+          "label": "New ALERT IDs",
+          "type": "text",
+          "placeholder": "Filled in when the Hub supplies them",
+          "emptyText": "To be supplied by the {hub} rep (follow-up)",
+          "showIf": {
+            "q": "commsChange",
+            "tag": "to_errts"
+          }
+        }
+      ],
+      "notes": [
+        {
+          "text": "Changing comms type requires GM Approval — ERRTS to SAT",
+          "when": {
+            "q": "commsChange",
+            "isNot": "none"
+          }
+        },
+        {
+          "text": "New ALERT IDs are not allocated in the forum: the Hub rep supplies them afterwards, once checked against the IDs already in use. A follow-up is added below.",
+          "when": {
+            "q": "commsChange",
+            "tag": "to_errts"
+          },
+          "level": "info"
+        }
+      ]
+    },
+    "comms": {
+      "label": "Comms Option",
+      "section": "comms",
+      "hint": "(Choose 1 option)",
+      "icon": "📞",
+      "type": "single",
+      "options": [
+        {
+          "code": "ip_logger_cellular_communications",
+          "label": "IP Logger - Cellular Communications",
+          "tags": [
+            "cellular"
+          ]
+        },
+        {
+          "code": "ip_logger_satellite_communications",
+          "label": "IP Logger - Satellite Communications",
+          "tags": [
+            "satellite"
+          ]
+        },
+        {
+          "code": "ip_logger_campbell_scientific_errts_vhf_communications",
+          "label": "IP Logger - Campbell Scientific - ERRTS VHF Communications",
+          "tags": [
+            "errts"
+          ]
+        },
+        {
+          "code": "local_processing_unit_elpro_errts_vhf_communications",
+          "label": "Local Processing Unit - Elpro ERRTS VHF Communications",
+          "tags": [
+            "errts"
+          ]
+        },
+        {
+          "code": "al200x_campbell_scientific_errts_vhf_communications",
+          "label": "AL200X Campbell Scientific - ERRTS VHF Communications",
+          "tags": [
+            "errts"
+          ]
+        }
+      ]
+    },
+    "txPower": {
+      "label": "TX power",
+      "section": "comms",
+      "hint": "(Repeaters typically 5W)",
+      "icon": "☀️",
+      "type": "single",
+      "options": [
+        {
+          "code": "na",
+          "label": "NA"
+        },
+        {
+          "code": "1w",
+          "label": "1W"
+        },
+        {
+          "code": "5w",
+          "label": "5W"
+        },
+        {
+          "code": "25w",
+          "label": "25W"
+        },
+        {
+          "code": "other_specify",
+          "label": "Other (Specify)",
+          "other": true
+        }
+      ],
+      "defaultWhen": [
+        {
+          "when": {
+            "any": [
+              {
+                "q": "comms",
+                "tag": "cellular"
+              },
+              {
+                "q": "comms",
+                "tag": "satellite"
+              }
+            ]
+          },
+          "value": "na"
+        }
+      ]
+    },
+    "frequency": {
+      "label": "ERRTS/ALERT Frequency",
+      "section": "comms",
+      "icon": "🐝",
+      "type": "single",
+      "options": [
+        {
+          "code": "na",
+          "label": "NA"
+        },
+        {
+          "code": "151_500_mhz",
+          "label": "151.500 MHz"
+        },
+        {
+          "code": "151_525_mhz",
+          "label": "151.525 MHz"
+        },
+        {
+          "code": "152_400_mhz",
+          "label": "152.400 MHz"
+        },
+        {
+          "code": "151_950_mhz",
+          "label": "151.950 MHz"
+        },
+        {
+          "code": "other_or_multiple",
+          "label": "Other or multiple:",
+          "other": true
+        }
+      ],
+      "defaultWhen": [
+        {
+          "when": {
+            "any": [
+              {
+                "q": "comms",
+                "tag": "cellular"
+              },
+              {
+                "q": "comms",
+                "tag": "satellite"
+              }
+            ]
+          },
+          "value": "na"
+        }
+      ],
+      "prefill": {
+        "from": "station.txFrequency"
+      },
+      "hintFrom": "station.txFrequency"
+    },
+    "alertFormat": {
+      "label": "ALERT Reporting",
+      "section": "comms",
+      "icon": "🔡",
+      "type": "single",
+      "options": [
+        {
+          "code": "binary",
+          "label": "BINARY"
+        },
+        {
+          "code": "iflows",
+          "label": "IFLOWS"
+        },
+        {
+          "code": "na",
+          "label": "NA"
+        }
+      ],
+      "defaultWhen": [
+        {
+          "when": {
+            "any": [
+              {
+                "q": "comms",
+                "tag": "cellular"
+              },
+              {
+                "q": "comms",
+                "tag": "satellite"
+              }
+            ]
+          },
+          "value": "na"
+        }
+      ]
+    },
+    "stockFence": {
+      "label": "Stock Fence",
+      "section": "works",
+      "hint": "(Yes/No, details)",
+      "icon": "🐄",
+      "type": "single",
+      "options": [
+        {
+          "code": "yes_standard_dimensions_and_configuration",
+          "label": "Yes (standard dimensions and configuration)"
+        },
+        {
+          "code": "no",
+          "label": "No"
+        },
+        {
+          "code": "other",
+          "label": "Other",
+          "other": true
+        },
+        {
+          "code": "not_applicable_eg_co_location",
+          "label": "Not applicable (eg: Co-location)"
+        }
+      ],
+      "fields": [
+        {
+          "code": "Comments",
+          "label": "Comments (eg: Specify non standard size)",
+          "type": "text"
+        }
+      ]
+    },
+    "demolition": {
+      "label": "Demolition / Disposal",
+      "section": "works",
+      "hint": "(Select one, optional details)",
+      "icon": "♻️",
+      "type": "multi",
+      "options": [
+        {
+          "group": "Standard",
+          "options": [
+            {
+              "code": "complete_demolition_and_or_disposal_nothing_returned_to_hub",
+              "label": "Complete demolition and/or disposal (nothing returned to HUB)"
+            }
+          ]
+        },
+        {
+          "group": "Complex",
+          "options": [
+            {
+              "code": "all_parts_to_be_returned_to_hub",
+              "label": "ALL Parts to be returned to HUB"
+            },
+            {
+              "code": "lpu_to_be_returned_to_hub",
+              "label": "LPU to be returned to HUB"
+            },
+            {
+              "code": "tbrg_to_be_returned_to_the_hub",
+              "label": "TBRG to be returned to the HUB"
+            },
+            {
+              "code": "modem_to_be_returned_to_hub",
+              "label": "Modem to be returned to HUB"
+            },
+            {
+              "code": "water_level_sensor_to_be_returned_to_hub",
+              "label": "Water level sensor to be returned to HUB"
+            },
+            {
+              "code": "other",
+              "label": "Other:",
+              "other": true
+            }
+          ]
+        }
+      ]
+    },
+    "coords": {
+      "label": "Instrumentation Coordinates",
+      "section": "location",
+      "hint": "(Existing)",
+      "icon": "🚩",
+      "type": "none",
+      "fields": [
+        {
+          "code": "existing",
+          "label": "Existing",
+          "type": "coord"
+        }
+      ],
+      "pin": {
+        "field": "existing",
+        "label": "Current location",
+        "colour": "red",
+        "anchor": true
+      },
+      "prefill": {
+        "field": "existing",
+        "from": "station.position"
+      }
+    },
+    "relocation": {
+      "label": "Relocation",
+      "section": "location",
+      "icon": "🚩🚩",
+      "type": "single",
+      "options": [
+        {
+          "code": "yes",
+          "label": "Yes"
+        },
+        {
+          "code": "no",
+          "label": "No"
+        }
+      ],
+      "fields": [
+        {
+          "code": "distance",
+          "label": "Distance",
+          "type": "text",
+          "unit": "m",
+          "showIf": {
+            "q": "relocation",
+            "is": "yes"
+          }
+        },
+        {
+          "code": "newLocation",
+          "label": "New Location (coordinates)",
+          "type": "coord",
+          "showIf": {
+            "q": "relocation",
+            "is": "yes"
+          }
+        }
+      ],
+      "notes": [
+        {
+          "text": "Relocation requires EPS & GM Approval"
+        }
+      ],
+      "pin": {
+        "field": "newLocation",
+        "label": "Relocation site",
+        "colour": "orange",
+        "showIf": {
+          "q": "relocation",
+          "is": "yes"
+        }
+      }
+    },
+    "accessibility": {
+      "label": "Accessibility",
+      "section": "works",
+      "hint": "(Delete irrelevant options)",
+      "icon": "🚚",
+      "type": "multi",
+      "options": [
+        {
+          "group": "Weather Permitting",
+          "options": [
+            {
+              "code": "all_weather_access",
+              "label": "All weather access"
+            },
+            {
+              "code": "dry_weather_access_only",
+              "label": "Dry weather access only"
+            }
+          ]
+        },
+        {
+          "group": "Vehicles up to and including",
+          "options": [
+            {
+              "code": "concrete_truck",
+              "label": "Concrete truck"
+            },
+            {
+              "code": "flatbed_truck",
+              "label": "Flatbed truck"
+            },
+            {
+              "code": "4wd_with_tandem_trailer",
+              "label": "4WD with tandem trailer"
+            },
+            {
+              "code": "4wd_only",
+              "label": "4WD only"
+            }
+          ]
+        }
+      ]
+    },
+    "installNotes": {
+      "label": "Installation Notes",
+      "section": "notes",
+      "hint": "(Freeform section)",
+      "icon": "📝",
+      "type": "none",
+      "fields": [
+        {
+          "code": "notes",
+          "label": "Notes",
+          "type": "textarea"
+        }
+      ]
+    },
+    "remediation": {
+      "label": "Remediation / Additional Works",
+      "section": "works",
+      "hint": "(Delete irrelevant options)",
+      "icon": "👷",
+      "type": "multi",
+      "options": [
+        {
+          "code": "vendor_contractor_site_visit_required_prior_to_complex_insta",
+          "label": "Vendor/Contractor site visit required prior to complex installation"
+        },
+        {
+          "code": "vegetation",
+          "label": "Vegetation management"
+        },
+        {
+          "code": "bollards_for_site_protection",
+          "label": "Bollards for site protection"
+        },
+        {
+          "code": "data_access_to_be_provided_to_council_via_satellite_modem",
+          "label": "Data access to be provided to Council via satellite modem"
+        },
+        {
+          "code": "track",
+          "label": "Track / stairs required to access orifice / gauge boards"
+        }
+      ],
+      "fields": [
+        {
+          "code": "other",
+          "label": "Other",
+          "type": "text"
+        }
+      ]
+    },
+    "nonStandard": {
+      "label": "Non-Standard options",
+      "section": "works",
+      "hint": "(Please avoid if possible)",
+      "icon": "⭐",
+      "type": "single",
+      "options": [
+        {
+          "code": "yes",
+          "label": "Yes"
+        },
+        {
+          "code": "na",
+          "label": "NA"
+        }
+      ],
+      "fields": [
+        {
+          "code": "detail",
+          "label": "If chosen: drawings, part numbers, exact locations etc. (must be provided)",
+          "type": "textarea"
+        }
+      ]
+    },
+    "rainfallLocation": {
+      "label": "Rainfall Mounted Location",
+      "section": "sensors",
+      "hint": "(Details / NA)",
+      "icon": "☔",
+      "type": "none",
+      "fields": [
+        {
+          "code": "detail",
+          "label": "Details",
+          "type": "text"
+        }
+      ]
+    },
+    "benchmark": {
+      "label": "Benchmark",
+      "section": "sensors",
+      "icon": "🔩",
+      "type": "single",
+      "options": [
+        {
+          "code": "install_new_bm_surveyed_in_ahd_and_lgh_specify_location",
+          "label": "Install new BM, surveyed in AHD & LGH (specify location)"
+        },
+        {
+          "code": "not_required",
+          "label": "Not required"
+        }
+      ],
+      "hintFrom": "map.nearestBenchmark"
+    },
+    "photos": {
+      "label": "Site Assessment Photos",
+      "section": "notes",
+      "icon": "📷",
+      "type": "none",
+      "fields": [
+        {
+          "code": "link",
+          "label": "Insert link & confirm access",
+          "type": "text"
+        }
+      ]
+    },
+    "currentComms": {
+      "label": "Current Comms",
+      "section": "comms",
+      "icon": "📡",
+      "type": "single",
+      "hint": "(What is on site now — filled from Flood-Net where it can tell; confirm)",
+      "options": [
+        {
+          "code": "errts",
+          "label": "ERRTS / ALERT VHF radio",
+          "tags": [
+            "errts"
+          ]
+        },
+        {
+          "code": "cellular",
+          "label": "IP logger – cellular",
+          "tags": [
+            "cellular"
+          ]
+        },
+        {
+          "code": "satellite",
+          "label": "IP logger – satellite",
+          "tags": [
+            "satellite"
+          ]
+        },
+        {
+          "code": "unknown",
+          "label": "Not known"
+        }
+      ],
+      "prefill": {
+        "from": "station.commsGuess"
+      },
+      "word": false
+    },
+    "acmaLicence": {
+      "label": "ACMA Licence",
+      "section": "comms",
+      "icon": "📜",
+      "type": "single",
+      "hint": "(Licence number if the site already has one)",
+      "options": [
+        {
+          "code": "reuse",
+          "label": "Existing licence – reuse"
+        },
+        {
+          "code": "transfer",
+          "label": "Existing licence held by council / third party – transfer to Bureau"
+        },
+        {
+          "code": "new",
+          "label": "New licence required – network assessment"
+        },
+        {
+          "code": "na",
+          "label": "NA"
+        }
+      ],
+      "fields": [
+        {
+          "code": "licenceNo",
+          "label": "Licence number",
+          "type": "licence",
+          "placeholder": "e.g. 1441013/1",
+          "showIf": {
+            "q": "acmaLicence",
+            "in": [
+              "reuse",
+              "transfer"
+            ]
+          }
+        },
+        {
+          "code": "holder",
+          "label": "Licence holder",
+          "type": "text",
+          "placeholder": "e.g. the council",
+          "showIf": {
+            "q": "acmaLicence",
+            "is": "transfer"
+          }
+        }
+      ],
+      "prefill": {
+        "field": "licenceNo",
+        "from": "station.acmaLicence"
+      },
+      "defaultWhen": [
+        {
+          "when": {
+            "any": [
+              {
+                "q": "comms",
+                "tag": "cellular"
+              },
+              {
+                "q": "comms",
+                "tag": "satellite"
+              }
+            ]
+          },
+          "value": "na"
+        }
+      ],
+      "hintFrom": "station.acma"
+    },
+    "vegetation": {
+      "label": "Vegetation Management",
+      "section": "works",
+      "icon": "🌳",
+      "type": "multi",
+      "hint": "(Pick all that apply; mark trees and the clearance circle on the map)",
+      "options": [
+        {
+          "code": "full_removal",
+          "label": "Full tree removal"
+        },
+        {
+          "code": "trim",
+          "label": "Tree trimming / partial removal"
+        },
+        {
+          "code": "weeds",
+          "label": "Overgrowth / weed removal"
+        }
+      ],
+      "fields": [
+        {
+          "code": "radius",
+          "label": "Clearance radius",
+          "type": "number",
+          "unit": "m",
+          "placeholder": "e.g. 15"
+        },
+        {
+          "code": "detail",
+          "label": "Detail (only if the picks above don’t cover it)",
+          "type": "text"
+        }
+      ],
+      "showIf": {
+        "any": [
+          {
+            "q": "remediation",
+            "has": "vegetation"
+          },
+          {
+            "q": "complexity",
+            "tag": "vegetation"
+          }
+        ]
+      },
+      "mapDraw": {
+        "kind": "circle",
+        "field": "radius",
+        "label": "Vegetation clearance"
+      }
+    },
+    "accessTrack": {
+      "label": "Access Track / Stairs",
+      "section": "works",
+      "icon": "🥾",
+      "type": "single",
+      "hint": "(Draw the route on the map — its length fills in)",
+      "options": [
+        {
+          "code": "track",
+          "label": "Track"
+        },
+        {
+          "code": "stairs",
+          "label": "Stairs"
+        },
+        {
+          "code": "both",
+          "label": "Track and stairs"
+        }
+      ],
+      "fields": [
+        {
+          "code": "to",
+          "label": "Access to",
+          "type": "text",
+          "placeholder": "e.g. orifice and gauge boards"
+        },
+        {
+          "code": "length",
+          "label": "Length",
+          "type": "number",
+          "unit": "m"
+        }
+      ],
+      "showIf": {
+        "q": "remediation",
+        "has": "track"
+      },
+      "mapDraw": {
+        "kind": "line",
+        "field": "length",
+        "label": "Access track"
+      }
+    },
+    "repeaterRadio": {
+      "label": "Repeater Radio",
+      "section": "comms",
+      "icon": "📻",
+      "type": "none",
+      "hint": "(From Flood-Net where recorded — confirm)",
+      "fields": [
+        {
+          "code": "rx",
+          "label": "RX frequency",
+          "type": "text",
+          "unit": "MHz"
+        },
+        {
+          "code": "tx",
+          "label": "TX frequency",
+          "type": "text",
+          "unit": "MHz"
+        },
+        {
+          "code": "passRanges",
+          "label": "ALERT IDs passed",
+          "type": "text"
+        },
+        {
+          "code": "owner",
+          "label": "Current owner",
+          "type": "text"
+        }
+      ],
+      "prefill": {
+        "from": "station.repeater"
+      }
+    },
+    "stationType": {
+      "label": "Station Type",
+      "section": "station",
+      "hint": "(Choose relevant option)",
+      "icon": "🌧️",
+      "type": "single",
+      "options": [
+        {
+          "code": "rain_gauge",
+          "label": "Rain Gauge"
+        }
+      ]
+    },
+    "complexity": {
+      "label": "Complexity, Scope & Type",
+      "section": "station",
+      "hint": "(Choose 1 option)",
+      "icon": "🧩",
+      "type": "multi",
+      "options": [
+        {
+          "group": "High Complexity",
+          "options": [
+            {
+              "code": "high_complexity_bespoke_rebuild",
+              "label": "High Complexity Bespoke Rebuild"
+            }
+          ]
+        },
+        {
+          "group": "Moderate Complexity",
+          "options": [
+            {
+              "code": "moderate_complexity_total_rebuild_type_1",
+              "label": "Moderate Complexity Total Rebuild – Type 1"
+            },
+            {
+              "code": "moderate_complexity_total_rebuild_type_2",
+              "label": "Moderate Complexity Total Rebuild – Type 2"
+            },
+            {
+              "code": "moderate_complexity_total_rebuild_type_3",
+              "label": "Moderate Complexity Total Rebuild – Type 3"
+            },
+            {
+              "code": "moderate_complexity_cabinet_and_equipment_replacement",
+              "label": "Moderate Complexity – Cabinet & Equipment Replacement"
+            },
+            {
+              "code": "moderate_complexity_platform_replacement",
+              "label": "Moderate Complexity Platform Replacement"
+            }
+          ]
+        },
+        {
+          "group": "Low Complexity",
+          "options": [
+            {
+              "code": "low_complexity_remediation_instrumentation_only",
+              "label": "Low Complexity Remediation – Instrumentation Only"
+            },
+            {
+              "code": "low_complexity_remediation_raintree_retrofit",
+              "label": "Low Complexity Remediation – Raintree Retrofit"
+            },
+            {
+              "code": "low_complexity_remediation_raintree_retrofit_vegetation_mana",
+              "label": "Low Complexity Remediation – Raintree Retrofit – Vegetation Management",
+              "tags": [
+                "vegetation"
+              ]
+            },
+            {
+              "code": "low_complexity_remediation_co_located_equipment_upgrade",
+              "label": "Low Complexity Remediation - Co-Located Equipment Upgrade"
+            },
+            {
+              "code": "low_complexity_remediation_co_located_equipment_upgrade_dlgw",
+              "label": "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter"
+            }
+          ]
+        },
+        {
+          "group": "Other",
+          "options": [
+            {
+              "code": "vegetation_management",
+              "label": "Vegetation Management",
+              "tags": [
+                "vegetation"
+              ]
+            },
+            {
+              "code": "acquire_and_decommission",
+              "label": "Acquire & Decommission"
+            },
+            {
+              "code": "acquire_and_relocate",
+              "label": "Acquire & Relocate"
+            },
+            {
+              "code": "acquired_no_remediation_required",
+              "label": "Acquired – No Remediation Required"
+            },
+            {
+              "code": "do_not_acquire",
+              "label": "Do Not Acquire"
+            }
+          ]
+        }
+      ]
+    },
+    "infraOptions": {
+      "label": "Infrastructure options",
+      "section": "station",
+      "icon": "⚙️",
+      "type": "single",
+      "options": [
+        {
+          "code": "full_footing",
+          "label": "Full footing"
+        },
+        {
+          "code": "reduced_footing",
+          "label": "Reduced footing"
+        }
+      ]
+    },
+    "riverCoords": {
+      "label": "River Line Termination Coordinates",
+      "section": "location",
+      "icon": "📍",
+      "type": "none",
+      "fields": [
+        {
+          "code": "detail",
+          "label": "Coordinates",
+          "type": "coord"
+        }
+      ],
+      "pin": {
+        "field": "detail",
+        "label": "River line termination",
+        "colour": "blue"
+      }
+    },
+    "riverRelocation": {
+      "label": "River Line Termination relocation",
+      "section": "location",
+      "icon": "📍📍",
+      "type": "none",
+      "fields": [
+        {
+          "code": "newRiver",
+          "label": "New Coordinates",
+          "type": "coord"
+        },
+        {
+          "code": "newRiverHeight",
+          "label": "Relative height change in m with tolerance and datum (discuss whether and why new orifice is to be higher, no change, or lower)",
+          "type": "textarea"
+        }
+      ],
+      "pin": {
+        "field": "newRiver",
+        "label": "River line relocation",
+        "colour": "purple"
+      }
+    },
+    "sensorOption": {
+      "label": "Sensor Option",
+      "section": "sensors",
+      "hint": "(Choose 1 option, details)",
+      "icon": "💧",
+      "type": "single",
+      "options": [
+        {
+          "code": "hs40_define_range",
+          "label": "HS40 (define range)"
+        },
+        {
+          "code": "amazon_bubbler_define_psi_pressure",
+          "label": "Amazon Bubbler (define psi pressure)"
+        },
+        {
+          "code": "vega_c23",
+          "label": "Vega C23"
+        }
+      ]
+    },
+    "sensorRange": {
+      "label": "Range",
+      "section": "sensors",
+      "icon": "📈",
+      "type": "single",
+      "options": [
+        {
+          "code": "na_radar",
+          "label": "NA (radar)"
+        },
+        {
+          "code": "0_20m",
+          "label": "0-20m"
+        },
+        {
+          "code": "0_30psi_20m",
+          "label": "0-30psi (20m)"
+        },
+        {
+          "code": "other_specify",
+          "label": "Other (specify)",
+          "other": true
+        }
+      ]
+    },
+    "terminationType": {
+      "label": "River line termination type",
+      "section": "sensors",
+      "icon": "｡˚○",
+      "type": "single",
+      "options": [
+        {
+          "code": "gco",
+          "label": "GCO"
+        },
+        {
+          "code": "bu07",
+          "label": "BU07"
+        }
+      ]
+    },
+    "gaugeBoards": {
+      "label": "Gauge Boards",
+      "section": "sensors",
+      "hint": "(Yes/No, add details)",
+      "icon": "📏",
+      "type": "single",
+      "options": [
+        {
+          "code": "yes",
+          "label": "Yes"
+        },
+        {
+          "code": "no",
+          "label": "No"
+        },
+        {
+          "code": "tba",
+          "label": "TBA"
+        }
+      ],
+      "fields": [
+        {
+          "code": "quantity",
+          "label": "Quantity",
+          "type": "text"
+        },
+        {
+          "code": "comment",
+          "label": "Comment",
+          "type": "text"
+        }
+      ]
+    },
+    "dipPoint": {
+      "label": "Dip point",
+      "section": "sensors",
+      "hint": "(eg. radars)",
+      "icon": "📐",
+      "type": "single",
+      "options": [
+        {
+          "code": "yes",
+          "label": "Yes"
+        },
+        {
+          "code": "no",
+          "label": "No"
+        }
+      ],
+      "fields": [
+        {
+          "code": "comment",
+          "label": "Comments",
+          "type": "textarea"
+        }
+      ]
+    },
+    "tbrgLocation": {
+      "label": "TBRG Location",
+      "section": "location",
+      "hint": "(if separated from enclosure)",
+      "icon": "☔",
+      "type": "single",
+      "options": [
+        {
+          "code": "tbrg_cabinet_mounted",
+          "label": "TBRG cabinet mounted"
+        },
+        {
+          "code": "tbrg_remote_from_cabinet",
+          "label": "TBRG remote from cabinet"
+        }
+      ],
+      "fields": [
+        {
+          "code": "tbrg",
+          "label": "TBRG coordinates",
+          "type": "coord"
+        }
+      ],
+      "notes": [
+        {
+          "text": "Leave coordinates blank if not applicable"
+        }
+      ],
+      "pin": {
+        "field": "tbrg",
+        "label": "TBRG Location",
+        "colour": "green"
+      }
+    },
+    "infraType": {
+      "label": "Infra Type",
+      "section": "comms",
+      "hint": "(Choose 1 option)",
+      "icon": "🚪",
+      "type": "single",
+      "options": [
+        {
+          "code": "rack_mount",
+          "label": "Rack Mount"
+        },
+        {
+          "code": "outdoor_cabinet",
+          "label": "Outdoor Cabinet"
+        }
+      ]
+    },
+    "mast": {
+      "label": "Mast",
+      "section": "comms",
+      "hint": "(Choose relevant option)",
+      "icon": "🏗",
+      "type": "single",
+      "options": [
+        {
+          "code": "8m_tilt_mast",
+          "label": "8m (tilt mast)"
+        },
+        {
+          "code": "3_m_swivel_pole_functional_height_4m",
+          "label": "\"3\"m (swivel pole, functional height 4m)"
+        },
+        {
+          "code": "cabinet_mount",
+          "label": "Cabinet mount"
+        }
+      ]
+    },
+    "backhaul": {
+      "label": "Backhaul Options",
+      "section": "comms",
+      "hint": "(Choose 1 option)",
+      "icon": "🛰",
+      "type": "single",
+      "options": [
+        {
+          "code": "bureau_wan",
+          "label": "Bureau WAN"
+        },
+        {
+          "code": "cellular_modem",
+          "label": "Cellular Modem"
+        }
+      ]
+    },
+    "bgan": {
+      "label": "Optional BGAN Backup",
+      "section": "comms",
+      "hint": "(Yes / No)",
+      "icon": "🌐",
+      "type": "single",
+      "options": [
+        {
+          "code": "yes",
+          "label": "Yes"
+        },
+        {
+          "code": "no",
+          "label": "No"
+        }
+      ]
+    },
+    "cavityFilters": {
+      "label": "Cavity Filters",
+      "section": "comms",
+      "hint": "(Add relevant detail)",
+      "icon": "🖥",
+      "type": "none",
+      "fields": [
+        {
+          "code": "bandpass",
+          "label": "Bandpass",
+          "type": "text"
+        },
+        {
+          "code": "frequency",
+          "label": "Frequency",
+          "type": "text"
+        }
+      ]
+    }
+  },
+  "templates": [
+    {
+      "id": "rainfall",
+      "label": "Rainfall",
+      "title": "Rainfall Table",
+      "questions": [
+        "stationType",
+        "complexity",
+        "infraOptions",
+        "coords",
+        "relocation",
+        "currentComms",
+        "comms",
+        "commsChange",
+        "fadeMargin",
+        "txPower",
+        "frequency",
+        "acmaLicence",
+        "alertFormat",
+        "stockFence",
+        "demolition",
+        "accessibility",
+        "nonStandard",
+        "remediation",
+        "vegetation",
+        "accessTrack",
+        "installNotes",
+        "photos"
+      ],
+      "suggest": {
+        "kinds": [
+          "rain"
+        ],
+        "notKinds": [
+          "river"
+        ]
+      }
+    },
+    {
+      "id": "waterlevel",
+      "label": "Water Level",
+      "title": "Water Level (+/- Rainfall) Table",
+      "questions": [
+        {
+          "q": "stationType",
+          "icon": "🌊",
+          "options": [
+            {
+              "code": "rain_gauge_water_level",
+              "label": "Rain Gauge / Water Level"
+            },
+            {
+              "code": "rain_gauge_water_level_repeater",
+              "label": "Rain Gauge / Water Level / Repeater"
+            },
+            {
+              "code": "rain_gauge_water_level_reservoir",
+              "label": "Rain Gauge / Water Level / Reservoir"
+            },
+            {
+              "code": "rain_gauge_water_level_tide",
+              "label": "Rain Gauge / Water Level / Tide"
+            },
+            {
+              "code": "water_level",
+              "label": "Water Level"
+            },
+            {
+              "code": "water_level_reservoir",
+              "label": "Water Level / Reservoir"
+            },
+            {
+              "code": "water_level_tide_gauge",
+              "label": "Water Level / Tide Gauge"
+            },
+            {
+              "code": "base_station",
+              "label": "Base Station"
+            }
+          ]
+        },
+        {
+          "q": "complexity",
+          "options": [
+            {
+              "group": "High Complexity",
+              "options": [
+                {
+                  "code": "high_complexity_total_rebuild_type_1",
+                  "label": "High Complexity Total Rebuild – Type 1"
+                },
+                {
+                  "code": "high_complexity_total_rebuild_type_2",
+                  "label": "High Complexity Total Rebuild – Type 2"
+                },
+                {
+                  "code": "high_complexity_total_rebuild_type_3",
+                  "label": "High Complexity Total Rebuild – Type 3"
+                },
+                {
+                  "code": "high_complexity_total_rebuild_type_4",
+                  "label": "High Complexity Total Rebuild – Type 4"
+                },
+                {
+                  "code": "high_complexity_total_rebuild_type_5a_integrated",
+                  "label": "High Complexity Total Rebuild – Type 5A (Integrated)"
+                },
+                {
+                  "code": "high_complexity_total_rebuild_type_5b_remote",
+                  "label": "High Complexity Total Rebuild – Type 5B (Remote)"
+                },
+                {
+                  "code": "high_complexity_bespoke_rebuild",
+                  "label": "High Complexity Bespoke Rebuild"
+                }
+              ]
+            },
+            {
+              "group": "Moderate Complexity",
+              "options": [
+                {
+                  "code": "moderate_complexity_total_rebuild_type_1",
+                  "label": "Moderate Complexity Total Rebuild – Type 1"
+                },
+                {
+                  "code": "moderate_complexity_total_rebuild_type_2",
+                  "label": "Moderate Complexity Total Rebuild – Type 2"
+                },
+                {
+                  "code": "moderate_complexity_total_rebuild_type_3",
+                  "label": "Moderate Complexity Total Rebuild – Type 3"
+                },
+                {
+                  "code": "moderate_complexity_bespoke_upgrade",
+                  "label": "Moderate Complexity Bespoke Upgrade"
+                },
+                {
+                  "code": "moderate_complexity_cabinet_and_equipment_replacement",
+                  "label": "Moderate Complexity – Cabinet & Equipment Replacement"
+                },
+                {
+                  "code": "moderate_complexity_platform_replacement",
+                  "label": "Moderate Complexity Platform Replacement"
+                }
+              ]
+            },
+            {
+              "group": "Low Complexity",
+              "options": [
+                {
+                  "code": "low_complexity_remediation_instrumentation_only",
+                  "label": "Low Complexity Remediation – Instrumentation Only"
+                },
+                {
+                  "code": "low_complexity_remediation_co_located_equipment_upgrade",
+                  "label": "Low Complexity Remediation - Co-Located Equipment Upgrade"
+                },
+                {
+                  "code": "low_complexity_type_4",
+                  "label": "Low Complexity – Type 4"
+                }
+              ]
+            },
+            {
+              "group": "Other",
+              "options": [
+                {
+                  "code": "vegetation_management",
+                  "label": "Vegetation Management",
+                  "tags": [
+                    "vegetation"
+                  ]
+                },
+                {
+                  "code": "acquire_and_decommission",
+                  "label": "Acquire & Decommission"
+                },
+                {
+                  "code": "acquire_and_relocate",
+                  "label": "Acquire & Relocate"
+                },
+                {
+                  "code": "acquired_no_remediation_required",
+                  "label": "Acquired – No Remediation Required"
+                },
+                {
+                  "code": "do_not_acquire",
+                  "label": "Do Not Acquire"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "q": "infraOptions",
+          "options": [
+            {
+              "code": "standard_enclosure_fixtures_and_fittings",
+              "label": "Standard enclosure, fixtures, and fittings."
+            },
+            {
+              "code": "stainless_steel_enclosure_capillary_conduit_fixtures_and_fit",
+              "label": "Stainless steel enclosure, capillary conduit, fixtures, and fittings."
+            }
+          ]
+        },
+        "coords",
+        "relocation",
+        "riverCoords",
+        "riverRelocation",
+        "sensorOption",
+        "sensorRange",
+        "terminationType",
+        "gaugeBoards",
+        "benchmark",
+        "dipPoint",
+        "currentComms",
+        "comms",
+        "commsChange",
+        "fadeMargin",
+        "txPower",
+        "frequency",
+        "acmaLicence",
+        "alertFormat",
+        "stockFence",
+        "demolition",
+        "accessibility",
+        "remediation",
+        "vegetation",
+        "accessTrack",
+        "nonStandard",
+        "installNotes",
+        "photos"
+      ],
+      "suggest": {
+        "kinds": [
+          "river"
+        ]
+      },
+      "waterLevel": true
+    },
+    {
+      "id": "colocated",
+      "label": "Co-located (DLGWV)",
+      "title": "Water Level (+/- Rainfall) Table",
+      "questions": [
+        {
+          "q": "stationType",
+          "type": "multi",
+          "icon": "🌊",
+          "options": [
+            {
+              "group": "Rain Gauge",
+              "options": [
+                {
+                  "code": "bureau_owned_tbrg",
+                  "label": "Bureau owned TBRG"
+                },
+                {
+                  "code": "consolidated_rainfall_dlgwv_owned_tbrg",
+                  "label": "Consolidated rainfall (DLGWV owned TBRG)"
+                }
+              ]
+            },
+            {
+              "group": "Water Level",
+              "options": [
+                {
+                  "code": "bureau_owned_water_level_sensor",
+                  "label": "Bureau owned water level sensor"
+                },
+                {
+                  "code": "consolidated_water_level_dlgwv_owned_wl_sensor",
+                  "label": "Consolidated water level (DLGWV owned WL Sensor)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "q": "complexity",
+          "options": [
+            {
+              "code": "low_complexity_remediation_co_located_equipment_upgrade_eg_d",
+              "label": "Low Complexity Remediation - Co-Located Equipment Upgrade – (eg: DLGWV)"
+            },
+            {
+              "code": "plus_tbrg_replacement",
+              "label": "Plus TBRG replacement"
+            },
+            {
+              "code": "vegetation_management",
+              "label": "Vegetation Management",
+              "tags": [
+                "vegetation"
+              ]
+            },
+            {
+              "code": "acquire_and_decommission",
+              "label": "Acquire & Decommission"
+            },
+            {
+              "code": "acquire_and_relocate",
+              "label": "Acquire & Relocate"
+            },
+            {
+              "code": "acquired_no_remediation_required",
+              "label": "Acquired – No Remediation Required"
+            },
+            {
+              "code": "do_not_acquire",
+              "label": "Do Not Acquire"
+            },
+            {
+              "code": "na",
+              "label": "NA"
+            }
+          ]
+        },
+        "coords",
+        "relocation",
+        {
+          "q": "riverCoords",
+          "notes": [
+            {
+              "text": "Leave blank if not applicable"
+            }
+          ]
+        },
+        {
+          "q": "riverRelocation",
+          "hint": "Leave blank if not applicable"
+        },
+        {
+          "q": "sensorOption",
+          "options": [
+            {
+              "code": "hs40_define_range",
+              "label": "HS40 (define range)"
+            },
+            {
+              "code": "amazon_bubbler_define_psi_pressure",
+              "label": "Amazon Bubbler (define psi pressure)"
+            },
+            {
+              "code": "vega_c23",
+              "label": "Vega C23"
+            },
+            {
+              "code": "not_applicable_eg_co_location",
+              "label": "Not applicable (eg: Co-location)"
+            }
+          ]
+        },
+        {
+          "q": "sensorRange",
+          "options": [
+            {
+              "code": "na_radar",
+              "label": "NA (radar)"
+            },
+            {
+              "code": "0_20m",
+              "label": "0-20m"
+            },
+            {
+              "code": "0_30psi_20m",
+              "label": "0-30psi (20m)"
+            },
+            {
+              "code": "other_specify",
+              "label": "Other (specify)",
+              "other": true
+            },
+            {
+              "code": "not_applicable_eg_co_location",
+              "label": "Not applicable (eg: Co-location)"
+            }
+          ]
+        },
+        {
+          "q": "terminationType",
+          "options": [
+            {
+              "code": "gco",
+              "label": "GCO"
+            },
+            {
+              "code": "bu07",
+              "label": "BU07"
+            },
+            {
+              "code": "not_applicable_eg_co_location",
+              "label": "Not applicable (eg: Co-location)"
+            }
+          ]
+        },
+        "gaugeBoards",
+        "benchmark",
+        {
+          "q": "dipPoint",
+          "options": [
+            {
+              "code": "yes",
+              "label": "Yes"
+            },
+            {
+              "code": "no",
+              "label": "No"
+            },
+            {
+              "code": "not_applicable_eg_co_location",
+              "label": "Not applicable (eg: Co-location)"
+            }
+          ]
+        },
+        "currentComms",
+        "comms",
+        "commsChange",
+        "fadeMargin",
+        "txPower",
+        "frequency",
+        "acmaLicence",
+        "alertFormat",
+        "stockFence",
+        "demolition",
+        "accessibility",
+        "remediation",
+        "vegetation",
+        "accessTrack",
+        "nonStandard",
+        {
+          "q": "installNotes",
+          "hint": "adjust as required",
+          "fields": [
+            {
+              "code": "notes",
+              "label": "Notes",
+              "type": "textarea",
+              "default": "Notes:  \n\n1. Solar, satellite antenna mounting \n- Require a 40NB pipe with attached, Pipe is to be mounted on existing rail at top of stairs.  \n- Antenna bracket/pipe to be positioned on the railing front corner to ensure access is not impeded.  \n- RFI Symmetry Solar panel pole mount bracket. Telco TF1SS Stainless Parallel Antenna brackets x 2 Ensure length of pipe places antenna close to roof height.  \n- Swivel coupler forged clamps x 2  \n\n2. TBRG mounting  \n- Separate mounting Pipe is to be mounted on existing rail at top of stairs.  \n- New TBRG to be installed - Kister TB3 \n- 60 - od - 50 nb - threaded pipe \n- Flange threaded with TB334 mounting bracket Ensure length of pipe places TB3 above roof height.  \n- Swivel coupler forged clamps x 2 Existing RIMCO TBRG to be removed \n\n3. Cabling installation notes  \n- 25mm flex conduit - UV stable Stainless  \n- cable ties along conduit to inside enclosure Cable gland for conduit entry to hut.  \n- Consideration for junction box to combine antenna and TBRG conduits into 1 "
+            }
+          ]
+        },
+        "photos"
+      ],
+      "suggest": {
+        "ownerMatches": "DLGWV|Local Government, Water|Water and Volunteers"
+      },
+      "waterLevel": true
+    },
+    {
+      "id": "repeater",
+      "label": "Repeater / Gateway",
+      "title": "Repeater / Gateway Table",
+      "questions": [
+        {
+          "q": "stationType",
+          "hint": "(Delete irrelevant options)",
+          "icon": "🗼",
+          "options": [
+            {
+              "code": "rain_gauge_repeater",
+              "label": "Rain Gauge / Repeater"
+            },
+            {
+              "code": "rain_gauge_water_level_repeater",
+              "label": "Rain Gauge / Water Level / Repeater"
+            },
+            {
+              "code": "rain_gauge_water_level_reservoir",
+              "label": "Rain Gauge / Water Level / Reservoir"
+            },
+            {
+              "code": "rain_gauge_water_level_tide",
+              "label": "Rain Gauge / Water Level / Tide"
+            },
+            {
+              "code": "water_level_reservoir",
+              "label": "Water Level / Reservoir"
+            },
+            {
+              "code": "water_level_tide_gauge",
+              "label": "Water Level / Tide Gauge"
+            },
+            {
+              "code": "repeater",
+              "label": "Repeater"
+            },
+            {
+              "code": "gateway",
+              "label": "Gateway"
+            },
+            {
+              "code": "base_station",
+              "label": "Base Station"
+            }
+          ]
+        },
+        {
+          "q": "complexity",
+          "label": "Complexity & Scope",
+          "options": [
+            {
+              "group": "High Complexity",
+              "options": [
+                {
+                  "code": "high_complexity_total_rebuild_type_5a",
+                  "label": "High Complexity Total Rebuild – Type 5A"
+                },
+                {
+                  "code": "high_complexity_total_rebuild_type_5b",
+                  "label": "High Complexity Total Rebuild – Type 5B"
+                },
+                {
+                  "code": "high_complexity_bespoke_rebuild",
+                  "label": "High Complexity Bespoke Rebuild"
+                },
+                {
+                  "code": "high_complexity_total_rebuild_repeater",
+                  "label": "High Complexity Total Rebuild – Repeater"
+                }
+              ]
+            },
+            {
+              "group": "Moderate Complexity",
+              "options": [
+                {
+                  "code": "moderate_complexity_bespoke_upgrade",
+                  "label": "Moderate Complexity Bespoke Upgrade"
+                },
+                {
+                  "code": "moderate_complexity_cabinet_and_equipment_replacement",
+                  "label": "Moderate Complexity – Cabinet & Equipment Replacement"
+                },
+                {
+                  "code": "moderate_complexity_platform_replacement",
+                  "label": "Moderate Complexity Platform Replacement"
+                }
+              ]
+            },
+            {
+              "group": "Low Complexity",
+              "options": [
+                {
+                  "code": "low_complexity_remediation_instrumentation_only",
+                  "label": "Low Complexity Remediation – Instrumentation Only"
+                },
+                {
+                  "code": "low_complexity_remediation_co_located_equipment_upgrade",
+                  "label": "Low Complexity Remediation - Co-Located Equipment Upgrade"
+                },
+                {
+                  "code": "low_complexity_remediation_co_located_equipment_upgrade_dlgw",
+                  "label": "Low Complexity Remediation - Co-Located Equipment Upgrade – DLGWV - Signal Splitter"
+                }
+              ]
+            },
+            {
+              "group": "Other",
+              "options": [
+                {
+                  "code": "vegetation_management",
+                  "label": "Vegetation Management",
+                  "tags": [
+                    "vegetation"
+                  ]
+                },
+                {
+                  "code": "acquire_and_decommission",
+                  "label": "Acquire & Decommission"
+                },
+                {
+                  "code": "acquire_and_relocate",
+                  "label": "Acquire & Relocate"
+                },
+                {
+                  "code": "acquired_no_remediation_required",
+                  "label": "Acquired – No Remediation Required"
+                },
+                {
+                  "code": "do_not_acquire",
+                  "label": "Do Not Acquire"
+                }
+              ]
+            }
+          ]
+        },
+        "coords",
+        "relocation",
+        "tbrgLocation",
+        "infraType",
+        "mast",
+        "backhaul",
+        "bgan",
+        "cavityFilters",
+        "repeaterRadio",
+        "fadeMargin",
+        "txPower",
+        "frequency",
+        "acmaLicence",
+        "alertFormat",
+        "remediation",
+        "vegetation",
+        "accessTrack",
+        "nonStandard",
+        "accessibility",
+        "demolition",
+        "stockFence",
+        "installNotes",
+        "photos"
+      ],
+      "suggest": {
+        "roles": [
+          "repeater",
+          "base"
+        ]
+      }
+    }
+  ],
+  "propertyServices": {
+    "title": "Property Services Instruction",
+    "note": "Property Services conducts its due diligence and secures tenure agreements based on the information provided in this Site Assessment. If there have been any changes to the coordinates since the completion date of this site assessment, you must inform Property Services (FWINLeasing@bom.gov.au) to ensure that the due diligence performed remains valid.",
+    "rows": [
+      {
+        "id": "currentCoords",
+        "kind": "coordGroup",
+        "label": "Current Co-Ordinates",
+        "coords": [
+          {
+            "key": "primary",
+            "label": "Primary (main equipment)",
+            "source": {
+              "q": "coords",
+              "field": "existing"
+            }
+          },
+          {
+            "key": "subsidiary",
+            "label": "Subsidiary (orifice line)",
+            "source": {
+              "q": "riverCoords",
+              "field": "detail"
+            }
+          }
+        ]
+      },
+      {
+        "id": "relocating",
+        "kind": "question",
+        "label": "Is the equipment being relocated?",
+        "linkedNote": "Preselected from the Relocation answer in the table above — change it here if this differs.",
+        "options": [
+          {
+            "code": "yes",
+            "label": "Yes"
+          },
+          {
+            "code": "no",
+            "label": "No"
+          }
+        ],
+        "source": {
+          "q": "relocation",
+          "field": null
+        }
+      },
+      {
+        "id": "relocationCoords",
+        "kind": "coordGroup",
+        "label": "Relocation Co-Ordinates",
+        "coords": [
+          {
+            "key": "primary",
+            "label": "Primary (main equipment)",
+            "source": {
+              "q": "relocation",
+              "field": "newLocation"
+            },
+            "default": "na"
+          },
+          {
+            "key": "orifice",
+            "label": "Orifice line termination or GCO",
+            "source": {
+              "q": "riverRelocation",
+              "field": "newRiver"
+            },
+            "default": "na"
+          },
+          {
+            "key": "raingauge",
+            "label": "Rain gauge (if not located at primary)",
+            "default": "na"
+          }
+        ]
+      },
+      {
+        "id": "turnSoil",
+        "kind": "question",
+        "label": "Does the work require the turning of soil?",
+        "required": true,
+        "options": [
+          {
+            "code": "yes",
+            "label": "Yes"
+          },
+          {
+            "code": "no",
+            "label": "No"
+          }
+        ]
+      },
+      {
+        "id": "culturalHeritage",
+        "kind": "question",
+        "label": "Cultural heritage risk from ground disturbance",
+        "options": [
+          {
+            "code": "low_existing",
+            "label": "Low – existing footing reused"
+          },
+          {
+            "code": "low_driven",
+            "label": "Low – driven poles, minimal soil disturbance"
+          },
+          {
+            "code": "medium",
+            "label": "Medium – new footings / excavation"
+          },
+          {
+            "code": "high",
+            "label": "High – trenching (e.g. a new orifice line)"
+          }
+        ]
+      },
+      {
+        "id": "bridgeAttach",
+        "kind": "question",
+        "label": "Is equipment attaching to bridge infrastructure?",
+        "options": [
+          {
+            "code": "yes",
+            "label": "Yes"
+          },
+          {
+            "code": "no",
+            "label": "No"
+          }
+        ],
+        "detail": {
+          "label": "Bridge",
+          "placeholder": "Name, structure number, who manages it",
+          "from": "map.nearestBridge"
+        }
+      },
+      {
+        "id": "wlHeader",
+        "kind": "sectionHeader",
+        "label": "Water Level site details only",
+        "waterLevelOnly": true
+      },
+      {
+        "id": "orificeReplace",
+        "kind": "question",
+        "label": "Will the orifice line be replaced?",
+        "required": true,
+        "options": [
+          {
+            "code": "yes",
+            "label": "Yes"
+          },
+          {
+            "code": "no",
+            "label": "No"
+          }
+        ],
+        "waterLevelOnly": true
+      },
+      {
+        "id": "orificeDirection",
+        "kind": "text",
+        "label": "What direction does the orifice line run from the primary equipment?",
+        "placeholder": "e.g. East-South-East",
+        "waterLevelOnly": true
+      },
+      {
+        "id": "date",
+        "kind": "date",
+        "label": "Date",
+        "auto": "forumDate"
+      },
+      {
+        "id": "psSection",
+        "kind": "sectionHeader",
+        "label": "Note to PS: Please check above if this is a DLGWV site, as they do not require PS clearances (covered under access agreement with DLGWV)."
+      }
+    ]
+  },
+  "followUps": [
+    {
+      "id": "alertIds",
+      "owner": "Hub",
+      "table": "scope",
+      "when": {
+        "q": "commsChange",
+        "tag": "to_errts"
+      },
+      "text": "New ALERT IDs needed — the {hub} rep to supply them after the forum, once checked against the IDs already in use.",
+      "doneWhen": {
+        "q": "commsChange",
+        "field": "newAlertIds",
+        "filled": true
+      }
+    },
+    {
+      "id": "acmaTransfer",
+      "owner": "Radio licensing",
+      "table": "scope",
+      "when": {
+        "q": "acmaLicence",
+        "is": "transfer"
+      },
+      "text": "Engage {f:acmaLicence.holder|the licence holder} to transfer ACMA licence {f:acmaLicence.licenceNo|(number to confirm)} to the Bureau."
+    },
+    {
+      "id": "acmaNew",
+      "owner": "Radio licensing",
+      "table": "scope",
+      "when": {
+        "q": "acmaLicence",
+        "is": "new"
+      },
+      "text": "New ACMA licence needed — network assessment and licence application."
+    },
+    {
+      "id": "vegetationScope",
+      "owner": "SoRT Administrator",
+      "table": "scope",
+      "link": "scopeOfWorks",
+      "when": {
+        "any": [
+          {
+            "q": "remediation",
+            "has": "vegetation"
+          },
+          {
+            "q": "complexity",
+            "tag": "vegetation"
+          }
+        ]
+      },
+      "text": "Complete the FWIN – ID – Scope of Works document for the vegetation management, including a detailed paragraph on its scope for the SAR."
+    },
+    {
+      "id": "trackScope",
+      "owner": "SoRT Administrator",
+      "table": "scope",
+      "link": "scopeOfWorks",
+      "when": {
+        "q": "remediation",
+        "has": "track"
+      },
+      "text": "Complete the FWIN – ID – Scope of Works document for the access track / stairs."
+    },
+    {
+      "id": "bridgeMeeting",
+      "owner": "Property Services",
+      "table": "ps",
+      "when": {
+        "ps": "bridgeAttach",
+        "is": "yes"
+      },
+      "text": "Equipment attaches to bridge infrastructure — Property Services to coordinate a meeting with the Technical Lead, OTE and ID."
+    }
+  ]
+}
