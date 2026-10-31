@@ -1,0 +1,26 @@
+# The Atlas check (https://cdomotor-g.github.io/atlas/): atlas.json is valid, and for
+# everything this repository takes from another, has that one moved on since we last
+# caught up? Opens an issue here for each entry marked drift_issue: true while it is behind, and closes it once the pin catches up.
+# The logic lives in cdomotor-g/atlas (tools/drift.mjs), shared by every repository.
+name: Atlas
+
+on:
+  push:
+    branches: [main]
+    paths: ['atlas.json', '.github/workflows/atlas.yml']
+  schedule:
+    - cron: '13 21 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  atlas:
+    uses: cdomotor-g/atlas/.github/workflows/drift.yml@main
+    permissions:
+      contents: read
+      issues: write
+    with:
+      issues: true

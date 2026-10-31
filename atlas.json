@@ -1,0 +1,136 @@
+{
+  "$schema": "https://cdomotor-g.github.io/atlas/schema/atlas.schema.json",
+  "atlas": 1,
+  "id": "sort",
+  "repo": "cdomotor-g/SoRT",
+  "name": "SoRT Scope Builder",
+  "tagline": "Builds SORT Forum remediation scope tables for field stations and copies them straight into Word.",
+  "about": "A single-page tool used at SORT Forums to click through a station's remediation scope — the questions for its station type, a Property Services table and a site map — and paste the finished tables into Word. The questions live in definitions.json in this repository, which is the source of truth: editors change them in the app and Publish to GitHub. A v2 beta runs beside v1: one flowing page that looks the station up in Flood-Net, saves sessions in the browser and puts the map on the page.",
+  "kind": "web app (static, single page)",
+  "site": "https://cdomotor-g.github.io/SoRT/",
+  "docs": {
+    "readme": "README.md",
+    "roadmap": "ROADMAP.md",
+    "agents": "CLAUDE.md",
+    "v2": "v2/README.md",
+    "tests": "tests/README.md",
+    "backups": "backups/README.md"
+  },
+  "status": {
+    "phase": "live",
+    "updated": "2026-10-31",
+    "summary": "v1 is in use at forums; the v2 beta (Flood-Net station lookup, saved sessions, the map on the page with survey marks and bridges) landed today at /SoRT/v2/ and runs beside v1 until it has been through some forums.",
+    "now": [
+      "v2 beta: try it at real forums beside v1",
+      "Property Services: the Check QLD Globe deep-link button (ROADMAP §1, still planned)"
+    ],
+    "next": [
+      "v2 cutover: one commit makes /SoRT/ open v2 and keeps v1 at /SoRT/v1/",
+      "Station picker (ROADMAP §2) — v2's Flood-Net lookup may stand in for stations.json",
+      "Load from repo also reloads stations.json (ROADMAP §3), once §2 exists"
+    ],
+    "later": [
+      "A Dataverse import keyed on v2's permanent question and option codes"
+    ],
+    "blocked": [
+      { "what": "v2 cutover waits on the owner using it at some real forums", "on": "human" }
+    ]
+  },
+  "components": [
+    {
+      "id": "scope-builder",
+      "name": "Scope Builder (v1)",
+      "what": "The live app: pick a station type, fill the rows, Copy table for Word; Manage Tables and Table Map edit the definitions in place.",
+      "paths": ["index.html"],
+      "url": "https://cdomotor-g.github.io/SoRT/",
+      "status": "live"
+    },
+    {
+      "id": "definitions",
+      "name": "Definitions (v1)",
+      "what": "Every table, row and option, read from GitHub on start; Publish to GitHub commits edits back, so its history is the audit trail and the rollback.",
+      "paths": ["definitions.json"],
+      "status": "live"
+    },
+    {
+      "id": "property-services",
+      "name": "Property Services table",
+      "what": "A second table copied into Word under the scope, pre-filled from the scope's coordinates and relocation answer, with its own editor tab.",
+      "paths": ["index.html", "definitions.json"],
+      "status": "live"
+    },
+    {
+      "id": "site-map",
+      "name": "Site Map (v1)",
+      "what": "A modal map of the table's pins over Queensland Government imagery, LiDAR contours, the road reserve and rail, with pin write-back and a picture captured for Word.",
+      "paths": ["index.html"],
+      "status": "live"
+    },
+    {
+      "id": "v2-app",
+      "name": "Scope Builder v2 (beta)",
+      "what": "One flowing page — forum, station, map, questions, Property Services, follow-ups, preview and Copy for Word — with answers saved in the browser as sessions.",
+      "paths": ["v2/index.html", "v2/app.css", "v2/js/app.js", "v2/js/form.js", "v2/js/rules.js", "v2/js/store.js", "v2/js/word.js", "v2/js/util.js"],
+      "url": "https://cdomotor-g.github.io/SoRT/v2/",
+      "status": "beta"
+    },
+    {
+      "id": "v2-definitions",
+      "name": "v2 question bank",
+      "what": "One question bank with permanent codes, four station-type templates, and conditions and follow-up rules as data; checked by the page and by a Node tool before use.",
+      "paths": ["v2/definitions.json", "v2/js/schema.js", "v2/tools/check-definitions.mjs", "v2/tools/convert-v1.mjs"],
+      "status": "beta"
+    },
+    {
+      "id": "floodnet-lookup",
+      "name": "Flood-Net station lookup",
+      "what": "Searches Flood-Net's read-only API and pre-fills name, number, ALERT IDs, frequency, current comms, repeater details and ACMA licences, marked until confirmed.",
+      "paths": ["v2/js/floodnet.js"],
+      "status": "beta"
+    },
+    {
+      "id": "v2-map",
+      "name": "v2 map",
+      "what": "The map on the page: QLD imagery, contours, road reserve and rail; survey marks from the State's control register and bridges from TMR and QLD Roads and Tracks; Flood-Net stations within 3 km.",
+      "paths": ["v2/js/map.js"],
+      "status": "beta"
+    },
+    {
+      "id": "tests",
+      "name": "Browser tests",
+      "what": "Playwright regression tests that drive the real v1 page in headless Chromium: map framing, pin write-back, Word geometry, GitHub publishing.",
+      "paths": ["tests/", ".claude/skills/verify/"],
+      "status": "live"
+    },
+    {
+      "id": "supabase-backup",
+      "name": "Retired Supabase store",
+      "what": "The last dump of the old definitions database and the script that rebuilds definitions.json from it, kept for the record.",
+      "paths": ["backups/"],
+      "status": "retired"
+    }
+  ],
+  "provides": [
+    {
+      "id": "qld-map-layers",
+      "name": "QLD Globe map layer recipes",
+      "what": "Which Queensland Government ArcGIS services and sublayers draw imagery, LiDAR contours (resolved by name), the road reserve, rail and survey marks, and how they are styled. Flood-Net's contour and survey-mark layers were ported from it.",
+      "component": "site-map",
+      "paths": ["index.html", "v2/js/map.js"]
+    }
+  ],
+  "consumes": [
+    {
+      "id": "floodnet-api",
+      "from": "flood-net",
+      "provider": "agent-api",
+      "into": "floodnet-lookup",
+      "what": "Flood-Net's public read-only agent API: station search and stations near a point, each station's dossier and record, and the ACMA licences at its site.",
+      "how": "live",
+      "url": "https://floodwarning.net/api/v1",
+      "watch": ["docs/api-changelog.json", "worker/api.js", "worker/acma.js"],
+      "since": { "date": "2026-10-31" },
+      "on_change": "Read the new docs/api-changelog.json entries; if a route or field SoRT reads changed, update v2/js/floodnet.js, bump v2's ?v= stamp and look up a station on /SoRT/v2/."
+    }
+  ]
+}
