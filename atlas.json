@@ -33,7 +33,42 @@
       "A Dataverse import keyed on v2's permanent question and option codes"
     ],
     "blocked": [
-      { "what": "v2 cutover waits on the owner using it at some real forums", "on": "human" }
+      {
+        "id": "v2-forums",
+        "what": "v2 cutover waits on the owner using it at some real forums",
+        "on": "human",
+        "kind": "time",
+        "since": "2026-10-31",
+        "holds": [
+          "v2 at the /SoRT/ address, v1 kept at /SoRT/v1/ (the cutover commit)",
+          "retiring ROADMAP §1–3, which v2 covers",
+          "deciding whether the station picker (ROADMAP §2) is still needed beside v2's Flood-Net lookup"
+        ],
+        "options": [
+          {
+            "what": "Run the next few forums on v2 at /SoRT/v2/ with v1 open in another tab, and note anything wrong as an issue. Then an agent makes the one cutover commit in v2/README.md's Cutover section (Sonnet5/Low, 20 min).",
+            "by": "human",
+            "effort": "the next 2–3 forums",
+            "pros": "the real test, with v1 a tab away",
+            "recommended": true
+          },
+          {
+            "what": "Rehearse a forum before the first real one: drive v2 in a browser through a real station end to end (Flood-Net lookup, map, Property Services, Copy for Word) with the repo's verify skill and v2/tests/e2e.cjs, and compare the Word tables with v1's for the same answers.",
+            "by": "agent",
+            "effort": "an hour",
+            "model": "Sonnet5/Med",
+            "pros": "catches what would break mid-forum",
+            "cons": "no substitute for real use"
+          },
+          {
+            "what": "Cut over now and lean on the rollback: the cutover is one commit, v1 stays at /SoRT/v1/, and reverting the commit puts v1 back.",
+            "by": "human",
+            "effort": "10 min to decide",
+            "pros": "no wait",
+            "cons": "the first real forum on v2 is the test"
+          }
+        ]
+      }
     ]
   },
   "components": [
