@@ -18,7 +18,7 @@
 
   const A = S.app = {
     defs: null, defsSource: '', defsNote: '', session: null, ctx: null, picture: null,
-    changed, hint, focusMapOn, drawOnMap, toast, newSession, openSession, refreshStation
+    changed, hint, focusMapOn, drawOnMap, toast, newSession, openSession, refreshStation, useDefs, reloadDefs
   };
 
   /* ---------------- definitions ---------------- */
@@ -35,11 +35,38 @@
         const d = await U.fetchJson(t.url, { timeoutMs: 10000, init: Object.assign({ cache: 'no-store' }, t.init || {}) });
         const chk = S.schema.check(d);
         if (chk.errors.length) { notes.push(`${t.name}'s definitions have ${chk.errors.length} error(s) (first: ${chk.errors[0]}) — not used.`); continue; }
-        A.defs = d; A.defsSource = t.name; A.defsNote = notes.join(' ');
+        A.defs = d; A.defsSource = t.name; A.defsNote = notes.join(' '); A.defsPublishedVersion = d.version;
+        // An unpublished draft from "Edit questions" wins in this browser.
+        const dr = S.editor && S.editor.draft();
+        if (dr && !S.schema.check(dr).errors.length) { A.defs = dr; A.defsSource = 'your unpublished draft'; }
         return;
       } catch (e) { notes.push(`${t.name}: ${e.message || e}`); }
     }
     throw new Error('No definitions could be loaded. ' + notes.join(' '));
+  }
+
+  // Switch to other definitions (an editor draft, or a fresh publish) in place.
+  function useDefs(defs, source) {
+    A.defs = defs; A.defsSource = source;
+    if (!S.schema.template(A.defs, A.session.template)) A.session.template = A.defs.templates[0].id;
+    rebuild(); renderAll(); renderDefsChip();
+  }
+  async function reloadDefs() {
+    try { await loadDefs(); } catch (e) { toast(e.message); return; }
+    useDefs(A.defs, A.defsSource);
+  }
+  function renderDefsChip() {
+    const chip = $('#defsChip'); if (!chip) return;
+    chip.innerHTML = '';
+    chip.appendChild(document.createTextNode(`Questions v${A.defs.version} · from ${A.defsSource} · `));
+    chip.appendChild(h('button', { type: 'button', class: 'link', onclick: () => S.editor.open(A) }, 'Edit questions'));
+    const b = $('#banner');
+    if (A.defsSource === 'your unpublished draft') {
+      b.innerHTML = ''; b.hidden = false;
+      b.appendChild(document.createTextNode('You are using your own unpublished changes to the questions. '));
+      b.appendChild(h('button', { type: 'button', class: 'link', onclick: () => S.editor.open(A) }, 'Publish or discard them'));
+    } else if (A.defsNote) { b.textContent = A.defsNote; b.hidden = false; }
+    else b.hidden = true;
   }
 
   /* ---------------- session plumbing ---------------- */
@@ -452,8 +479,7 @@
     try { await loadDefs(); }
     catch (e) { $('#bootMsg').textContent = e.message; $('#bootMsg').classList.add('error'); return; }
     $('#bootMsg').remove();
-    if (A.defsNote) { const b = $('#banner'); b.textContent = A.defsNote; b.hidden = false; }
-    $('#defsChip').textContent = `Questions v${A.defs.version} · from ${A.defsSource}`;
+    renderDefsChip();
     A.session = S.store.current() || S.store.newSession(A.defs);
     if (!S.schema.template(A.defs, A.session.template)) A.session.template = A.defs.templates[0].id;
     rebuild();

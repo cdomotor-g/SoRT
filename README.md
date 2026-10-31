@@ -1,5 +1,10 @@
 # SoRT — Forum Scope Builder
 
+> **Version 2 is in beta at [`/v2/`](https://cdomotor-g.github.io/SoRT/v2/)**
+> ([v2/README.md](v2/README.md)): one flowing page, Flood-Net lookup, the map on
+> the page, saved sessions and the playbook. This version (v1) is unchanged and
+> stays at this address until the cutover.
+
 A single-page tool for building SORT Forum remediation scope tables and copying
 them straight into Word. It has three modes:
 
