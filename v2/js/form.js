@@ -10,11 +10,12 @@
   const U = () => S.util, R = () => S.rules, sch = () => S.schema;
   const h = (...a) => U().h(...a);
 
-  const SRC_LABEL = { floodnet: 'Flood-Net', precedent: 'Precedent', map: 'Map', prefill: 'Suggested', auto: 'Auto' };
+  const SRC_LABEL = { floodnet: 'Flood-Net', precedent: 'Precedent', earlier: 'Earlier session', map: 'Map', prefill: 'Suggested', auto: 'Auto' };
   const SRC_TITLE = {
     floodnet: 'Filled in from Flood-Net. Check it, then press ✓ to keep it (or just change it).',
     precedent: 'Copied from a precedent station. Check it, then press ✓ to keep it (or just change it).',
     map: 'Taken from the map. Check it, then press ✓ to keep it (or just change it).',
+    earlier: 'Carried over from this station’s earlier session. Check it, then press ✓ to keep it (or just change it).',
     auto: 'Filled in by a rule from your other answers (e.g. NA for an IP logger). Choose another answer to override it.'
   };
   const LICENCE_RE = /^\d{4,9}\/\d{1,3}$/;
@@ -24,7 +25,7 @@
 
   function ans(code) {
     const s = app.session;
-    if (!s.answers[code]) s.answers[code] = { value: null, other: '', fields: {}, note: '' };
+    if (!s.answers[code]) s.answers[code] = { value: null, fields: {} };
     const a = s.answers[code]; a.fields = a.fields || {};
     return a;
   }
@@ -33,8 +34,10 @@
     const e = R().eff(app.ctx, q.code), a = ans(q.code);
     if (R().emptyVal(a.value) && !R().emptyVal(e.value)) a.value = U().clone(e.value);
     (q.fields || []).forEach(f => {
-      if (a.fields[f.code] === undefined && ['floodnet', 'precedent', 'map'].includes(e.fieldSrc[f.code])) a.fields[f.code] = e.fields[f.code];
+      if (a.fields[f.code] === undefined && R().PREFILL_SRCS.includes(e.fieldSrc[f.code])) a.fields[f.code] = e.fields[f.code];
     });
+    if (a.other === undefined && e.other) a.other = e.other;
+    if (a.note === undefined && e.note) a.note = e.note;
   }
 
   /* ---------------- focus keeping ---------------- */
@@ -72,9 +75,9 @@
     restoreFocus(focus);
   }
 
-  function badge(src, onConfirm) {
+  function badge(src, onConfirm, from) {
     if (!src || src === 'user' || src === 'default') return null;
-    const b = h('span', { class: `src src-${src}`, title: SRC_TITLE[src] || '' }, SRC_LABEL[src] || src);
+    const b = h('span', { class: `src src-${src}`, title: (SRC_TITLE[src] || '') + (from ? ` (From ${from}.)` : '') }, SRC_LABEL[src] || src);
     if (onConfirm && src !== 'auto') {
       b.appendChild(h('button', { type: 'button', class: 'src-ok', title: 'Keep this answer', 'aria-label': 'Keep this answer', onclick: onConfirm }, '✓'));
     }
@@ -91,7 +94,7 @@
         h('div', { class: 'q-label' }, q.label),
         q.hint ? h('div', { class: 'q-hint' }, q.hint) : null),
       h('div', { class: 'q-tools' },
-        waiting ? badge(e.src && e.src !== 'user' ? e.src : Object.values(e.fieldSrc).find(s => ['floodnet', 'precedent', 'map'].includes(s)), () => { confirmQuestion(q); app.changed(); }) : null,
+        waiting ? badge(e.src && e.src !== 'user' ? e.src : Object.values(e.fieldSrc).find(s => R().PREFILL_SRCS.includes(s)), () => { confirmQuestion(q); app.changed(); }, (app.session.prefill[q.code] || {}).from) : null,
         e.src === 'auto' ? badge('auto') : null,
         h('button', { type: 'button', class: 'q-clear', title: 'Clear this answer', onclick: () => {
           delete app.session.answers[q.code]; delete app.session.prefill[q.code]; app.changed();
@@ -135,6 +138,7 @@
       const input = h('input', { type: q.type === 'single' ? 'radio' : 'checkbox', name, value: o.code, checked, 'data-fk': `${q.code}::opt::${o.code}` });
       input.addEventListener('click', () => {
         const a = ans(q.code);
+        if (a.other === undefined && e.other) a.other = e.other;
         if (q.type === 'single') {
           // Clicking the answer already chosen by a person clears it.
           if (checked && e.src === 'user') a.value = null; else a.value = o.code;
@@ -159,7 +163,7 @@
     const fk = `${q.code}::f::${f.code}`;
     const set = v => { ans(q.code).fields[f.code] = v; };
     const ph = f.emptyText ? R().fill(app.ctx, f.emptyText) : (f.placeholder || '');
-    const common = { 'data-fk': fk, placeholder: ph, class: ['floodnet', 'precedent', 'map'].includes(src) ? 'prefilled' : null,
+    const common = { 'data-fk': fk, placeholder: ph, class: R().PREFILL_SRCS.includes(src) ? `prefilled pre-${src}` : null,
       'aria-label': `${q.label} — ${f.label}` };
     let input;
     if (f.type === 'textarea') {
@@ -175,7 +179,7 @@
     const row = h('div', { class: 'fld' + (f.type === 'textarea' ? ' fld-wide' : '') },
       h('label', { class: 'fld-label', for: null }, f.label, f.unit ? h('span', { class: 'fld-unit' }, ` (${f.unit})`) : null));
     const line = h('div', { class: 'fld-line' }, input);
-    if (['floodnet', 'precedent', 'map'].includes(src)) line.appendChild(badge(src, () => { set(val); app.changed(); }));
+    if (R().PREFILL_SRCS.includes(src)) line.appendChild(badge(src, () => { set(val); app.changed(); }, (app.session.prefill[q.code] || {}).from));
     if (q.pin && q.pin.field === f.code) {
       line.appendChild(h('button', { type: 'button', class: 'btn-mini', title: 'Show this point on the map', onclick: () => app.focusMapOn(q.code, f.code) }, '📍 Map'));
     }

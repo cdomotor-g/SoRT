@@ -39,7 +39,7 @@
   const near = (lat, lon, radiusKm, limit) => get('/stations', { near: `${lat},${lon}`, radius_km: radiusKm || 3, limit: limit || 50 });
   // Licences at the site (Flood-Net's ACMA route). Optional: an older API
   // without it answers 404 and the caller carries on without.
-  const acma = id => get(`/stations/${encodeURIComponent(id)}/acma`, null, { timeoutMs: 12000 });
+  const acma = (id, freq) => get(`/stations/${encodeURIComponent(id)}/acma`, freq ? { freq_mhz: freq } : null, { timeoutMs: 12000 });
 
   const KIND_LABEL = { rain: 'Rain', river: 'River', repeater: 'Repeater', base: 'Base' };
 
@@ -59,7 +59,8 @@
   function rangesText(list) {
     return (list || []).map(r => (r.low === r.high ? `${r.low}` : `${r.low}–${r.high}`)).join(', ');
   }
-  function freqText(mhz) { return mhz == null ? '' : `${Number(mhz).toFixed(3)} MHz`; }
+  // ALERT channels sit 6.25 kHz apart: four decimals where they matter, never fewer than three.
+  function freqText(mhz) { return mhz == null ? '' : `${Number(mhz).toFixed(4).replace(/0$/, '')} MHz`; }
 
   // The facts SoRT keeps about a station (session.station), from its dossier.
   async function stationFacts(id) {
@@ -80,17 +81,14 @@
       owner: (sls && sls.owner) || idn.owner || '', sls: sls ? { gaugeType: sls.gauge_type, dataType: sls.data_type, priority: sls.priority, owner: sls.owner } : null,
       alertIds: addresses, satcom: !!(nr.satcom && nr.satcom.enabled),
       commsGuess: guess.code, commsWhy: guess.why,
-      txFrequency: null, repeater: null, acma: [], acmaLicence: '', fadeMargin: null,
+      txFrequency: null, repeater: null, acma: null, acmaLicence: '', acmaHolder: '', fadeMargin: null,
       lastHeard: ((tel.health || {}).last_seen_at) || null,
       fetchedAt: Date.now(), app: (d.links || {}).app || `https://floodwarning.net/?station=${encodeURIComponent(id)}`
     };
     // A repeater's own radio record.
     if (nr.repeater && nr.repeater.status === 'ok') {
       facts.repeater = { rx: nr.repeater.rx_mhz, tx: nr.repeater.tx_mhz, passRanges: rangesText(nr.repeater.pass_ranges), acma: nr.repeater.acma_licence || '', owner: idn.owner || '' };
-      if (nr.repeater.acma_licence) facts.acma.push({ licence: nr.repeater.acma_licence, what: `repeater ${freqText(nr.repeater.rx_mhz)} RX / ${freqText(nr.repeater.tx_mhz)} TX`, from: 'Flood-Net' });
     }
-    ((nr.frequencies || {}).items || []).forEach(f => { if (f.acma_licence) facts.acma.push({ licence: f.acma_licence, what: `${f.label || 'channel'} ${freqText(f.rx_mhz)}`, from: 'Flood-Net' }); });
-    facts.acmaLicence = (facts.acma[0] || {}).licence || '';
     // Fade margin: what Flood-Net modelled, and what was last measured on site.
     const links = ((nr.link_margins || {}).links || []).filter(l => l.margin_db != null);
     const visits = ((d.inspections || {}).recent_visits || []);
@@ -119,18 +117,36 @@
     } else if (facts.repeater && facts.repeater.tx != null) {
       facts.txFrequency = { mhz: facts.repeater.tx, from: ['its own repeater record'], others: [] };
     }
-    // ACMA register licences at the site, where Flood-Net serves them.
+    // ACMA licences (Flood-Net's /acma route): what Flood-Net records for the
+    // station, what the ACMA register has at the site on its channel, and the
+    // repeaters that relay it. Matched to the inferred frequency for a field
+    // station. Optional: without the route the licence is simply typed in.
     try {
-      const a = await acma(facts.id);
-      const list = (a && (a.licences || a.register || a.items)) || [];
-      list.slice(0, 6).forEach(l => {
-        const no = l.licence || l.licence_no || l.number;
-        if (!no || facts.acma.some(x => x.licence === no)) return;
-        facts.acma.push({ licence: no, what: [l.licensee || l.client, l.f_mhz ? freqText(l.f_mhz) : (l.frequencies_mhz ? l.frequencies_mhz.map(freqText).join(', ') : '')].filter(Boolean).join(' · '),
-          from: 'ACMA register', distanceM: l.distance_m });
-      });
-      if (!facts.acmaLicence && facts.acma[0]) facts.acmaLicence = facts.acma[0].licence;
-    } catch (_) { /* no ACMA route (yet) — the licence is typed in */ }
+      const a = await acma(facts.id, facts.txFrequency ? facts.txFrequency.mhz : null);
+      const holder = l => (l && (l.trading_name || l.name)) || '';
+      const rec = ((a.recorded || {}).licences || []).map(l => ({ licence: l.register_licence || l.licence,
+        what: [l.label || (l.recorded_on === 'repeater' ? 'repeater pair' : ''), l.rx_mhz ? freqText(l.rx_mhz) : ''].filter(Boolean).join(' '),
+        holder: holder(l.licensee), status: l.status || (l.in_register ? '' : 'not in the register'), expiry: l.expiry || '', expired: !!l.expiry_passed }));
+      const reg = ((a.register || {}).licences || []).filter(l => l.matches_station_frequency || l.recorded_by_floodnet)
+        .filter(l => !rec.some(r => r.licence === l.licence)).slice(0, 4)
+        .map(l => ({ licence: l.licence, what: (l.frequencies_mhz || []).map(freqText).join(', '), holder: holder(l.licensee),
+          site: (l.site || {}).name || '', distanceM: (l.site || {}).distance_m, status: l.status || '', expiry: l.expiry || '', expired: !!l.expiry_passed }));
+      const relayed = (((a.relayed_by || {}).repeaters) || []).slice(0, 3).map(r => ({ name: r.name, rx: r.rx_mhz,
+        licences: (r.licences || []).map(l => l.register_licence || l.licence).slice(0, 2) }));
+      const reg0 = a.register || {};
+      facts.acma = { recorded: rec, register: reg, relayed, radiusM: reg0.radius_m || 500,
+        nearest: reg0.nearest_site ? { name: reg0.nearest_site.name, distanceM: reg0.nearest_site.distance_m } : null,
+        extract: a.register_extract ? { date: a.register_extract.source_date, stale: !!a.register_extract.stale } : null };
+      const first = rec[0] || reg[0];
+      if (first) { facts.acmaLicence = first.licence; facts.acmaHolder = first.holder; }
+    } catch (_) {
+      // No ACMA route: fall back to what the dossier itself records.
+      const own = [];
+      if (facts.repeater && facts.repeater.acma) own.push({ licence: facts.repeater.acma, what: 'repeater pair', holder: '' });
+      ((nr.frequencies || {}).items || []).forEach(f => { if (f.acma_licence) own.push({ licence: f.acma_licence, what: `${f.label || 'channel'} ${freqText(f.rx_mhz)}`, holder: '' }); });
+      facts.acma = { recorded: own, register: [], relayed: [], extract: null };
+      if (own[0]) facts.acmaLicence = own[0].licence;
+    }
     return facts;
   }
 
@@ -155,7 +171,10 @@
     if (!st) return;
     const qs = S.schema.templateQuestions(defs, session.template);
     const has = c => qs.find(q => q.code === c);
-    const put = (code, part) => { pre[code] = Object.assign({ src: 'floodnet', fields: {} }, pre[code] && pre[code].src === 'floodnet' ? pre[code] : {}, part); };
+    const put = (code, part) => {
+      if (pre[code] && !['floodnet', 'map'].includes(pre[code].src)) return;   // an earlier session's or a precedent's answer stands
+      pre[code] = Object.assign({ src: 'floodnet', fields: {} }, pre[code] && pre[code].src === 'floodnet' ? pre[code] : {}, part);
+    };
     if (has('coords') && st.lat != null) {
       const pos = st.checked ? U().formatCoord(st.checked.lat, st.checked.lon) : U().formatCoord(st.lat, st.lon);
       put('coords', { fields: { existing: pos }, src: st.checked ? 'map' : 'floodnet' });
@@ -167,9 +186,9 @@
       const opt = S.schema.flatOptions(q.options).find(o => o.label.startsWith(want));
       const other = S.schema.flatOptions(q.options).find(o => o.other);
       if (opt) put('frequency', { value: opt.code });
-      else if (other) put('frequency', { value: other.code });
+      else if (other) put('frequency', { value: other.code, other: freqText(st.txFrequency.mhz) });
     }
-    if (has('acmaLicence') && st.acmaLicence) put('acmaLicence', { fields: { licenceNo: st.acmaLicence } });
+    if (has('acmaLicence') && st.acmaLicence) put('acmaLicence', { fields: { licenceNo: st.acmaLicence, holder: st.acmaHolder || '' } });
     if (has('repeaterRadio') && st.repeater) put('repeaterRadio', { fields: {
       rx: st.repeater.rx != null ? Number(st.repeater.rx).toFixed(4).replace(/0$/, '') : '',
       tx: st.repeater.tx != null ? Number(st.repeater.tx).toFixed(4).replace(/0$/, '') : '',
@@ -194,8 +213,15 @@
       if (fm.measured) parts.push(`last measured on site ${fm.measured.db} dB (${U().dmy(fm.measured.date)})`);
       return parts.length ? `Flood-Net: ${parts.join('; ')}.` : null;
     }
-    if (key === 'station.acma' && st.acma && st.acma.length) {
-      return `Licences Flood-Net knows of here: ${st.acma.map(a => `${a.licence}${a.what ? ' (' + a.what + ')' : ''}`).join('; ')}.`;
+    if (key === 'station.acma' && st.acma) {
+      const A = st.acma, parts = [];
+      const one = l => `${l.licence}${l.what ? ' (' + l.what + ')' : ''}${l.holder ? ' — ' + l.holder : ''}${l.expired ? ', EXPIRED' : ''}`;
+      if (A.recorded.length) parts.push(`Flood-Net records ${A.recorded.map(one).join('; ')}.`);
+      if (A.register.length) parts.push(`In the ACMA register at the site on its channel: ${A.register.map(l => one(l) + (l.distanceM != null ? ` at ${U().fmtDist(l.distanceM)}` : '')).join('; ')}.`);
+      else if (!A.recorded.length) parts.push(`No licence in the ACMA register within ${U().fmtDist(A.radiusM || 500)}${A.nearest ? ` (nearest registered site ${A.nearest.name}, ${U().fmtDist(A.nearest.distanceM)})` : ''}.`);
+      if (A.relayed.length) parts.push(`Relayed by ${A.relayed.map(r => `${r.name}${r.rx ? ' (' + freqText(r.rx) + ')' : ''}${r.licences.length ? ', licence ' + r.licences.join(', ') : ', no licence recorded'}`).join('; ')}.`);
+      if (A.extract) parts.push(`Register extract of ${U().dmy(A.extract.date)}${A.extract.stale ? ' — check anything newer on the ACMA register' : ''}.`);
+      return parts.length ? parts.join(' ') : null;
     }
     if (key === 'station.txFrequency' && st.txFrequency) {
       return `Flood-Net: the repeaters passing its ALERT IDs (${st.txFrequency.from.join(', ')}) listen on ${freqText(st.txFrequency.mhz)}${st.txFrequency.others.length ? '; others: ' + st.txFrequency.others.join(', ') : ''}. Inferred — confirm.`;

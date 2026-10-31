@@ -23,6 +23,8 @@
   const U = () => S.util;
 
   const emptyVal = v => v == null || v === '' || (Array.isArray(v) && !v.length);
+  // Where a suggested answer can come from (each shows a badge until accepted).
+  const PREFILL_SRCS = ['floodnet', 'precedent', 'earlier', 'map'];
 
   /* A context bundles what every rule needs, and caches effective answers for
      one pass (rebuild it after any change). */
@@ -42,7 +44,8 @@
     const q = questionDef(ctx, code);
     const a = ctx.session.answers[code] || {};
     const p = ctx.session.prefill[code] || {};
-    const out = { code, value: null, src: null, other: a.other || '', fields: {}, fieldSrc: {}, note: a.note || '' };
+    const out = { code, value: null, src: null, other: String(a.other !== undefined ? a.other : (p.other || '')),
+      fields: {}, fieldSrc: {}, note: String(a.note !== undefined ? a.note : (p.note || '')) };
     if (!q) return out;
     if (ctx._busy[code]) return out;                // a rule that loops reads "no answer"
     ctx._busy[code] = true;
@@ -149,7 +152,7 @@
   function awaitingConfirm(ctx, q) {
     const e = eff(ctx, q.code);
     if (e.src && e.src !== 'user' && e.src !== 'auto' && !emptyVal(e.value)) return true;
-    return (q.fields || []).some(f => fieldVisible(ctx, f) && ['floodnet', 'precedent', 'map'].includes(e.fieldSrc[f.code]) && String(e.fields[f.code] || '').trim());
+    return (q.fields || []).some(f => fieldVisible(ctx, f) && PREFILL_SRCS.includes(e.fieldSrc[f.code]) && String(e.fields[f.code] || '').trim());
   }
   function progress(ctx) {
     const vis = visibleQuestions(ctx);
@@ -279,7 +282,7 @@
     return pre && psQuestionValue(ctx, row.id) === 'yes' ? pre : '';
   }
 
-  S.rules = { context, eff, test, visible, fieldVisible, visibleQuestions, hasContent, awaitingConfirm, progress,
+  S.rules = { PREFILL_SRCS, context, eff, test, visible, fieldVisible, visibleQuestions, hasContent, awaitingConfirm, progress,
     fill, fieldText, outputLines, notesFor, followUps, emptyVal,
     psState, psText, psSourceText, psQuestionValue, psQuestionLabel, psDetail, psNA, psRow };
 })(typeof window !== 'undefined' ? window : globalThis);

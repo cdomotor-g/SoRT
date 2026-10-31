@@ -127,7 +127,7 @@
 
   function ans(code) {
     const s = M.app.session;
-    if (!s.answers[code]) s.answers[code] = { value: null, other: '', fields: {}, note: '' };
+    if (!s.answers[code]) s.answers[code] = { value: null, fields: {} };
     s.answers[code].fields = s.answers[code].fields || {};
     return s.answers[code];
   }

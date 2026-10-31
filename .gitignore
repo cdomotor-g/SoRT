@@ -2,3 +2,10 @@ node_modules/
 package-lock.json
 package.json
 .DS_Store
+# The playbook's data is private: it lives in cdomotor-g/SoRT-playbook, never
+# in this public repo (v2/playbook/ here holds only its tools). Assessment
+# reports never go in either.
+v2/playbook/stations/
+v2/playbook/index.json
+v2/playbook/export/
+*.docx

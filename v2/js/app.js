@@ -53,6 +53,7 @@
     rebuild();
     if (!(opts && opts.light)) { S.form.render($('#form')); S.form.renderPS($('#ps')); renderStation(); }
     renderProgress(); renderFollowUps(); previewSoon(); saveSoon();
+    if (S.playbook) S.playbook.renderActs(A);
     if (S.mapView) S.mapView.sync(A);
   }
   function hint(key) {
@@ -266,7 +267,11 @@
     if (st.commsGuess) add('Comms now', `${({ errts: 'ERRTS / ALERT VHF', cellular: 'IP logger – cellular (probably)', satellite: 'IP logger – satellite', unknown: 'not known' })[st.commsGuess]} — ${st.commsWhy}`, 'Flood-Net’s best guess at what is on site now; the Current Comms question starts from it');
     if (st.repeater) add('Repeater radio', `RX ${fn.freqText(st.repeater.rx)} · TX ${fn.freqText(st.repeater.tx)}${st.repeater.passRanges ? ' · passes ' + st.repeater.passRanges : ''}`);
     else if (st.txFrequency) add('Frequency', `${fn.freqText(st.txFrequency.mhz)} — inferred from ${st.txFrequency.from.join(', ')}`, 'Flood-Net records frequencies on repeaters; a field station transmits on what the repeaters passing its ALERT IDs listen on');
-    if (st.acma && st.acma.length) add('ACMA licence', st.acma.map(a => a.licence + (a.what ? ` (${a.what})` : '')).join('; '));
+    if (st.acma) {
+      const own = st.acma.recorded.concat(st.acma.register).slice(0, 3);
+      add('ACMA licence', own.length ? own.map(a => `${a.licence}${a.holder ? ' — ' + a.holder : ''}${a.expired ? ' (expired)' : ''}`).join('; ')
+        : `none at the site in the register${st.acma.extract ? ` (extract of ${U.dmy(st.acma.extract.date)})` : ''}`, 'From Flood-Net’s ACMA route; the ACMA Licence question has the detail');
+    }
     if (st.lat != null) {
       const p = st.precision;
       add('Location', `${U.formatCoord(st.lat, st.lon)}${p ? ` · ${p.places} decimal places (${p.metres < 1 ? 'under 1 m' : '±' + U.fmtDist(p.metres)})` : ''}${st.checked ? ` · checked on the map, moved ${U.fmtDist(st.checked.movedM)}` : ' · check it on the map'}`);
@@ -416,6 +421,7 @@
             openSessions();
           } }, 'Forget'))));
     });
+    if (S.playbook) list.appendChild(S.playbook.followUpsPanel(A));
     if (!dlg.open) dlg.showModal();
   }
 
@@ -437,6 +443,7 @@
     S.form.render($('#form')); S.form.renderPS($('#ps'));
     renderOutputControls(); renderFollowUps(); renderProgress(); renderSavedChip();
     renderPreview();
+    if (S.playbook) S.playbook.renderActs(A);
     if (S.mapView) { S.mapView.station(A); S.mapView.sync(A); }
   }
   async function boot() {

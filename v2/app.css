@@ -142,6 +142,7 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .src-floodnet { background: var(--src-floodnet); color: var(--src-floodnet-ink); }
 .src-precedent { background: var(--src-precedent); color: var(--src-precedent-ink); }
 .src-map { background: var(--src-map); color: var(--src-map-ink); }
+.src-earlier { background: var(--src-precedent); color: var(--src-precedent-ink); }
 .src-auto { background: var(--src-auto); color: var(--src-auto-ink); padding-right: 8px; }
 .src-ok { border: 0; background: rgba(255, 255, 255, .7); color: inherit; border-radius: 999px; cursor: pointer; font-weight: 700; padding: 0 6px; }
 :root[data-theme="dark"] .src-ok { background: rgba(0, 0, 0, .3); }
@@ -158,11 +159,18 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .opts-pills .opt.on { background: var(--accent); color: var(--accent-ink); }
 .opt.on.from-floodnet { background: var(--src-floodnet); color: var(--src-floodnet-ink); border-color: var(--src-floodnet-ink); }
 .opt.on.from-precedent { background: var(--src-precedent); color: var(--src-precedent-ink); border-color: var(--src-precedent-ink); }
+.opt.on.from-earlier { background: var(--src-precedent); color: var(--src-precedent-ink); border-color: var(--src-precedent-ink); }
 .opt.on.from-map { background: var(--src-map); color: var(--src-map-ink); border-color: var(--src-map-ink); }
 .opt.on.from-auto { background: var(--src-auto); color: var(--src-auto-ink); border-color: var(--line-2); }
 .opts-pills .opt { position: relative; }
 .opts-pills .opt:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 input.prefilled, textarea.prefilled { background: var(--src-floodnet); }
+input.pre-precedent, textarea.pre-precedent, input.pre-earlier, textarea.pre-earlier { background: var(--src-precedent); }
+input.pre-map, textarea.pre-map { background: var(--src-map); }
+.pb-sim { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+.pb-fu { border-top: 1px solid var(--line); margin-top: 10px; }
+.gh-dlg ol { padding-left: 20px; }
+.gh-dlg .dlg-body { display: grid; gap: 8px; }
 .fld-wide { grid-column: 1 / -1; }
 .ps-row { grid-template-columns: minmax(200px, 30%) 1fr; }
 .ps-row > .q-label { grid-column: 1; }
