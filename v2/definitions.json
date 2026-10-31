@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 1,
+  "version": 2,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-10-31",
@@ -833,8 +833,9 @@
         },
         {
           "code": "detail",
-          "label": "Detail (only if the picks above don’t cover it)",
-          "type": "text"
+          "label": "Detail",
+          "type": "text",
+          "placeholder": "Only if the picks above don’t cover it"
         }
       ],
       "showIf": {

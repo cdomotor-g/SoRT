@@ -26,7 +26,7 @@
       else if (k === 'text') el.textContent = v;
       else if (k === 'html') el.innerHTML = v;
       else if (k === 'dataset') Object.assign(el.dataset, v);
-      else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+      else if (k === 'style' && typeof v === 'object') Object.entries(v).forEach(([sk, sv]) => { if (sk.startsWith('--')) el.style.setProperty(sk, sv); else el.style[sk] = sv; });
       else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
       else if (v === true) el.setAttribute(k, '');
       else el.setAttribute(k, v);

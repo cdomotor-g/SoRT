@@ -1,0 +1,1125 @@
+/* SoRT v2 — map.js
+   The map, on the page (no pop-up): Queensland imagery, LiDAR contours, the road
+   reserve and rail (v1's layers and their hard-won fixes, ported), the station's
+   locations as pins, the location check, things drawn for the scope (vegetation
+   clearance circle, trees, access track), survey marks and bridges near the
+   station, Flood-Net's other stations nearby, and the picture for Word.
+
+   Because the map is always on the page and visible, the picture is simply the
+   map you are looking at — v1's machinery for capturing a hidden modal (the
+   off-screen rebuild, the suspended-view checks, the red rings) is not needed.
+   The check that a capture actually rendered (rasterStats) is kept: a blank
+   picture is refused, never pasted.
+
+   Every external call is bounded, and nothing here can stop the rest of the
+   page working: if the map can't load, coordinates are typed in the questions. */
+(function (G) {
+  'use strict';
+  const S = G.SoRT = G.SoRT || {};
+  const U = () => S.util, R = () => S.rules;
+  const h = (...a) => U().h(...a);
+
+  const CFG = {
+    esriBase: 'https://js.arcgis.com/4.31/',
+    imagery: 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer',
+    imageryLabels: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Basemaps/QldImageryLabel/MapServer',
+    contours: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/Contours/MapServer',
+    contourSublayers: { 1: 30, 5: 20, 10: 10 },          // confirmed in v1's live diagnostics; probed by name too
+    contourLine: { color: [214, 104, 26, 1], width: 1.1 },
+    cadastre: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer',
+    cadastreParcelsSublayer: 4,
+    roadSublayerNames: ['road'],
+    roadFieldCandidates: ['parcel_typ', 'parcel_type', 'tenure', 'feat_name', 'segpar_typ'],
+    roadIntersectionPattern: '%INTER%', roadIntersectionMaxRatio: 3, roadProbeKm: 2,
+    roadOutline: { color: [255, 0, 200, 1], width: 2 }, roadFill: [224, 196, 132, 0.5],
+    otherTransport: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/OtherTransport/MapServer',
+    railSublayersFallback: [155, 156, 157, 158],
+    railInclude: /rail|railway|tram|monorail|siding|cane|light rail/i,
+    railExclude: /aviat|aero|airport|airstrip|airfield|aerodrome|runway|helipad|heliport|\bport\b|wharf|jetty|marine/i,
+    survey: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Location/SurveyControl/MapServer',
+    surveyReportBase: 'https://qspatial.information.qld.gov.au/SurveyReport/',
+    roadsAndTracks: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/RoadsAndTracks/MapServer',
+    stateRoads: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/StateRoadInformation/MapServer',
+    marks: { radiusM: 2000, max: 5 },               // the owner's call: on by default, 2 km, 5 marks
+    bridges: { radiusM: 1000, max: 5, prefillWithinM: 150, mergeM: 60 },
+    nearby: { radiusKm: 3, max: 30 },
+    dynamicMinScale: 20000,                           // contours and road reserve stop at ~1:20,000
+    siteZoom: 17,
+    order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, pins: 10 },
+    timeouts: { esri: 20000, view: 20000, meta: 10000, layer: 10000, query: 12000 },
+    attribution: '© State of Queensland (Department of Natural Resources and Mines; Department of Resources; Transport and Main Roads) — CC BY 4.0'
+  };
+  const PIN_RGB = { red: [214, 40, 40], orange: [224, 122, 10], blue: [30, 110, 200], purple: [130, 60, 200], green: [40, 150, 70], teal: [15, 150, 140] };
+  const rgb = c => PIN_RGB[c] || (/^#[0-9a-f]{6}$/i.test(c || '') ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : PIN_RGB.red);
+  const DRAW_RGB = [20, 160, 80];
+
+  const M = {
+    app: null, root: null, els: {}, esri: null, esriP: null, view: null, map: null, layers: {}, gl: {},
+    contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true },
+    move: false, hover: null, drag: null, place: null, measure: null, sketch: null,
+    pins: [], anchor: null, fetchedAt: null, marks: [], bridges: [], nearby: [], diag: {}, log: [],
+    framedFor: null, ready: false, failed: null, contourIds: null, railIds: null
+  };
+
+  /* ---------------- small plumbing ---------------- */
+  const now = () => (G.performance ? performance.now() : Date.now());
+  function withTimeout(p, ms, label) {
+    let t; const to = new Promise((_, rej) => { t = setTimeout(() => { const e = new Error(`${label} timed out after ${Math.round(ms / 1000)} s`); e.isTimeout = true; rej(e); }, ms); });
+    return Promise.race([p, to]).finally(() => clearTimeout(t));
+  }
+  async function getJson(url, label, ms) { return withTimeout(U().fetchJson(url, { timeoutMs: ms || CFG.timeouts.meta }), (ms || CFG.timeouts.meta) + 500, label); }
+  function diag(key, status, note, ms) { M.diag[key] = { status, note: note || '', ms: ms == null ? null : Math.round(ms) }; renderDiag(); }
+  function log(msg) { M.log.push(`${new Date().toLocaleTimeString()} ${msg}`); if (M.log.length > 80) M.log.shift(); renderDiag(); }
+  function banner(msg, kind) { if (!M.els.banners) return; M.els.banners.appendChild(h('div', { class: `map-banner ${kind || 'warn'}` }, msg)); }
+
+  function loadEsri() {
+    if (M.esri) return Promise.resolve(M.esri);
+    if (M.esriP) return M.esriP;
+    const t0 = now();
+    const p = new Promise((resolve, reject) => {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = CFG.esriBase + 'esri/themes/light/main.css';
+      document.head.appendChild(css);
+      const s = document.createElement('script'); s.src = CFG.esriBase; s.async = true;
+      s.onload = () => {
+        if (!G.require) { reject(new Error('the Esri loader did not start')); return; }
+        G.require(['esri/Map', 'esri/views/MapView', 'esri/layers/ImageryLayer', 'esri/layers/ImageryTileLayer', 'esri/layers/MapImageLayer',
+          'esri/layers/FeatureLayer', 'esri/layers/GroupLayer', 'esri/layers/GraphicsLayer', 'esri/Graphic', 'esri/core/reactiveUtils',
+          'esri/geometry/geometryEngine', 'esri/geometry/support/webMercatorUtils', 'esri/widgets/Sketch/SketchViewModel', 'esri/widgets/DistanceMeasurement2D'],
+        (Map, MapView, ImageryLayer, ImageryTileLayer, MapImageLayer, FeatureLayer, GroupLayer, GraphicsLayer, Graphic, reactiveUtils, geometryEngine, webMercatorUtils, SketchViewModel, DistanceMeasurement2D) => {
+          M.esri = { Map, MapView, ImageryLayer, ImageryTileLayer, MapImageLayer, FeatureLayer, GroupLayer, GraphicsLayer, Graphic, reactiveUtils, geometryEngine, webMercatorUtils, SketchViewModel, DistanceMeasurement2D };
+          resolve(M.esri);
+        }, reject);
+      };
+      s.onerror = () => reject(new Error('could not load the Esri map library (js.arcgis.com)'));
+      document.head.appendChild(s);
+    });
+    M.esriP = withTimeout(p, CFG.timeouts.esri, 'The Esri map library')
+      .then(e => { diag('esri', 'loaded', '', now() - t0); return e; })
+      .catch(e => { M.esriP = null; diag('esri', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); throw e; });
+    return M.esriP;
+  }
+  function addOrdered(layer, kind) {
+    layer.__z = CFG.order[kind] == null ? 99 : CFG.order[kind];
+    let i = 0;
+    M.map.layers.forEach(l => { if ((l.__z == null ? 99 : l.__z) <= layer.__z) i++; });
+    M.map.add(layer, i);
+  }
+
+  /* ---------------- the pins: every location question the table asks ---------------- */
+  function resolvePins() {
+    const ctx = M.app.ctx, st = M.app.session.station || {};
+    const pins = [];
+    ctx.qs.forEach(q => {
+      if (!q.pin) return;
+      const e = R().eff(ctx, q.code);
+      const raw = String(e.fields[q.pin.field] || '');
+      const p = U().parseCoord(raw);
+      const shown = R().visible(ctx, q) && R().test(ctx, q.pin.showIf);
+      pins.push({ key: `${q.code}.${q.pin.field}`, code: q.code, field: q.pin.field, label: q.pin.label || q.label, qlabel: q.label,
+        colour: q.pin.colour || 'red', anchor: !!q.pin.anchor, shown, gate: q.pin.showIf || null, ok: !!p.ok, lat: p.lat, lon: p.lon, raw, src: e.fieldSrc[q.pin.field] });
+    });
+    M.pins = pins;
+    const a = pins.find(p => p.anchor && p.shown && p.ok);
+    M.anchor = a ? { lat: a.lat, lon: a.lon } : (st.lat != null ? { lat: st.lat, lon: st.lon } : null);
+    return pins;
+  }
+  const shownPins = () => M.pins.filter(p => p.shown && p.ok);
+
+  function ans(code) {
+    const s = M.app.session;
+    if (!s.answers[code]) s.answers[code] = { value: null, other: '', fields: {}, note: '' };
+    s.answers[code].fields = s.answers[code].fields || {};
+    return s.answers[code];
+  }
+  // Write a location into its question (and satisfy its gate, e.g. placing the
+  // relocation site sets Relocation to Yes). Undoable from the toast.
+  function writePin(pin, lat, lon, how) {
+    const s = M.app.session;
+    const before = U().clone({ a: s.answers[pin.code] || null, g: pin.gate && pin.gate.q ? s.answers[pin.gate.q] || null : null });
+    ans(pin.code).fields[pin.field] = lat == null ? '' : U().formatCoord(lat, lon);
+    if (lat != null && pin.gate && pin.gate.q && pin.gate.is != null) {
+      const g = ans(pin.gate.q);
+      if (g.value !== pin.gate.is) g.value = pin.gate.is;
+    }
+    M.app.changed();
+    const moved = how === 'drag' && pin.ok ? ` (moved ${U().fmtDist(U().haversineM({ lat: pin.lat, lon: pin.lon }, { lat, lon }))})` : '';
+    M.app.toast(lat == null ? `${pin.label} cleared.` : `${pin.label} set to ${U().formatCoord(lat, lon)}${moved}.`, { label: 'Undo', run: () => {
+      if (before.a) s.answers[pin.code] = before.a; else delete s.answers[pin.code];
+      if (pin.gate && pin.gate.q) { if (before.g) s.answers[pin.gate.q] = before.g; else delete s.answers[pin.gate.q]; }
+      M.app.changed();
+    } });
+  }
+
+  /* ---------------- mount + build ---------------- */
+  function mount(el, app) {
+    M.app = app; M.root = el;
+    el.innerHTML = '';
+    const contourSel = h('select', { 'aria-label': 'Contours', title: 'LiDAR contours (5 m draws much faster than 1 m)' },
+      [['off', 'Contours off'], ['1', 'Contours 1 m'], ['5', 'Contours 5 m'], ['10', 'Contours 10 m']].map(([v, t]) => h('option', { value: v, selected: v === M.contour }, t)));
+    contourSel.addEventListener('change', ev => setContours(ev.target.value));
+    const tog = (key, label, title) => {
+      const i = h('input', { type: 'checkbox', checked: M.on[key] });
+      i.addEventListener('change', ev => { M.on[key] = ev.target.checked; applyToggles(); });
+      return h('label', { class: 'inline-check', title }, i, ' ', label);
+    };
+    M.els.moveBtn = h('button', { type: 'button', class: 'btn-mini', 'aria-pressed': 'false', title: 'Drag a pin to move it; the coordinate is written into its question', onclick: () => setMove(!M.move) }, '✥ Move pins');
+    M.els.measureBtn = h('button', { type: 'button', class: 'btn-mini', 'aria-pressed': 'false', title: 'Measure a distance on the map', onclick: () => setMeasure(!M.measure) }, '📏 Measure');
+    const tools = h('div', { class: 'map-tools' },
+      contourSel, tog('road', 'Road reserve', 'The cadastre’s road parcels, as on QLD Globe'), tog('rail', 'Rail'),
+      tog('marks', 'Survey marks', 'Permanent survey marks and benchmarks within 2 km (nearest 5)'),
+      tog('bridges', 'Bridges', 'Road bridges within 1 km, and who manages them'),
+      tog('nearby', 'Flood-Net stations', 'Other Flood-Net stations within 3 km — shown for the forum, left out of the Word picture'),
+      h('span', { class: 'map-tools-gap' }),
+      M.els.moveBtn, M.els.measureBtn,
+      h('button', { type: 'button', class: 'btn-mini', title: 'Frame every location on the map', onclick: () => frame(true) }, '⤢ Fit locations'));
+    M.els.check = h('div', { class: 'map-check', id: 'mapCheck' });
+    M.els.view = h('div', { class: 'map-view', id: 'mapView', role: 'region', 'aria-label': 'Map' });
+    M.els.status = h('div', { class: 'map-status' }, 'Loading the map…');
+    M.els.legend = h('div', { class: 'map-legend', 'aria-hidden': 'true' });
+    M.els.stamp = h('div', { class: 'map-stamp', 'aria-hidden': 'true' });
+    M.els.edges = h('div', { class: 'map-edges', 'aria-hidden': 'true' });
+    M.els.progress = h('div', { class: 'map-progress', hidden: true }, h('div'));
+    M.els.placeHint = h('div', { class: 'map-place', hidden: true });
+    M.els.drawActs = h('div', { class: 'map-drawacts', hidden: true },
+      h('button', { type: 'button', class: 'btn btn-primary', onclick: () => { if (M.sketch) M.sketch.complete(); } }, '✓ Finish route'),
+      h('button', { type: 'button', class: 'btn', onclick: () => cancelPlace() }, 'Cancel'));
+    M.els.banners = h('div', { class: 'map-banners' });
+    M.els.side = h('aside', { class: 'map-side' });
+    M.els.diag = h('pre', { class: 'map-diag' });
+    el.appendChild(h('div', { class: 'map-wrap' },
+      M.els.check,
+      h('div', { class: 'map-grid' },
+        h('div', { class: 'map-main' }, tools,
+          h('div', { class: 'map-frame' }, M.els.view, M.els.legend, M.els.stamp, M.els.edges, M.els.placeHint, M.els.drawActs, M.els.status, M.els.progress),
+          M.els.banners),
+        M.els.side),
+      h('details', { class: 'map-details' }, h('summary', null, 'Map details (for troubleshooting)'),
+        h('button', { type: 'button', class: 'btn-mini', onclick: () => { navigator.clipboard.writeText(M.els.diag.textContent).then(() => M.app.toast('Map details copied.')); } }, 'Copy map details'),
+        M.els.diag)));
+    G.addEventListener('keydown', ev => {
+      if (ev.key === 'Escape' && (M.place || M.drawing)) cancelPlace();
+      else if (ev.key === 'Enter' && M.drawing && M.sketch) { ev.preventDefault(); M.sketch.complete(); }
+    });
+    build().catch(e => {
+      M.failed = e.message;
+      M.els.status.hidden = false;
+      M.els.status.textContent = `The map couldn’t load (${e.message}). Everything else works — type coordinates into the questions.`;
+      M.els.status.classList.add('error');
+    });
+  }
+
+  async function build() {
+    const E = await loadEsri();
+    M.map = new E.Map({ layers: [] });
+    // The imagery goes on before the view starts: a view needs a tiled layer to
+    // know its zoom levels (and Web Mercator, the imagery's tiling), and without
+    // one it never becomes ready. Its load is checked in loadImagery().
+    const img = new E.ImageryTileLayer({ url: CFG.imagery });
+    M.layers.imagery = img; addOrdered(img, 'imagery');
+    ['nearby', 'bridges', 'marks', 'draw', 'ghost', 'pins'].forEach(k => { M.gl[k] = new E.GraphicsLayer({ title: k }); addOrdered(M.gl[k], k); });
+    resolvePins();
+    const c = M.anchor || { lat: -22.5, lon: 146.5 };
+    M.view = new E.MapView({ container: M.els.view, map: M.map, center: [c.lon, c.lat], zoom: M.anchor ? CFG.siteZoom : 5, spatialReference: { wkid: 3857 },
+      constraints: { rotationEnabled: false, snapToZoom: false }, ui: { components: ['zoom', 'attribution'] }, popupEnabled: false });
+    const t0 = now();
+    loadImagery(img);
+    const ready = M.view.when();
+    try { await withTimeout(ready, CFG.timeouts.view, 'The map view'); }
+    catch (e) {
+      if (!e.isTimeout) throw e;
+      // Slow graphics (an old PC, a remote desktop): keep waiting, and say so.
+      M.els.status.textContent = 'The map is slow to start on this computer — still trying…';
+      log(`The map view took more than ${CFG.timeouts.view / 1000} s to start.`);
+      await ready;
+    }
+    M.view.ui.move('zoom', 'bottom-right');
+    diag('view', 'ready', '', now() - t0);
+    M.ready = true;
+    M.els.status.hidden = true;
+    // A station chosen while the map library was still loading: frame it now
+    // (the view started wherever the anchor was when it was built, maybe nowhere).
+    resolvePins();
+    M.framedFor = null;
+    if (M.anchor) { M.framedFor = key(M.anchor); frame(false); }
+    attachInteraction();
+    E.reactiveUtils.watch(() => M.view.updating, u => { M.els.progress.hidden = !u; });
+    E.reactiveUtils.watch(() => [M.view.extent, M.view.scale], () => { renderEdges(); renderStamp(); });
+    loadLabels(); loadContours(); loadRoad(); loadRail();
+    sync(M.app);
+    refreshNear(true);
+  }
+
+  /* ---------------- layers (ported from v1) ---------------- */
+  async function loadImagery(l) {
+    const E = M.esri, t0 = now();
+    try {
+      await withTimeout(l.load(), CFG.timeouts.layer, 'Imagery');
+      diag('imagery', 'loaded', 'tiled', now() - t0);
+    } catch (e) {
+      // v1's last resort: the same service as a dynamic (non-tiled) layer.
+      try {
+        M.map.remove(l);
+        const d = new E.ImageryLayer({ url: CFG.imagery });
+        await withTimeout(d.load(), CFG.timeouts.layer, 'Imagery (dynamic)');
+        M.layers.imagery = d; addOrdered(d, 'imagery');
+        diag('imagery', 'loaded', 'dynamic fallback', now() - t0);
+      } catch (e2) { diag('imagery', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); banner(`Imagery didn’t load (${e.message}). The rest of the map still works.`, 'error'); }
+    }
+  }
+  async function loadLabels() {
+    const E = M.esri, t0 = now();
+    try { const l = new E.MapImageLayer({ url: CFG.imageryLabels, opacity: 0.9 }); await withTimeout(l.load(), CFG.timeouts.layer, 'Labels'); M.layers.labels = l; addOrdered(l, 'labels'); diag('labels', 'loaded', '', now() - t0); }
+    catch (e) { diag('labels', 'not loaded', e.message, now() - t0); }
+  }
+  async function resolveContourIds() {
+    if (M.contourIds) return M.contourIds;
+    const ids = Object.assign({}, CFG.contourSublayers);
+    try {
+      const j = await getJson(CFG.contours + '?f=json', 'Contours schema');
+      (j.layers || []).forEach(l => {
+        const n = String(l.name || '').toLowerCase();
+        if (!/lidar|contour/.test(n)) return;
+        const m = n.match(/(?:^|[^0-9])(10|5|1)\s*(?:m\b|met(?:re|er)s?\b)/);
+        if (m) ids[m[1]] = l.id;
+      });
+    } catch (e) { log(`Contour ids not probed (${e.message}); using 1 m:${ids[1]} 5 m:${ids[5]} 10 m:${ids[10]}.`); }
+    M.contourIds = ids;
+    return ids;
+  }
+  async function loadContours() {
+    const E = M.esri, t0 = now();
+    if (M.layers.contour) { M.map.remove(M.layers.contour); M.layers.contour = null; }
+    renderStamp();
+    if (M.contour === 'off') { diag('contours', 'off'); return; }
+    const want = M.contour;
+    try {
+      const ids = await resolveContourIds();
+      const id = ids[want];
+      const fl = new E.FeatureLayer({ url: `${CFG.contours}/${id}`, opacity: 0.95, minScale: CFG.dynamicMinScale, maxScale: 0,
+        renderer: { type: 'simple', symbol: { type: 'simple-line', color: CFG.contourLine.color, width: CFG.contourLine.width } } });
+      await withTimeout(fl.load(), CFG.timeouts.layer, 'Contours');
+      const q = fl.capabilities && fl.capabilities.query;
+      if (q && q.supportsQuantization === false) throw new Error('the server can’t simplify contours');
+      const elev = (fl.fields || []).find(f => /small-integer|integer|single|double|long/.test(String(f.type)) && /elev|contour|height|^alt$|value|^z$/i.test(f.name));
+      if (elev) { fl.labelingInfo = [{ labelExpressionInfo: { expression: `Text(Round($feature.${elev.name}, 1)) + ' m'` }, symbol: { type: 'text', color: [40, 30, 15], haloColor: [255, 255, 255, 0.9], haloSize: 1, font: { size: 9, weight: 'bold' } }, minScale: 8000, maxScale: 0, labelPlacement: 'center-along' }]; fl.labelsVisible = true; }
+      if (want !== M.contour) return;
+      M.layers.contour = fl; addOrdered(fl, 'contour');
+      diag('contours', 'loaded', `${want} m, sublayer ${id}`, now() - t0);
+    } catch (e) {
+      try {
+        const ids = await resolveContourIds();
+        const subs = ['1', '5', '10'].filter(k => ids[k] != null).map(k => ({ id: ids[k], visible: k === want }));
+        const l = new E.MapImageLayer({ url: CFG.contours, opacity: 0.7, minScale: CFG.dynamicMinScale, maxScale: 0, imageFormat: 'png8', dpi: 96, sublayers: subs });
+        await withTimeout(l.load(), CFG.timeouts.layer, 'Contours (server-drawn)');
+        if (want !== M.contour) return;
+        M.layers.contour = l; addOrdered(l, 'contour');
+        diag('contours', 'loaded', `${want} m, server-drawn (${e.message})`, now() - t0);
+      } catch (e2) { diag('contours', e2.isTimeout ? 'timed out' : 'failed', e2.message, now() - t0); banner(`Contours didn’t load (${e2.message}).`, 'warn'); }
+    }
+  }
+  function setContours(v) { M.contour = v; if (M.ready) loadContours(); }
+
+  function envelopeKm(km) {
+    if (!M.anchor) return null;
+    const dLat = km / 111.32, dLon = km / (111.32 * Math.max(0.2, Math.cos(M.anchor.lat * Math.PI / 180)));
+    return { xmin: M.anchor.lon - dLon, ymin: M.anchor.lat - dLat, xmax: M.anchor.lon + dLon, ymax: M.anchor.lat + dLat, spatialReference: { wkid: 4326 } };
+  }
+  async function countParcels(base, where, env) {
+    let q = `${base}/query?where=${encodeURIComponent(where)}&returnCountOnly=true&f=json`;
+    if (env) q += `&geometry=${encodeURIComponent(JSON.stringify(env))}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects`;
+    const j = await getJson(q, 'Cadastre count');
+    return j && typeof j.count === 'number' ? j.count : null;
+  }
+  // v1's resolver: the cadastre's own road sublayer if it has one, else the
+  // parcel layer filtered for road parcels — validated near the site, with the
+  // intersection parcels added so the reserve reads continuous.
+  async function resolveRoad() {
+    try {
+      const j = await getJson(CFG.cadastre + '?f=json', 'Cadastre layers');
+      const env = envelopeKm(CFG.roadProbeKm);
+      for (const l of (j.layers || []).filter(l => {
+        const n = String(l.name || '').toLowerCase();
+        return CFG.roadSublayerNames.some(k => n.includes(k)) && (!l.geometryType || l.geometryType === 'esriGeometryPolygon') && !/label|annotation|centre|center|\bline\b|text|rail/.test(n);
+      })) {
+        let c = null;
+        try { c = await countParcels(`${CFG.cadastre}/${l.id}`, '1=1', env); } catch (_) { /* next */ }
+        if (c > 0) return { sublayer: l.id, where: '1=1', source: `road sublayer "${l.name}"` };
+      }
+    } catch (e) { log(`Cadastre layer list: ${e.message}`); }
+    const base = `${CFG.cadastre}/${CFG.cadastreParcelsSublayer}`;
+    let fields = [];
+    try { fields = ((await getJson(base + '?f=json', 'Cadastre schema')).fields || []).map(f => String(f.name)); }
+    catch (e) { log(`Cadastre schema: ${e.message}`); return null; }
+    const lower = fields.map(f => f.toLowerCase());
+    const cands = CFG.roadFieldCandidates.filter(c => lower.includes(c)).map(c => fields[lower.indexOf(c)]);
+    const env = envelopeKm(CFG.roadProbeKm);
+    const countAll = async e => Promise.all(cands.map(async f => { const where = `UPPER(${f}) LIKE '%ROAD%'`; try { return { field: f, where, count: await countParcels(base, where, e) }; } catch (_) { return { field: f, where, count: null }; } }));
+    let hit = null;
+    if (env) hit = (await countAll(env)).find(r => r.count > 0) || null;
+    if (!hit) (await countAll(null)).forEach(r => { if (r.count > 0 && (!hit || r.count > hit.count)) hit = r; });
+    if (!hit) return null;
+    const iw = `UPPER(${hit.field}) LIKE '${CFG.roadIntersectionPattern}'`;
+    try {
+      const n = await countParcels(base, iw, env);
+      if (n > 0 && !(hit.count > 0 && n > hit.count * CFG.roadIntersectionMaxRatio)) hit.where = `(${hit.where}) OR (${iw})`;
+    } catch (_) { /* intersections left out */ }
+    return { sublayer: CFG.cadastreParcelsSublayer, where: hit.where, source: `parcel filter ${hit.where}` };
+  }
+  async function loadRoad() {
+    const E = M.esri, t0 = now();
+    try {
+      const road = await resolveRoad();
+      if (!road) { diag('road', 'withheld', 'road parcels could not be resolved'); banner('Road reserve hidden: the cadastre’s road parcels couldn’t be resolved here.', 'warn'); return; }
+      const url = `${CFG.cadastre}/${road.sublayer}`, o = CFG.roadOutline;
+      const fill = (color, outline) => ({ type: 'simple', symbol: { type: 'simple-fill', color, outline: outline || null } });
+      const pass = (renderer, extra) => new E.FeatureLayer(Object.assign({ url, definitionExpression: road.where, minScale: CFG.dynamicMinScale, maxScale: 0, renderer }, extra || {}));
+      // Three passes in a group outline the reserve as ONE shape (v1's A8): no
+      // seams across the road at every intersection.
+      const sandy = pass(fill(CFG.roadFill, null));
+      await withTimeout(sandy.load(), CFG.timeouts.layer, 'Road reserve');
+      const grp = new E.GroupLayer({ title: 'Road reserve', layers: [
+        pass(fill(o.color, { color: o.color, width: o.width * 2 })),
+        pass(fill([0, 0, 0, 1], null), { blendMode: 'destination-out' }),
+        sandy] });
+      grp.visible = M.on.road;
+      M.layers.road = grp; addOrdered(grp, 'road');
+      diag('road', 'loaded', road.source, now() - t0);
+    } catch (e) { diag('road', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); banner(`Road reserve didn’t load (${e.message}).`, 'warn'); }
+  }
+  async function loadRail() {
+    const E = M.esri, t0 = now();
+    try {
+      let ids = null;
+      try {
+        const j = await getJson(CFG.otherTransport + '?f=json', 'Rail schema');
+        ids = (j.layers || []).filter(l => !(Array.isArray(l.subLayerIds) && l.subLayerIds.length) && CFG.railInclude.test(l.name || '') && !CFG.railExclude.test(l.name || '')).map(l => l.id);
+      } catch (_) { /* fallback ids */ }
+      if (!ids || !ids.length) ids = CFG.railSublayersFallback.slice();
+      const l = new E.MapImageLayer({ url: CFG.otherTransport, sublayers: ids.map(id => ({ id, visible: true })) });
+      await withTimeout(l.load(), CFG.timeouts.layer, 'Rail');
+      l.visible = M.on.rail;
+      M.layers.rail = l; addOrdered(l, 'rail');
+      diag('rail', 'loaded', `sublayers ${ids.join(', ')}`, now() - t0);
+    } catch (e) { diag('rail', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); }
+  }
+  function applyToggles() {
+    if (M.layers.road) M.layers.road.visible = M.on.road;
+    if (M.layers.rail) M.layers.rail.visible = M.on.rail;
+    storeNear();
+    drawMarks(); drawBridges(); drawNearby(); renderSide(); renderLegend(); renderEdges();
+    if (M.app) M.app.changed({ light: true });
+  }
+
+  /* ---------------- things near the station: survey marks, bridges, stations ---------------- */
+  const key = a => a ? `${a.lat.toFixed(4)},${a.lon.toFixed(4)}` : '';
+  function boxM(a, m) {
+    const dLat = m / 111320, dLon = m / (111320 * Math.max(0.2, Math.cos(a.lat * Math.PI / 180)));
+    return { w: a.lon - dLon, s: a.lat - dLat, e: a.lon + dLon, n: a.lat + dLat };
+  }
+  const near = (a, b) => U().haversineM(a, b);
+  const away = (a, b) => `${U().fmtDist(near(a, b))} ${U().compass(U().bearingDeg(a, b))}`;
+
+  let surveyLayers = null;
+  async function surveySublayers() {
+    if (surveyLayers) return surveyLayers;
+    const j = await getJson(CFG.survey + '/layers?f=json', 'Survey control layers', CFG.timeouts.query);
+    const out = [];
+    (j.layers || []).forEach(l => {
+      const name = l.name || '';
+      if (l.type && l.type !== 'Feature Layer') return;
+      if (/destroyed|cadastral/i.test(name)) return;
+      const cors = /cors/i.test(name);
+      if (!cors && !/(gda|control mark|survey control|ahd)/i.test(name)) return;
+      const names = (l.fields || []).map(f => f.name);
+      const pick = re => names.find(n => re.test(n));
+      const f = { id: pick(/(^|\.)mrk_id$/i), ahd: pick(/(^|\.)ahdheight$/i), cond: pick(/(^|\.)mrkcnd_de$/i), visit: pick(/(^|\.)lastvisit_dt$/i),
+        report: pick(/(^|\.)report_url$/i), type: pick(/(^|\.)mrktype_de$/i) };
+      if (!f.id) return;
+      out.push({ id: l.id, cors, fields: f });
+    });
+    surveyLayers = out;
+    return out;
+  }
+  async function fetchMarks(a) {
+    const t0 = now();
+    try {
+      const subs = await surveySublayers();
+      const b = boxM(a, CFG.marks.radiusM);
+      const all = await Promise.all(subs.map(sl => {
+        const f = sl.fields, outFields = Object.values(f).filter(Boolean).join(',');
+        const params = new URLSearchParams({ where: '1=1', geometry: `${b.w},${b.s},${b.e},${b.n}`, geometryType: 'esriGeometryEnvelope', inSR: '4326', outSR: '4326',
+          spatialRel: 'esriSpatialRelIntersects', outFields, returnGeometry: 'true', f: 'json' });   // no resultRecordCount: this server answers it with nothing
+        return getJson(`${CFG.survey}/${sl.id}/query?${params}`, 'Survey marks', CFG.timeouts.query)
+          .then(j => (j.features || []).map(ft => ({ sl, a: ft.attributes || {}, g: ft.geometry || {} }))).catch(() => []);
+      }));
+      const byId = new Map();
+      all.flat().forEach(({ sl, a: at, g }) => {
+        const f = sl.fields, id = at[f.id];
+        if (id == null || g.x == null) return;
+        const ahd = f.ahd && at[f.ahd] != null && isFinite(at[f.ahd]) ? Number(at[f.ahd]) : null;
+        const prev = byId.get(String(id));
+        if (prev && (prev.ahd != null || ahd == null)) return;
+        let report = f.report ? at[f.report] : null;
+        if (!report || String(report).indexOf(CFG.surveyReportBase) !== 0) report = `${CFG.surveyReportBase}SCR${String(id).padStart(6, '0')}.pdf`;
+        const v = f.visit ? at[f.visit] : null;
+        let lastVisit = '';
+        if (v) { const d = new Date(Number(v)); if (!isNaN(d)) lastVisit = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`; }
+        const cond = f.cond ? String(at[f.cond] || '').trim() : '';
+        byId.set(String(id), { id: String(id), name: `${sl.cors ? 'CORS' : 'PSM'} ${id}`, lat: g.y, lon: g.x, ahd,
+          condition: cond ? cond.charAt(0).toUpperCase() + cond.slice(1).toLowerCase() : '', lastVisit, report,
+          type: f.type ? String(at[f.type] || '') : '' });
+      });
+      const list = [...byId.values()].map(m => Object.assign(m, { d: near(a, m) })).filter(m => m.d <= CFG.marks.radiusM)
+        .sort((x, y) => x.d - y.d).slice(0, CFG.marks.max)
+        .map((m, i) => Object.assign(m, { ref: `S${i + 1}`, away: away(a, m), good: !/not found|damaged|disturbed|destroyed/i.test(m.condition) }));
+      diag('marks', 'loaded', `${list.length} within ${U().fmtDist(CFG.marks.radiusM)}`, now() - t0);
+      return list;
+    } catch (e) { diag('marks', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); return null; }
+  }
+  const subCache = {};
+  async function sublayerId(url, re, fallback) {
+    if (subCache[url + re]) return subCache[url + re];
+    try { const j = await getJson(url + '/layers?f=json', 'Layer list', CFG.timeouts.query); const l = (j.layers || []).find(x => re.test(x.name || '')); subCache[url + re] = l ? l.id : fallback; }
+    catch (_) { subCache[url + re] = fallback; }
+    return subCache[url + re];
+  }
+  async function fetchBridges(a) {
+    const t0 = now();
+    try {
+      const b = boxM(a, CFG.bridges.radiusM);
+      const [tid, qid] = await Promise.all([sublayerId(CFG.stateRoads, /^state controlled bridge$/i, 3), sublayerId(CFG.roadsAndTracks, /^bridges$/i, 22)]);
+      const q = (url, id, where, fields) => getJson(`${url}/${id}/query?${new URLSearchParams({ where, geometry: `${b.w},${b.s},${b.e},${b.n}`, geometryType: 'esriGeometryEnvelope',
+        inSR: '4326', outSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: fields, returnGeometry: 'true', geometryPrecision: '6', f: 'geojson' })}`, 'Bridges', CFG.timeouts.query).catch(() => null);
+      const [tj, qj] = await Promise.all([q(CFG.stateRoads, tid, '1=1', 'name,struc_id,struc_type,rsect_name,road_code'),
+        q(CFG.roadsAndTracks, qid, "operational_status NOT IN ('Dismantled','Proposed')", 'name,feature_type,operational_status,additional_names')]);
+      if (!tj && !qj) throw new Error('the bridge registers didn’t answer');
+      const tmr = new Map();
+      ((tj || {}).features || []).forEach(f => {
+        const g = f.geometry; if (!g || g.type !== 'Point') return;
+        const [lon, lat] = g.coordinates, p = f.properties || {};
+        const id = p.struc_id != null ? String(p.struc_id) : `${lat},${lon}`;
+        const s = tmr.get(id) || { kind: 'tmr', struc: p.struc_id != null ? String(p.struc_id) : '', name: (p.name || '').trim(), type: (p.struc_type || '').trim(), roads: new Set(), pts: [] };
+        s.pts.push({ lat, lon }); if (p.rsect_name) s.roads.add(`${String(p.road_code || '').toUpperCase() === 'OVER' ? 'over ' : ''}${p.rsect_name}`);
+        tmr.set(id, s);
+      });
+      const list = [...tmr.values()].map(s => ({ kind: 'tmr', struc: s.struc, name: s.name, type: s.type, roads: [...s.roads],
+        lat: s.pts.reduce((x, p) => x + p.lat, 0) / s.pts.length, lon: s.pts.reduce((x, p) => x + p.lon, 0) / s.pts.length }));
+      ((qj || {}).features || []).forEach(f => {
+        const g = f.geometry; if (!g) return;
+        const lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+        const pts = lines.flat().map(([lon, lat]) => ({ lat, lon }));
+        if (!pts.length) return;
+        if (list.some(t => t.kind === 'tmr' && pts.some(p => near(p, t) <= CFG.bridges.mergeM))) return;   // the same bridge
+        const mid = pts[Math.floor(pts.length / 2)];
+        const p = f.properties || {};
+        list.push({ kind: 'qrt', name: (p.name || p.additional_names || '').trim(), type: (p.feature_type || 'Road bridge').trim(), lat: mid.lat, lon: mid.lon, pts });
+      });
+      const dist = br => br.pts ? Math.min(...br.pts.map(p => near(a, p))) : near(a, br);
+      const out = list.map(br => Object.assign(br, { d: dist(br) })).filter(br => br.d <= CFG.bridges.radiusM).sort((x, y) => x.d - y.d)
+        .slice(0, CFG.bridges.max).map((br, i) => {
+          const title = br.name || (br.kind === 'tmr' && br.struc ? `Structure ${br.struc}` : br.type || 'Bridge');
+          const who = br.kind === 'tmr' ? `Transport and Main Roads${br.struc ? ', structure ' + br.struc : ''}${br.roads.length ? ' — ' + br.roads.join('; ') : ''}` : 'not State-controlled (normally the council’s)';
+          return { ref: `B${i + 1}`, title, who, kind: br.kind, lat: br.lat, lon: br.lon, d: br.d, away: away(a, br) };
+        });
+      diag('bridges', 'loaded', `${out.length} within ${U().fmtDist(CFG.bridges.radiusM)}`, now() - t0);
+      return out;
+    } catch (e) { diag('bridges', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); return null; }
+  }
+  async function fetchNearby(a) {
+    try {
+      const r = await S.floodnet.near(a.lat, a.lon, CFG.nearby.radiusKm, CFG.nearby.max);
+      const own = (M.app.session.station || {}).id;
+      return (r.stations || []).filter(s => s.id !== own && s.lat != null).map(s => ({ id: s.id, name: s.name, number: s.station_number, lat: s.lat, lon: s.lon, kinds: s.kinds || [] }));
+    } catch (e) { log(`Flood-Net stations nearby: ${e.message}`); return []; }
+  }
+  // Ask again when the location has moved far enough to matter.
+  async function refreshNear(force) {
+    resolvePins();
+    const a = M.anchor;
+    if (!a) { M.marks = []; M.bridges = []; M.nearby = []; storeNear(); drawMarks(); drawBridges(); drawNearby(); renderSide(); return; }
+    if (!force && M.fetchedAt && near(M.fetchedAt, a) < 100) return;
+    M.fetchedAt = { lat: a.lat, lon: a.lon };
+    M.looking = true; renderSide();
+    const [marks, bridges, nearby] = await Promise.all([fetchMarks(a), fetchBridges(a), fetchNearby(a)]);
+    M.looking = false;
+    if (marks) M.marks = marks;
+    if (bridges) M.bridges = bridges;
+    M.nearby = nearby;
+    storeNear();
+    drawMarks(); drawBridges(); drawNearby(); renderSide(); renderLegend(); renderEdges();
+    M.app.changed({ light: true });
+    if (M.app.ctx) S.form.render(document.getElementById('form'));   // the Benchmark hint
+    S.form.renderPS(document.getElementById('ps'));
+  }
+  // Keep what the Word copy and the playbook need in the session.
+  function storeNear() {
+    const s = M.app.session;
+    s.map.marks = M.on.marks ? M.marks.map(m => ({ id: m.id, ref: m.ref, name: m.name, lat: m.lat, lon: m.lon, ahd: m.ahd, condition: m.condition, lastVisit: m.lastVisit, report: m.report, away: m.away })) : [];
+    s.map.bridges = M.bridges.map(b => ({ ref: b.ref, title: b.title, who: b.who, lat: b.lat, lon: b.lon, away: b.away }));
+    // The nearest bridge, close enough to be the one equipment might attach to,
+    // fills Property Services' bridge detail (shown once that answer is Yes).
+    const b = M.bridges.find(x => x.d <= CFG.bridges.prefillWithinM);
+    s.prefill.__ps = s.prefill.__ps || {};
+    if (b) s.prefill.__ps['bridgeAttach.detail'] = `${b.title} — ${b.who} (${b.away} of the station)`;
+    else delete s.prefill.__ps['bridgeAttach.detail'];
+  }
+
+  /* ---------------- drawing on the map ---------------- */
+  const G_ = (geometry, symbol, attributes) => new M.esri.Graphic({ geometry, symbol, attributes: attributes || {} });
+  const pt = (lon, lat) => ({ type: 'point', longitude: lon, latitude: lat });
+  const text = (t, color, yoff, size) => ({ type: 'text', text: t, color: color || [255, 255, 255], haloColor: [20, 20, 20, 0.85], haloSize: 1.5,
+    yoffset: yoff == null ? 14 : yoff, font: { size: size || 11, weight: 'bold', family: 'Arial' } });
+
+  function drawPins() {
+    if (!M.ready) return;
+    const L = M.gl.pins; L.removeAll(); M.gl.ghost.removeAll();
+    const st = M.app.session.station;
+    // Where Flood-Net has the station, once the position on the map differs from
+    // it by enough to see. A working aid only: left out of the Word picture.
+    const cur = M.pins.find(p => p.anchor && p.shown && p.ok);
+    if (st && st.lat != null && (!cur || near(cur, st) >= 10)) {
+      M.gl.ghost.add(G_(pt(st.lon, st.lat), { type: 'simple-marker', style: 'circle', size: 20, color: [0, 0, 0, 0], outline: { color: [214, 40, 40, 1], width: 2, style: 'dash' } }, { kind: 'fn' }));
+      M.gl.ghost.add(G_(pt(st.lon, st.lat), text(`Flood-Net position${cur ? ' (' + U().fmtDist(near(cur, st)) + ' away)' : ''}`, [255, 220, 220], -20, 10)));
+    }
+    shownPins().forEach(p => {
+      L.add(G_(pt(p.lon, p.lat), { type: 'simple-marker', style: 'circle', size: 15, color: rgb(p.colour).concat(1), outline: { color: [255, 255, 255, 1], width: 2 } }, { pin: p.key }));
+      L.add(G_(pt(p.lon, p.lat), text(p.label), { pinLabel: p.key }));
+    });
+  }
+  function drawMarks() {
+    if (!M.ready) return;
+    const L = M.gl.marks; L.removeAll();
+    if (!M.on.marks) return;
+    const hidden = new Set(M.app.session.map.hiddenMarks || []);
+    M.marks.forEach(m => {
+      if (hidden.has(m.id)) return;
+      const col = m.good ? [27, 79, 114, 1] : [120, 120, 120, 1];
+      L.add(G_(pt(m.lon, m.lat), { type: 'simple-marker', style: 'circle', size: 13, color: [255, 255, 255, 0.85], outline: { color: col, width: 2.5 } }, { mark: m.id }));
+      if (m.ahd != null) L.add(G_(pt(m.lon, m.lat), { type: 'simple-marker', style: 'circle', size: 4, color: col, outline: null }));
+      L.add(G_(pt(m.lon, m.lat), text(m.ref, [255, 255, 255], 12, 10)));
+    });
+  }
+  function drawBridges() {
+    if (!M.ready) return;
+    const L = M.gl.bridges; L.removeAll();
+    if (!M.on.bridges) return;
+    M.bridges.forEach(b => {
+      L.add(G_(pt(b.lon, b.lat), { type: 'simple-marker', style: 'diamond', size: 13, color: b.kind === 'tmr' ? [128, 0, 32, 1] : [110, 76, 60, 1], outline: { color: [255, 255, 255, 1], width: 1.5 } }, { bridge: b.ref }));
+      L.add(G_(pt(b.lon, b.lat), text(b.ref, [255, 240, 230], 12, 10)));
+    });
+  }
+  function drawNearby() {
+    if (!M.ready) return;
+    const L = M.gl.nearby; L.removeAll();
+    if (!M.on.nearby) return;
+    M.nearby.forEach(s => {
+      L.add(G_(pt(s.lon, s.lat), { type: 'simple-marker', style: 'circle', size: 8, color: [235, 235, 235, 0.9], outline: { color: [60, 60, 60, 0.9], width: 1 } }));
+      L.add(G_(pt(s.lon, s.lat), text(s.name, [235, 235, 235], 10, 9)));
+    });
+  }
+  function features() { return M.app.session.map.features = M.app.session.map.features || []; }
+  function drawFeatures() {
+    if (!M.ready) return;
+    const L = M.gl.draw, E = M.esri; L.removeAll();
+    const ctx = M.app.ctx;
+    features().forEach(f => {
+      const q = ctx.byCode[f.q];
+      if (q && !R().visible(ctx, q)) return;
+      if (f.kind === 'circle') {
+        const r = Number(R().eff(ctx, f.q).fields[(q && q.mapDraw && q.mapDraw.field) || 'radius']) || f.radiusM || 0;
+        if (!r) return;
+        const poly = E.geometryEngine.geodesicBuffer(G_(pt(f.lon, f.lat)).geometry, r, 'meters');
+        L.add(G_(poly, { type: 'simple-fill', color: DRAW_RGB.concat(0.18), outline: { color: DRAW_RGB.concat(1), width: 2, style: 'dash' } }, { feature: f.id }));
+        L.add(G_(pt(f.lon, f.lat), text(`Clearance ${r} m`, [220, 255, 225], -18, 10)));
+      } else if (f.kind === 'tree') {
+        L.add(G_(pt(f.lon, f.lat), { type: 'simple-marker', style: 'triangle', size: 13, color: DRAW_RGB.concat(1), outline: { color: [255, 255, 255, 1], width: 1.5 } }, { feature: f.id }));
+        L.add(G_(pt(f.lon, f.lat), text(f.ref, [220, 255, 225], 12, 10)));
+      } else if (f.kind === 'line' && f.path && f.path.length > 1) {
+        L.add(G_({ type: 'polyline', paths: [f.path], spatialReference: { wkid: 4326 } }, { type: 'simple-line', color: [255, 170, 0, 1], width: 3.5 }, { feature: f.id }));
+        const mid = f.path[Math.floor(f.path.length / 2)];
+        L.add(G_(pt(mid[0], mid[1]), text(`Access track ${Math.round(f.lengthM || 0)} m`, [255, 235, 200], 12, 10)));
+      }
+    });
+  }
+  function startDraw(code) {
+    const q = M.app.ctx.byCode[code];
+    if (!q || !q.mapDraw) return;
+    if (!M.ready) { M.app.toast('The map hasn’t loaded yet.'); return; }
+    if (q.mapDraw.kind === 'circle') {
+      startPlace({ kind: 'circle', q: code, label: 'Click the centre of the clearance (usually the station)' });
+    } else if (q.mapDraw.kind === 'line') {
+      cancelPlace();
+      if (!M.sketch) M.sketch = new M.esri.SketchViewModel({ view: M.view, layer: M.gl.draw, updateOnGraphicClick: false });
+      M.drawing = true;
+      setPlaceHint('Click along the route — double-click, press Enter or ✓ Finish route when done');
+      M.els.drawActs.hidden = false;
+      M.sketch.create('polyline');
+      const hnd = M.sketch.on('create', ev => {
+        if (ev.state !== 'active') log(`Drawing: ${ev.state}${ev.toolEventInfo ? ' (' + ev.toolEventInfo.type + ')' : ''}${ev.graphic && ev.graphic.geometry ? `, ${(ev.graphic.geometry.paths[0] || []).length} points` : ''}`);
+        else if (ev.toolEventInfo && ev.toolEventInfo.type === 'vertex-add') log('Drawing: point added');
+        if (ev.state === 'cancel') { hnd.remove(); M.drawing = false; M.els.drawActs.hidden = true; setPlaceHint(null); drawFeatures(); return; }
+        if (ev.state !== 'complete') return;
+        hnd.remove(); M.drawing = false; M.els.drawActs.hidden = true; setPlaceHint(null);
+        if (!ev.graphic || !ev.graphic.geometry || !(ev.graphic.geometry.paths[0] || []).length || ev.graphic.geometry.paths[0].length < 2) { drawFeatures(); M.app.toast('A route needs at least two points.'); return; }
+        const g = ev.graphic.geometry;
+        const lengthM = M.esri.geometryEngine.geodesicLength(g, 'meters');
+        const merc = g.spatialReference && g.spatialReference.isWebMercator;
+        const path = (g.paths[0] || []).map(([x, y]) => (merc ? M.esri.webMercatorUtils.xyToLngLat(x, y) : [x, y]).map(n => Math.round(n * 1e6) / 1e6));
+        const fs = features().filter(f => !(f.kind === 'line' && f.q === code));
+        fs.push({ id: U().uuid(), kind: 'line', q: code, path, lengthM: Math.round(lengthM) });
+        M.app.session.map.features = fs;
+        // The length fills the question's length field (as a suggestion from the map).
+        const pre = M.app.session.prefill[code] = Object.assign({ src: 'map', fields: {} }, M.app.session.prefill[code] || {});
+        pre.src = 'map'; pre.fields[q.mapDraw.field] = String(Math.round(lengthM));
+        M.app.changed();
+        drawFeatures();
+        M.app.toast(`Access track drawn: ${Math.round(lengthM)} m.`);
+      });
+    }
+  }
+  function addTree(lat, lon) {
+    const fs = features();
+    const n = fs.filter(f => f.kind === 'tree').length + 1;
+    fs.push({ id: U().uuid(), kind: 'tree', q: 'vegetation', ref: `T${n}`, lat, lon });
+    const pre = M.app.session.prefill.vegetation = Object.assign({ src: 'map', fields: {} }, M.app.session.prefill.vegetation || {});
+    pre.src = 'map';
+    pre.fields.detail = `Trees to remove marked on the site map (T1${n > 1 ? '–T' + n : ''})`;
+    M.app.changed(); drawFeatures();
+  }
+
+  /* ---------------- interaction: place, drag, click ---------------- */
+  function setPlaceHint(t) { M.els.placeHint.hidden = !t; M.els.placeHint.textContent = t || ''; M.els.view.classList.toggle('placing', !!t); }
+  function startPlace(p) { if (!M.ready) { M.app.toast('The map hasn’t loaded yet.'); return; } setMove(false); M.place = p; setPlaceHint(`${p.label} — Esc to cancel`); }
+  function cancelPlace() { M.place = null; if (M.drawing && M.sketch) M.sketch.cancel(); M.drawing = false; if (M.els.drawActs) M.els.drawActs.hidden = true; setPlaceHint(null); }
+  function findPin(hit) {
+    for (const r of (hit && hit.results) || []) { const a = r.graphic && r.graphic.attributes; if (a && a.pin) return r.graphic; }
+    return null;
+  }
+  function attachInteraction() {
+    const v = M.view;
+    v.on('click', ev => {
+      if (M.place) {
+        const p = M.place; const mp = ev.mapPoint; cancelPlace();
+        if (!mp) return;
+        if (p.kind === 'pin') { const pin = M.pins.find(x => x.key === p.key); if (pin) writePin(pin, mp.latitude, mp.longitude, 'place'); }
+        else if (p.kind === 'circle') {
+          const fs = features().filter(f => !(f.kind === 'circle' && f.q === p.q));
+          fs.push({ id: U().uuid(), kind: 'circle', q: p.q, lat: mp.latitude, lon: mp.longitude });
+          M.app.session.map.features = fs;
+          const q = M.app.ctx.byCode[p.q];
+          if (!Number(R().eff(M.app.ctx, p.q).fields[q.mapDraw.field])) { ans(p.q).fields[q.mapDraw.field] = '10'; M.app.toast('Clearance circle placed at 10 m — change the radius in the Vegetation Management question.'); }
+          M.app.changed(); drawFeatures();
+        } else if (p.kind === 'tree') addTree(mp.latitude, mp.longitude);
+        ev.stopPropagation();
+        return;
+      }
+      v.hitTest(ev).then(hit => {
+        for (const r of hit.results || []) {
+          const a = r.graphic && r.graphic.attributes || {};
+          if (a.mark || a.bridge) { const el = M.els.side.querySelector(`[data-ref="${a.mark ? 'm-' + a.mark : 'b-' + a.bridge}"]`); if (el) { el.scrollIntoView({ block: 'nearest' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1200); } return; }
+        }
+      }).catch(() => {});
+    });
+    v.on('pointer-move', ev => {
+      if (!M.move || M.drag) return;
+      v.hitTest(ev).then(hit => { M.hover = findPin(hit); M.els.view.classList.toggle('grab', !!M.hover); }).catch(() => {});
+    });
+    v.on('drag', ev => {
+      if (!M.move) return;
+      if (ev.action === 'start') {
+        if (M.hover) { M.drag = M.hover; M.els.view.classList.add('grabbing'); ev.stopPropagation(); }
+      } else if (ev.action === 'update' && M.drag) {
+        const p = v.toMap({ x: ev.x, y: ev.y });
+        if (p) { M.drag.geometry = pt(p.longitude, p.latitude); const lab = M.gl.pins.graphics.find(g => g.attributes && g.attributes.pinLabel === M.drag.attributes.pin); if (lab) lab.geometry = pt(p.longitude, p.latitude); }
+        ev.stopPropagation();
+      } else if (ev.action === 'end' && M.drag) {
+        const g = M.drag; M.drag = null; M.els.view.classList.remove('grabbing');
+        const pin = M.pins.find(x => x.key === g.attributes.pin);
+        if (pin) writePin(pin, Math.round(g.geometry.latitude * 1e6) / 1e6, Math.round(g.geometry.longitude * 1e6) / 1e6, 'drag');
+        ev.stopPropagation();
+      }
+    });
+  }
+  function setMove(on) {
+    M.move = !!on;
+    if (M.move && M.measure) setMeasure(false);
+    M.els.moveBtn.setAttribute('aria-pressed', String(M.move));
+    M.els.moveBtn.classList.toggle('on', M.move);
+    if (!M.move) { M.hover = null; M.drag = null; M.els.view.classList.remove('grab', 'grabbing'); }
+  }
+  function setMeasure(on) {
+    if (!M.ready) return;
+    if (on && !M.measure) {
+      setMove(false);
+      M.measure = new M.esri.DistanceMeasurement2D({ view: M.view, unit: 'metric' });
+      M.view.ui.add(M.measure, 'top-right');
+      try { M.measure.viewModel.start(); } catch (_) { /* older API */ }
+    } else if (!on && M.measure) { M.view.ui.remove(M.measure); M.measure.destroy(); M.measure = null; }
+    M.els.measureBtn.setAttribute('aria-pressed', String(!!M.measure));
+    M.els.measureBtn.classList.toggle('on', !!M.measure);
+  }
+
+  /* ---------------- framing ---------------- */
+  async function frame(all) {
+    if (!M.ready) return;
+    const pts = shownPins();
+    try {
+      if (pts.length > 1 && all) await M.view.goTo(pts.map(p => G_(pt(p.lon, p.lat))), { animate: false }).then(() => { if (M.view.zoom > 18) M.view.zoom = 18; else M.view.zoom = M.view.zoom - 0.6; });
+      else if (M.anchor) await M.view.goTo({ center: [M.anchor.lon, M.anchor.lat], zoom: CFG.siteZoom }, { animate: false });
+    } catch (e) { log(`Framing didn’t finish: ${e && (e.name || e.message)}`); }
+  }
+
+  /* ---------------- the location check ---------------- */
+  function renderCheck() {
+    const el = M.els.check; if (!el) return;
+    el.innerHTML = '';
+    const st = M.app.session.station;
+    const cur = M.pins.find(p => p.anchor && p.shown && p.ok);
+    if (!st) { el.appendChild(h('p', { class: 'hint' }, 'Choose a station above — or place its location on the map from the list beside it.')); return; }
+    if (st.lat == null) { el.appendChild(h('p', { class: 'hint' }, 'Flood-Net has no position for this station. Place it on the map from the list beside it.')); return; }
+    if (st.checked) {
+      el.appendChild(h('div', { class: 'check-ok' }, `✓ Position checked ${U().fmtWhen(st.checked.at)} — ${st.checked.movedM >= 1 ? `moved ${U().fmtDist(st.checked.movedM)} from Flood-Net’s record` : 'Flood-Net’s record was right'}.`, ' ',
+        h('button', { type: 'button', class: 'link', onclick: () => { st.checked = null; M.app.changed(); } }, 'Check again')));
+      return;
+    }
+    const p = st.precision || U().coordPrecision(st.lat, st.lon);
+    const coarse = p.places <= 4;
+    el.appendChild(h('div', { class: 'check-todo' + (coarse ? ' coarse' : '') },
+      h('div', null, h('b', null, 'Check the station’s position. '),
+        `Flood-Net has it at ${U().formatCoord(st.lat, st.lon)} — ${p.places} decimal places (${p.metres < 1 ? 'under 1 m' : '±' + U().fmtDist(p.metres)}). `,
+        coarse ? 'Older records are often rounded like this. ' : '',
+        'Turn on ', h('b', null, '✥ Move pins'), ' and drag the red pin onto the equipment in the imagery, or type the position in the list — then:'),
+      h('button', { type: 'button', class: 'btn btn-primary', onclick: confirmPosition }, '✓ Position checked')));
+  }
+  function confirmPosition() {
+    const st = M.app.session.station; if (!st) return;
+    resolvePins();
+    const cur = M.pins.find(p => p.anchor && p.shown && p.ok);
+    const pos = cur ? { lat: cur.lat, lon: cur.lon } : { lat: st.lat, lon: st.lon };
+    const moved = st.lat != null ? near(st, pos) : 0;
+    if (moved > 500 && !G.confirm(`The position you’ve set is ${U().fmtDist(moved)} from where Flood-Net has ${st.name}. Is that right? (A move this big is usually the wrong station or a typo.)`)) return;
+    st.checked = { lat: pos.lat, lon: pos.lon, movedM: st.lat != null ? Math.round(near(st, pos) * 10) / 10 : 0, at: Date.now() };
+    if (cur) ans(cur.code).fields[cur.field] = U().formatCoord(pos.lat, pos.lon);
+    M.app.changed();
+    refreshNear(false);
+  }
+
+  /* ---------------- side panel ---------------- */
+  function renderSide() {
+    const el = M.els.side; if (!el || !M.app || !M.app.ctx) return;
+    const keep = document.activeElement && el.contains(document.activeElement) ? document.activeElement.dataset.fk : null;
+    el.innerHTML = '';
+    el.appendChild(h('h4', null, 'Locations'));
+    M.pins.forEach(p => {
+      const input = h('input', { type: 'text', value: p.raw, 'data-fk': `map::${p.key}`, placeholder: 'lat, lon — or Place', 'aria-label': `${p.label} coordinates` });
+      const commit = () => {
+        const v = input.value.trim();
+        if (v === p.raw.trim()) return;
+        if (!v) { writePin(p, null); return; }
+        const r = U().parseCoord(v);
+        if (!r.ok) { M.app.toast(r.error || 'That doesn’t read as coordinates.'); return; }
+        writePin(p, r.lat, r.lon, 'typed');
+        if (M.ready) M.view.goTo({ center: [r.lon, r.lat] }, { animate: false }).catch(() => {});
+      };
+      input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); commit(); } else if (ev.key === 'Escape') input.value = p.raw; });
+      input.addEventListener('blur', commit);
+      const gateNote = !p.shown && p.gate && p.gate.q ? `Placing it sets ${((M.app.ctx.byCode[p.gate.q] || {}).label) || p.gate.q} to ${p.gate.is === 'yes' ? 'Yes' : p.gate.is}` : '';
+      el.appendChild(h('div', { class: 'loc' + (p.shown && p.ok ? '' : ' empty'), dataset: { pin: p.key } },
+        h('div', { class: 'loc-head' }, h('span', { class: 'dot', style: { background: `rgb(${rgb(p.colour).join(',')})` } }), h('span', { class: 'loc-label' }, p.label),
+          p.src && p.src !== 'user' && p.ok ? h('span', { class: `src src-${p.src}` }, p.src === 'floodnet' ? 'Flood-Net' : p.src === 'map' ? 'Map' : p.src) : null),
+        h('div', { class: 'fld-line' }, input,
+          h('button', { type: 'button', class: 'btn-mini', title: 'Click on the map to set it', onclick: () => startPlace({ kind: 'pin', key: p.key, label: `Click where the ${p.label.toLowerCase()} is` }) }, 'Place')),
+        gateNote ? h('div', { class: 'hint' }, gateNote) : null));
+    });
+    if (!M.pins.length) el.appendChild(h('p', { class: 'hint' }, 'This table has no locations.'));
+    // Things drawn for the scope.
+    const ctx = M.app.ctx, drawQs = ctx.qs.filter(q => q.mapDraw && R().visible(ctx, q));
+    if (drawQs.length) {
+      el.appendChild(h('h4', null, 'Drawn for the scope'));
+      drawQs.forEach(q => {
+        const fs = features().filter(f => f.q === q.code);
+        const row = h('div', { class: 'loc' }, h('div', { class: 'loc-label' }, q.mapDraw.label));
+        if (q.mapDraw.kind === 'circle') {
+          row.appendChild(h('div', { class: 'fld-line' },
+            h('button', { type: 'button', class: 'btn-mini', onclick: () => startDraw(q.code) }, fs.some(f => f.kind === 'circle') ? '◯ Move circle' : '◯ Place circle'),
+            h('button', { type: 'button', class: 'btn-mini', onclick: () => startPlace({ kind: 'tree', label: 'Click a tree to remove' }) }, '▲ Mark a tree'),
+            fs.length ? h('button', { type: 'button', class: 'link', onclick: () => { M.app.session.map.features = features().filter(f => f.q !== q.code); delete (M.app.session.prefill[q.code] || { fields: {} }).fields.detail; M.app.changed(); drawFeatures(); } }, 'Clear') : null));
+          const trees = fs.filter(f => f.kind === 'tree');
+          if (trees.length) row.appendChild(h('div', { class: 'hint' }, `${trees.length} tree${trees.length > 1 ? 's' : ''} marked (${trees.map(t => t.ref).join(', ')})`));
+        } else {
+          const line = fs.find(f => f.kind === 'line');
+          row.appendChild(h('div', { class: 'fld-line' },
+            h('button', { type: 'button', class: 'btn-mini', onclick: () => startDraw(q.code) }, line ? '〰 Redraw route' : '〰 Draw route'),
+            line ? h('span', { class: 'hint' }, `${line.lengthM} m`) : null,
+            line ? h('button', { type: 'button', class: 'link', onclick: () => { M.app.session.map.features = features().filter(f => f.id !== line.id); M.app.changed(); drawFeatures(); } }, 'Clear') : null));
+        }
+        el.appendChild(row);
+      });
+    }
+    // Survey marks.
+    el.appendChild(h('h4', null, 'Survey marks ', h('span', { class: 'hint' }, `within ${U().fmtDist(CFG.marks.radiusM)}, nearest ${CFG.marks.max}`)));
+    if (!M.on.marks) el.appendChild(h('p', { class: 'hint' }, 'Switched off.'));
+    else if (!M.anchor) el.appendChild(h('p', { class: 'hint' }, 'Shown once the station has a location.'));
+    else if (M.looking && !M.marks.length) el.appendChild(h('p', { class: 'hint' }, 'Asking the State’s survey register…'));
+    else if (!M.marks.length) el.appendChild(h('p', { class: 'hint' }, M.diag.marks && M.diag.marks.status !== 'loaded' ? `Couldn’t ask the survey register (${M.diag.marks.note}).` : 'None registered within 2 km.'));
+    const hidden = new Set(M.app.session.map.hiddenMarks || []);
+    M.on.marks && M.marks.forEach(m => {
+      const tick = h('input', { type: 'checkbox', checked: !hidden.has(m.id), title: 'Show on the map and list in the Word copy' });
+      tick.addEventListener('change', ev => {
+        const hm = new Set(M.app.session.map.hiddenMarks || []);
+        if (ev.target.checked) hm.delete(m.id); else hm.add(m.id);
+        M.app.session.map.hiddenMarks = [...hm];
+        drawMarks(); renderLegend(); renderEdges(); M.app.changed({ light: true });
+      });
+      el.appendChild(h('div', { class: 'mark' + (m.good ? '' : ' poor'), dataset: { ref: `m-${m.id}` } },
+        h('label', { class: 'mark-tick' }, tick, h('b', null, m.ref)),
+        h('div', null, h('a', { href: m.report, target: '_blank', rel: 'noopener', title: 'Survey Control Mark Report (PDF)' }, m.name), ' · ',
+          m.ahd != null ? `benchmark ${m.ahd} m AHD` : 'no AHD height', h('br'),
+          h('span', { class: 'hint' }, [m.condition, m.lastVisit && `last visited ${m.lastVisit}`, m.away].filter(Boolean).join(' · ')))));
+    });
+    // Bridges.
+    el.appendChild(h('h4', null, 'Bridges ', h('span', { class: 'hint' }, `within ${U().fmtDist(CFG.bridges.radiusM)}`)));
+    if (!M.on.bridges) el.appendChild(h('p', { class: 'hint' }, 'Switched off.'));
+    else if (!M.anchor) el.appendChild(h('p', { class: 'hint' }, 'Shown once the station has a location.'));
+    else if (M.looking && !M.bridges.length) el.appendChild(h('p', { class: 'hint' }, 'Asking the bridge registers…'));
+    else if (!M.bridges.length) el.appendChild(h('p', { class: 'hint' }, M.diag.bridges && M.diag.bridges.status !== 'loaded' ? `Couldn’t ask the bridge registers (${M.diag.bridges.note}).` : 'None within 1 km.'));
+    M.on.bridges && M.bridges.forEach(b => el.appendChild(h('div', { class: 'mark', dataset: { ref: `b-${b.ref}` } }, h('b', null, b.ref),
+      h('div', null, b.title, h('br'), h('span', { class: 'hint' }, `${b.who} · ${b.away}`)))));
+    if (keep) { const k = el.querySelector(`[data-fk="${CSS.escape(keep)}"]`); if (k) k.focus(); }
+  }
+
+  /* ---------------- legend, contour stamp, edge pointers (on screen; the picture repeats them) ---------------- */
+  function legendItems() {
+    const items = shownPins().map(p => ({ kind: 'pin', colour: rgb(p.colour), label: p.label, sub: U().formatCoord(p.lat, p.lon) }));
+    const ctx = M.app.ctx, fs = features();
+    if (fs.some(f => f.kind === 'circle')) { const f = fs.find(x => x.kind === 'circle'); const r = Number(R().eff(ctx, f.q).fields.radius) || 0; if (r) items.push({ kind: 'circle', colour: DRAW_RGB, label: `Vegetation clearance (${r} m radius)` }); }
+    const trees = fs.filter(f => f.kind === 'tree');
+    if (trees.length) items.push({ kind: 'tree', colour: DRAW_RGB, label: `Trees to remove (${trees.map(t => t.ref).join(', ')})` });
+    const line = fs.find(f => f.kind === 'line');
+    if (line) items.push({ kind: 'line', colour: [255, 170, 0], label: `Access track (${line.lengthM} m)` });
+    const hidden = new Set(M.app.session.map.hiddenMarks || []);
+    const marks = M.on.marks ? M.marks.filter(m => !hidden.has(m.id)) : [];
+    if (marks.length) items.push({ kind: 'mark', colour: [27, 79, 114], label: `Survey marks ${marks.map(m => m.ref).join(', ')} — table below the map` });
+    if (M.on.bridges && M.bridges.length) items.push({ kind: 'bridge', colour: [128, 0, 32], label: `Bridges ${M.bridges.map(b => b.ref).join(', ')}` });
+    return items;
+  }
+  function renderLegend() {
+    const el = M.els.legend; if (!el) return;
+    el.innerHTML = '';
+    const items = legendItems();
+    el.hidden = !items.length;
+    items.forEach(i => el.appendChild(h('div', { class: 'lg' }, h('span', { class: `lg-sym lg-${i.kind}`, style: { '--c': `rgb(${i.colour.join(',')})` } }),
+      h('span', null, h('b', null, i.label), i.sub ? h('span', { class: 'lg-sub' }, i.sub) : null))));
+  }
+  function stampText() { return M.contour === 'off' ? '' : `Contours: ${M.contour} m LiDAR${M.view && M.view.scale > CFG.dynamicMinScale ? ' (zoom in to see them)' : ''}`; }
+  function renderStamp() { if (M.els.stamp) { const t = stampText(); M.els.stamp.hidden = !t; M.els.stamp.textContent = t; } }
+  // Survey marks outside the current view: an arrow at the edge, pointing at them.
+  function offscreenMarks() {
+    if (!M.ready || !M.on.marks) return [];
+    const hidden = new Set(M.app.session.map.hiddenMarks || []);
+    const W = M.view.width, H = M.view.height, out = [];
+    M.marks.forEach(m => {
+      if (hidden.has(m.id)) return;
+      const s = M.view.toScreen(G_(pt(m.lon, m.lat)).geometry);
+      if (!s || (s.x >= 0 && s.x <= W && s.y >= 0 && s.y <= H)) return;
+      const cx = W / 2, cy = H / 2, dx = s.x - cx, dy = s.y - cy;
+      const k = Math.min((W / 2 - 22) / Math.abs(dx || 1e-9), (H / 2 - 22) / Math.abs(dy || 1e-9));
+      out.push({ m, x: cx + dx * k, y: cy + dy * k, angle: Math.atan2(dy, dx), label: `${m.ref} ${U().fmtDist(m.d)}` });
+    });
+    // Labels on the same edge are spread apart along it so none overlap.
+    const edgeOf = o => (o.y <= 23 ? 't' : o.y >= H - 23 ? 'b' : o.x <= 23 ? 'l' : 'r');
+    const LW = o => o.label.length * 7 + 22, LH = 22;
+    ['t', 'b', 'l', 'r'].forEach(e => {
+      const on = out.filter(o => edgeOf(o) === e);
+      const horiz = e === 't' || e === 'b';
+      on.sort((a, b) => horiz ? a.x - b.x : a.y - b.y);
+      for (let i = 1; i < on.length; i++) {
+        const prev = on[i - 1], o = on[i];
+        if (horiz) { const min = prev.x + (LW(prev) + LW(o)) / 2 + 4; if (o.x < min) o.x = min; }
+        else { const min = prev.y + LH + 4; if (o.y < min) o.y = min; }
+      }
+      // Keep the last ones on the map.
+      for (let i = on.length - 1; i >= 0; i--) {
+        const o = on[i];
+        if (horiz) { const max = (i === on.length - 1 ? W - LW(o) / 2 - 4 : on[i + 1].x - (LW(o) + LW(on[i + 1])) / 2 - 4); if (o.x > max) o.x = max; }
+        else { const max = (i === on.length - 1 ? H - LH : on[i + 1].y - LH - 4); if (o.y > max) o.y = max; }
+      }
+    });
+    return out;
+  }
+  function renderEdges() {
+    const el = M.els.edges; if (!el) return;
+    el.innerHTML = '';
+    offscreenMarks().forEach(o => el.appendChild(h('div', { class: 'edge', style: { left: `${o.x}px`, top: `${o.y}px` } },
+      h('span', { class: 'edge-arrow', style: { transform: `rotate(${o.angle}rad)` } }, '➤'), h('span', null, o.label))));
+  }
+
+  /* ---------------- diagnostics ---------------- */
+  function renderDiag() {
+    if (!M.els.diag) return;
+    const lines = ['SoRT v2 map — ' + new Date().toISOString()];
+    Object.entries(M.diag).forEach(([k, d]) => lines.push(`${k}: ${d.status}${d.ms != null ? ` (${(d.ms / 1000).toFixed(1)} s)` : ''}${d.note ? ' — ' + d.note : ''}`));
+    if (M.view) lines.push(`view: centre ${M.view.center ? U().formatCoord(M.view.center.latitude, M.view.center.longitude) : '?'}, scale 1:${Math.round(M.view.scale || 0)}, ${M.view.width}×${M.view.height}`);
+    if (M.anchor) lines.push(`anchor: ${U().formatCoord(M.anchor.lat, M.anchor.lon)}`);
+    lines.push('', ...M.log);
+    M.els.diag.textContent = lines.join('\n');
+  }
+
+  /* ---------------- the picture for Word ---------------- */
+  function rasterStats(ctx, W, H) {
+    try {
+      const d = ctx.getImageData(0, 0, W, H).data, N = 48; let cov = 0, tot = 0; const b = new Set();
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+        const x = Math.min(W - 1, Math.floor((i + 0.5) * W / N)), y = Math.min(H - 1, Math.floor((j + 0.5) * H / N)), o = (y * W + x) * 4;
+        tot++; if (d[o + 3] > 8) { cov++; b.add((d[o] >> 3) + ',' + (d[o + 1] >> 3) + ',' + (d[o + 2] >> 3)); }
+      }
+      return { coverage: tot ? cov / tot : 0, distinct: b.size };
+    } catch (_) { return null; }
+  }
+  function roundRect(c, x, y, w, hh, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + hh, r); c.arcTo(x + w, y + hh, x, y + hh, r); c.arcTo(x, y + hh, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+  async function whenReady() {
+    const E = M.esri, v = M.view, budget = CFG.timeouts.layer;
+    const settle = pred => Promise.race([E.reactiveUtils.whenOnce(pred), new Promise(r => setTimeout(r, budget))]).catch(() => {});
+    await settle(() => !v.suspended && v.ready && v.width > 0 && v.height > 0);
+    await new Promise(r => setTimeout(r, 60));
+    await settle(() => !v.updating && (!v.allLayerViews || v.allLayerViews.toArray().every(lv => !lv.updating)));
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  }
+  async function picture() {
+    if (M.failed) throw new Error('the map didn’t load');
+    if (!M.ready) throw new Error('the map is still loading');
+    resolvePins();
+    if (!shownPins().length && !M.anchor) return null;
+    // Working aids (Flood-Net's recorded position, its other stations) stay off the report's picture.
+    const aids = [M.gl.ghost, M.gl.nearby, M.layers.labels && null].filter(Boolean);
+    const was = aids.map(l => l.visible);
+    aids.forEach(l => { l.visible = false; });
+    let shot;
+    try { await whenReady(); shot = await M.view.takeScreenshot(); }
+    finally { aids.forEach((l, i) => { l.visible = was[i]; }); }
+    const img = new Image(); img.src = shot.dataUrl;
+    await (img.decode ? img.decode().catch(() => new Promise(r => { img.onload = r; })) : new Promise(r => { img.onload = r; }));
+    const W = img.naturalWidth, H = img.naturalHeight;
+    if (!W || !H) throw new Error('the map picture came back empty');
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0, W, H);
+    const st = rasterStats(x, W, H);
+    if (st && (st.coverage < 0.5 || st.distinct <= 4)) throw new Error('the map hadn’t finished drawing — wait a moment and copy again');
+    x.globalCompositeOperation = 'destination-over'; x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.globalCompositeOperation = 'source-over';
+    const sc = W / M.view.width;                               // device pixels per CSS pixel
+    const pad = Math.round(10 * sc), fs = Math.round(13 * sc), fs2 = Math.round(11 * sc);
+    x.textBaseline = 'top';
+    // Legend, top-left.
+    const items = legendItems();
+    if (items.length) {
+      let wmax = 0;
+      items.forEach(i => { x.font = `bold ${fs}px Segoe UI, Arial, sans-serif`; wmax = Math.max(wmax, x.measureText(i.label).width); if (i.sub) { x.font = `${fs2}px Segoe UI, Arial, sans-serif`; wmax = Math.max(wmax, x.measureText(i.sub).width); } });
+      const rowH = i => fs + (i.sub ? fs2 + 3 * sc : 0) + 7 * sc;
+      const boxW = Math.min(W * 0.6, wmax + pad * 3.4), boxH = items.reduce((a, i) => a + rowH(i), 0) + pad;
+      x.fillStyle = 'rgba(255,255,255,0.88)'; roundRect(x, pad, pad, boxW, boxH, 6 * sc); x.fill();
+      let y = pad + pad / 2;
+      items.forEach(i => {
+        const cx = pad * 2.1, cy = y + fs * 0.55, col = `rgb(${i.colour.join(',')})`;
+        x.fillStyle = col; x.strokeStyle = col; x.lineWidth = 2 * sc;
+        if (i.kind === 'pin') { x.beginPath(); x.arc(cx, cy, fs * 0.42, 0, Math.PI * 2); x.fill(); }
+        else if (i.kind === 'mark') { x.beginPath(); x.arc(cx, cy, fs * 0.38, 0, Math.PI * 2); x.stroke(); }
+        else if (i.kind === 'bridge') { x.beginPath(); x.moveTo(cx, cy - fs * .45); x.lineTo(cx + fs * .45, cy); x.lineTo(cx, cy + fs * .45); x.lineTo(cx - fs * .45, cy); x.closePath(); x.fill(); }
+        else if (i.kind === 'tree') { x.beginPath(); x.moveTo(cx, cy - fs * .45); x.lineTo(cx + fs * .45, cy + fs * .4); x.lineTo(cx - fs * .45, cy + fs * .4); x.closePath(); x.fill(); }
+        else if (i.kind === 'line') { x.beginPath(); x.moveTo(cx - fs * .5, cy); x.lineTo(cx + fs * .5, cy); x.lineWidth = 3.5 * sc; x.stroke(); }
+        else if (i.kind === 'circle') { x.setLineDash([3 * sc, 2 * sc]); x.beginPath(); x.arc(cx, cy, fs * 0.42, 0, Math.PI * 2); x.stroke(); x.setLineDash([]); }
+        x.fillStyle = '#152531'; x.font = `bold ${fs}px Segoe UI, Arial, sans-serif`; x.fillText(i.label, pad * 3.4, y);
+        if (i.sub) { x.fillStyle = '#3a4a56'; x.font = `${fs2}px Segoe UI, Arial, sans-serif`; x.fillText(i.sub, pad * 3.4, y + fs + 3 * sc); }
+        y += rowH(i);
+      });
+    }
+    // Contour caption, top-right.
+    const stamp = stampText();
+    if (stamp) {
+      x.font = `${fs2}px Segoe UI, Arial, sans-serif`; const sw = x.measureText(stamp).width;
+      x.fillStyle = 'rgba(255,255,255,0.88)'; roundRect(x, W - sw - pad * 2.4, pad, sw + pad * 1.4, fs2 + pad, 6 * sc); x.fill();
+      x.fillStyle = '#152531'; x.fillText(stamp, W - sw - pad * 1.7, pad * 1.5);
+    }
+    // Survey marks off the picture: an arrow at the edge with the distance.
+    offscreenMarks().forEach(o => {
+      x.font = `bold ${fs2}px Segoe UI, Arial, sans-serif`;
+      const tw = x.measureText(o.label).width, bw = tw + 22 * sc, bh = fs2 + 6 * sc;
+      const bx = Math.min(W - bw - 2 * sc, Math.max(2 * sc, o.x * sc - bw / 2)), by = Math.min(H - bh - fs2 - pad * 1.5, Math.max(2 * sc, o.y * sc - bh / 2));
+      x.fillStyle = 'rgba(255,255,255,0.9)'; roundRect(x, bx, by, bw, bh, 3 * sc); x.fill();
+      x.save(); x.translate(bx + 9 * sc, by + bh / 2); x.rotate(o.angle);
+      x.fillStyle = '#1b4f72'; x.beginPath(); x.moveTo(6 * sc, 0); x.lineTo(-4 * sc, -4.5 * sc); x.lineTo(-4 * sc, 4.5 * sc); x.closePath(); x.fill(); x.restore();
+      x.fillStyle = '#1b4f72'; x.fillText(o.label, bx + 18 * sc, by + 3 * sc);
+    });
+    // Attribution band.
+    const band = fs2 + pad;
+    x.fillStyle = 'rgba(0,0,0,0.55)'; x.fillRect(0, H - band, W, band);
+    x.fillStyle = '#fff'; x.font = `${fs2}px Segoe UI, Arial, sans-serif`; x.fillText(CFG.attribution, pad, H - band + pad * 0.45);
+    const ext = M.view.extent;
+    const outside = shownPins().filter(p => ext && !ext.contains(G_(pt(p.lon, p.lat)).geometry)).length;
+    return { dataUrl: c.toDataURL('image/png'), outside, at: Date.now() };
+  }
+
+  /* ---------------- what app.js calls ---------------- */
+  let lastAnchor = '';
+  // The relocation's distance, measured between its pin and the current location
+  // — a suggestion (marked Map) until accepted; a typed distance always wins.
+  function suggestDistances() {
+    const s = M.app.session, cur = M.pins.find(p => p.anchor && p.shown && p.ok);
+    let changed = false;
+    M.pins.forEach(p => {
+      if (p.anchor || p.code !== 'relocation') return;
+      const q = M.app.ctx.byCode[p.code], f = q && (q.fields || []).find(x => x.code === 'distance');
+      if (!f) return;
+      const want = cur && p.shown && p.ok ? String(Math.round(near(cur, p))) : null;
+      const pre = s.prefill[p.code] && s.prefill[p.code].src === 'map' ? s.prefill[p.code] : null;
+      const have = pre && pre.fields ? pre.fields.distance : null;
+      if (want === (have || null)) return;
+      if (want) s.prefill[p.code] = { src: 'map', fields: Object.assign({}, pre ? pre.fields : {}, { distance: want }) };
+      else if (pre) delete s.prefill[p.code];
+      changed = true;
+    });
+    return changed;
+  }
+  function sync(app) {
+    M.app = app;
+    resolvePins();
+    if (suggestDistances()) { M.app.changed(); return; }
+    renderCheck(); renderSide(); renderLegend();
+    const k = key(M.anchor);
+    if (k && k !== lastAnchor) { lastAnchor = k; refreshNearSoon(); }
+    if (!M.ready) return;
+    if (M.anchor && M.view.center && near(M.anchor, { lat: M.view.center.latitude, lon: M.view.center.longitude }) > 5000 && M.framedFor !== key(M.anchor)) { M.framedFor = key(M.anchor); frame(false); }
+    drawPins(); drawMarks(); drawBridges(); drawFeatures(); renderEdges();
+  }
+  const refreshNearSoon = (() => { let t = null; return () => { clearTimeout(t); t = setTimeout(() => refreshNear(false), 600); }; })();
+  // A (new) station: frame it, and fetch what is near it.
+  function station(app) {
+    M.app = app;
+    resolvePins();
+    renderCheck();
+    lastAnchor = key(M.anchor);
+    refreshNear(true);
+    if (!M.ready) return;
+    const k = key(M.anchor);
+    if (k && M.framedFor !== k) { M.framedFor = k; frame(false); }
+  }
+  function reset() { M.marks = []; M.bridges = []; M.nearby = []; M.fetchedAt = null; M.framedFor = null; lastAnchor = ''; cancelPlace(); setMove(false); }
+  function focusPin(code, field) {
+    resolvePins();
+    const p = M.pins.find(x => x.code === code && x.field === field);
+    if (!p) return;
+    if (p.shown && p.ok && M.ready) M.view.goTo({ center: [p.lon, p.lat], zoom: Math.max(M.view.zoom, CFG.siteZoom) }, { animate: true }).catch(() => {});
+    else startPlace({ kind: 'pin', key: p.key, label: `Click where the ${p.label.toLowerCase()} is` });
+  }
+  function hint(k) {
+    if (k === 'map.nearestBenchmark') {
+      const b = M.marks.find(m => m.ahd != null);
+      if (!M.anchor) return null;
+      if (!b) return M.marks.length || M.fetchedAt ? `No registered benchmark with an AHD height within ${U().fmtDist(CFG.marks.radiusM)} of the station.` : null;
+      return `Nearest benchmark: ${b.name} (${b.ref}), ${b.away}, ${b.ahd} m AHD${b.condition ? ', ' + b.condition.toLowerCase() : ''}${b.lastVisit ? ', last visited ' + b.lastVisit : ''}.`;
+    }
+    return null;
+  }
+
+  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, CFG, _M: M };
+})(window);

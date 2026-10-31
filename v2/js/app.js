@@ -340,17 +340,35 @@
     const out = S.word.build(A.ctx, A.session.include.map ? A.picture : null);
     root.innerHTML = out.html;
   }
+  // The clipboard is handed a promise the moment Copy is pressed, so the time
+  // the map picture takes can't outlast the browser's "just clicked" window;
+  // browsers without promise support get the older wait-then-write route.
   async function copyForWord() {
     const btns = U.$$('.copy-btn'); btns.forEach(b => { b.disabled = true; });
-    try {
-      let picture = null, note = '';
+    let note = '';
+    const built = (async () => {
+      let picture = null;
       if (A.session.include.map && S.mapView) {
         toast('Making the map picture…');
-        try { picture = await S.mapView.picture(); A.picture = picture; } catch (e) { note = ` (no map picture: ${e.message})`; }
+        try { picture = await S.mapView.picture(); A.picture = picture; }
+        catch (e) { note = ` (no map picture: ${e.message})`; }
         if (!picture && !note) note = ' (no map picture — no location yet)';
+        if (picture && picture.outside) note = ` — ${picture.outside} location${picture.outside > 1 ? 's are' : ' is'} outside the map picture`;
       }
-      const out = S.word.build(A.ctx, picture);
-      const how = await S.word.toClipboard(out.html, out.text);
+      return S.word.build(A.ctx, picture);
+    })();
+    try {
+      let how = null;
+      try {
+        if (navigator.clipboard && G.ClipboardItem) {
+          await navigator.clipboard.write([new G.ClipboardItem({
+            'text/html': built.then(o => new Blob([o.html], { type: 'text/html' })),
+            'text/plain': built.then(o => new Blob([o.text], { type: 'text/plain' }))
+          })]);
+          how = 'rich';
+        }
+      } catch (_) { how = null; }
+      if (!how) { const out = await built; how = await S.word.toClipboard(out.html, out.text); }
       toast(how === 'rich' ? `Copied — paste into Word${note}` : 'Copied as plain text only (the browser refused the formatted copy)');
       renderPreview();
     } catch (e) { toast(`Copy failed: ${e.message}`); }
