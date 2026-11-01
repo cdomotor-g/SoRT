@@ -106,6 +106,12 @@
     return sel;
   }
   const enabled = A => !!(A.defs.tasks && A.defs.tasks.enabled);
+  // Where a follow-up lands in Word, and that ticking it done takes it out.
+  function whereText(f) {
+    const where = f.table === 'ps' ? 'Property Services table' : f.table === 'scope' ? 'scope table’s Follow-up Actions row' : '';
+    if (!where) return f.done ? 'Done' : '';
+    return f.done ? `Done — left out of the ${where} in Word` : `Goes in the ${where}; tick the box when it’s done and it’s left out of the Word tables`;
+  }
   function render(A, root) {
     root.innerHTML = '';
     const s = A.session, list = R().followUps(A.ctx);
@@ -115,7 +121,7 @@
     list.forEach(f => {
       const st = s.followUpState[f.id] = s.followUpState[f.id] || {};
       const t = st.task || (st.task = { send: !!(rules[f.id] && rules[f.id].team), team: teamFor(A, rules[f.id]) });
-      const done = h('input', { type: 'checkbox', checked: f.done, disabled: f.doneAuto, title: f.doneAuto ? 'Done — the answer it was waiting for is in' : 'Tick when done' });
+      const done = h('input', { type: 'checkbox', checked: f.done, disabled: f.doneAuto, title: f.doneAuto ? 'Done — the answer it was waiting for is in, so it is left out of the Word tables' : 'Tick when done — it is then left out of the Word tables' });
       done.addEventListener('change', ev => { st.status = ev.target.checked ? 'done' : 'open'; st.at = Date.now(); A.changed({ light: true }); });
       const sendBox = h('input', { type: 'checkbox', checked: t.send && !f.done, disabled: f.done });
       sendBox.addEventListener('change', ev => { t.send = ev.target.checked; A.changed({ light: true }); });
@@ -123,7 +129,7 @@
         h('label', { class: 'fu-check' }, done),
         h('div', { class: 'fu-body' },
           h('div', null, h('span', { class: 'owner' }, f.owner), ' ', f.text, f.link ? [' ', h('a', { href: f.link.url, target: '_blank', rel: 'noopener' }, f.link.label + ' ↗')] : null),
-          h('div', { class: 'fu-meta' }, f.table === 'ps' ? 'Goes in the Property Services table' : f.table === 'scope' ? 'Goes in the scope table’s Follow-up Actions row' : '', f.done ? ' · done' : ''),
+          h('div', { class: 'fu-meta' }, whereText(f)),
           f.done ? null : h('div', { class: 'fu-task' },
             h('label', { class: 'inline-check', title: 'Send it to Flood-Net as a task for a team' }, sendBox, ' Send as a task to'),
             teamSelect(A, t.team, team => { t.team = team; t.send = true; A.changed({ light: true }); }),
@@ -151,12 +157,12 @@
     if (!list.length) { root.appendChild(h('p', { class: 'muted' }, 'None — the answers so far don’t call for any.')); return; }
     list.forEach(f => {
       const st = s.followUpState[f.id] = s.followUpState[f.id] || {};
-      const done = h('input', { type: 'checkbox', checked: f.done, disabled: f.doneAuto, title: f.doneAuto ? 'Done — the answer it was waiting for is in' : 'Tick when done' });
+      const done = h('input', { type: 'checkbox', checked: f.done, disabled: f.doneAuto, title: f.doneAuto ? 'Done — the answer it was waiting for is in, so it is left out of the Word tables' : 'Tick when done — it is then left out of the Word tables' });
       done.addEventListener('change', ev => { st.status = ev.target.checked ? 'done' : 'open'; st.at = Date.now(); A.changed({ light: true }); });
       root.appendChild(h('div', { class: 'fu' + (f.done ? ' done' : '') }, h('label', { class: 'fu-check' }, done),
         h('div', { class: 'fu-body' },
           h('div', null, h('span', { class: 'owner' }, f.owner), ' ', f.text, f.link ? [' ', h('a', { href: f.link.url, target: '_blank', rel: 'noopener' }, f.link.label + ' ↗')] : null),
-          h('div', { class: 'fu-meta' }, f.table === 'ps' ? 'Goes in the Property Services table' : f.table === 'scope' ? 'Goes in the scope table’s Follow-up Actions row' : '', f.done ? ' · done' : ''))));
+          h('div', { class: 'fu-meta' }, whereText(f)))));
     });
   }
   function addForm(A) {

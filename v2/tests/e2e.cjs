@@ -185,13 +185,14 @@ const scenarios = {
   async layout(b) {
     const p = await page(b);
     await p.pick('540601');
-    ok(!(await p.evaluate(() => document.body.classList.contains('layout-side'))), 'map above the questions by default');
+    ok(await p.evaluate(() => getComputedStyle(document.querySelector('#map-card')).position === 'fixed'), 'map beside the questions by default');
     await p.click('#layoutBtn');
-    ok(await p.evaluate(() => getComputedStyle(document.querySelector('#map-card')).position === 'fixed'), 'the switch puts the map beside the questions');
+    ok(await p.evaluate(() => getComputedStyle(document.querySelector('#map-card')).position !== 'fixed'), 'the switch puts it above the questions');
     await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.station-card', { timeout: 40000 });
-    ok(await p.evaluate(() => document.body.classList.contains('layout-side')), 'the choice is remembered');
+    ok(!(await p.evaluate(() => document.body.classList.contains('layout-side'))), 'the choice is remembered');
     await p.click('#layoutBtn');
-    ok(await p.evaluate(() => getComputedStyle(document.querySelector('#map-card')).position !== 'fixed'), 'and switches back');
+    ok(await p.evaluate(() => getComputedStyle(document.querySelector('#map-card')).position === 'fixed'), 'and switches back');
+    ok(/left out of the Word tables/.test(await p.innerText('#followups')) || !(await p.$('#followups .fu')), 'follow-ups say ticking takes them out of Word');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
@@ -205,10 +206,10 @@ const scenarios = {
     ok(/Abergowrie Bridge/.test(side) && /Transport and Main Roads/.test(side), 'the TMR bridge listed');
     await p.click('[data-ps="bridgeAttach"] .opt:has-text("Yes")');
     ok(/structure 7646/.test(await p.$eval('[data-fk="ps::bridgeAttach.detail"]', e => e.value)), 'bridge detail filled into Property Services');
-    await p.$eval('#mapView', e => e.scrollIntoView({ block: 'center' })); await p.waitForTimeout(300);
-    const box = await (await p.$('#mapView')).boundingBox();
     await p.click('.loc[data-pin="relocation.newLocation"] button:has-text("Place")');
-    await p.mouse.click(box.x + box.width / 2 + 150, box.y + box.height / 2 - 100);
+    await p.waitForTimeout(300);
+    const box = await (await p.$('#mapView')).boundingBox();
+    await p.mouse.click(box.x + box.width / 2 + 120, box.y + box.height / 2 - 80);
     await p.waitForTimeout(1200);
     ok((await p.$$eval('#q-relocation .opt.on', e => e.map(x => x.textContent))).join() === 'Yes', 'placing the relocation site answers Relocation');
     ok(/^\d+$/.test(await p.$eval('[data-fk="relocation::f::distance"]', e => e.value)), 'relocation distance measured');
@@ -216,6 +217,8 @@ const scenarios = {
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 90000 });
     const html = await p.clip();
     ok(/<img/.test(html), 'map picture copied');
+    await p.$eval('#preview', e => e.scrollIntoView({ block: 'center' }));
+    ok(await p.waitForFunction(() => !!document.querySelector('#preview img[alt="Site map"]'), null, { timeout: 30000 }).then(() => true).catch(() => false), 'the preview shows the map picture');
     ok(/Survey marks near Abergowrie Bridge AL \(532028\)/.test(html), 'survey marks table copied, headed with the station');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();

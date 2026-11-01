@@ -54,6 +54,7 @@
   const DRAW_RGB = [20, 160, 80];
 
   const M = {
+    version: 0,
     app: null, root: null, els: {}, esri: null, esriP: null, view: null, map: null, layers: {}, gl: {},
     contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true },
     move: false, hover: null, drag: null, place: null, measure: null, sketch: null,
@@ -244,6 +245,8 @@
     attachInteraction();
     E.reactiveUtils.watch(() => M.view.updating, u => { M.els.progress.hidden = !u; });
     E.reactiveUtils.watch(() => [M.view.extent, M.view.scale], () => { renderEdges(); renderStamp(); });
+    E.reactiveUtils.watch(() => M.view.stationary, still => { if (still) changedPicture(); });
+    E.reactiveUtils.watch(() => M.view.updating, busy => { if (!busy) changedPicture(); });
     loadLabels(); loadContours(); loadRoad(); loadRail();
     sync(M.app);
     refreshNear(true);
@@ -564,6 +567,10 @@
     else delete s.prefill.__ps['bridgeAttach.detail'];
   }
 
+  // Anything that changes what the picture would show moves the version on, and
+  // tells the page (which re-takes the preview's picture when it is in view).
+  function changedPicture() { M.version++; if (M.app && M.app.mapChanged) M.app.mapChanged(); }
+
   /* ---------------- drawing on the map ---------------- */
   const G_ = (geometry, symbol, attributes) => new M.esri.Graphic({ geometry, symbol, attributes: attributes || {} });
   const pt = (lon, lat) => ({ type: 'point', longitude: lon, latitude: lat });
@@ -572,6 +579,7 @@
 
   function drawPins() {
     if (!M.ready) return;
+    changedPicture();
     const L = M.gl.pins; L.removeAll(); M.gl.ghost.removeAll();
     const st = M.app.session.station;
     // Where Flood-Net has the station, once the position on the map differs from
@@ -588,6 +596,7 @@
   }
   function drawMarks() {
     if (!M.ready) return;
+    changedPicture();
     const L = M.gl.marks; L.removeAll();
     if (!M.on.marks) return;
     const hidden = new Set(M.app.session.map.hiddenMarks || []);
@@ -601,6 +610,7 @@
   }
   function drawBridges() {
     if (!M.ready) return;
+    changedPicture();
     const L = M.gl.bridges; L.removeAll();
     if (!M.on.bridges) return;
     M.bridges.forEach(b => {
@@ -610,6 +620,7 @@
   }
   function drawNearby() {
     if (!M.ready) return;
+    changedPicture();
     const L = M.gl.nearby; L.removeAll();
     if (!M.on.nearby) return;
     M.nearby.forEach(s => {
@@ -620,6 +631,7 @@
   function features() { return M.app.session.map.features = M.app.session.map.features || []; }
   function drawFeatures() {
     if (!M.ready) return;
+    changedPicture();
     const L = M.gl.draw, E = M.esri; L.removeAll();
     const ctx = M.app.ctx;
     features().forEach(f => {
@@ -651,6 +663,7 @@
       cancelPlace();
       if (!M.sketch) M.sketch = new M.esri.SketchViewModel({ view: M.view, layer: M.gl.draw, updateOnGraphicClick: false });
       M.drawing = true;
+      showMap();
       setPlaceHint('Click along the route — double-click, press Enter or ✓ Finish route when done');
       M.els.drawActs.hidden = false;
       M.sketch.create('polyline');
@@ -689,7 +702,9 @@
 
   /* ---------------- interaction: place, drag, click ---------------- */
   function setPlaceHint(t) { M.els.placeHint.hidden = !t; M.els.placeHint.textContent = t || ''; M.els.view.classList.toggle('placing', !!t); }
-  function startPlace(p) { if (!M.ready) { M.app.toast('The map hasn’t loaded yet.'); return; } setMove(false); M.place = p; setPlaceHint(`${p.label} — Esc to cancel`); }
+  // Bring the map into view for a click on it (the button may be below it, in a scrolled card).
+  function showMap() { const f = M.els.view && M.els.view.closest('.map-frame'); if (f) f.scrollIntoView({ block: 'nearest' }); }
+  function startPlace(p) { if (!M.ready) { M.app.toast('The map hasn’t loaded yet.'); return; } setMove(false); M.place = p; setPlaceHint(`${p.label} — Esc to cancel`); showMap(); }
   function cancelPlace() { M.place = null; if (M.drawing && M.sketch) M.sketch.cancel(); M.drawing = false; if (M.els.drawActs) M.els.drawActs.hidden = true; setPlaceHint(null); }
   function findPin(hit) {
     for (const r of (hit && hit.results) || []) { const a = r.graphic && r.graphic.attributes; if (a && a.pin) return r.graphic; }
@@ -929,9 +944,23 @@
       const k = Math.min((W / 2 - 22) / Math.abs(dx || 1e-9), (H / 2 - 22) / Math.abs(dy || 1e-9));
       out.push({ m, x: cx + dx * k, y: cy + dy * k, angle: Math.atan2(dy, dx), label: `${m.ref} ${U().fmtDist(m.d)}` });
     });
-    // Labels on the same edge are spread apart along it so none overlap.
+    // Labels on the same edge are spread apart along it so none overlap, and
+    // step clear of the legend (top left) and the contour caption (top right).
     const edgeOf = o => (o.y <= 23 ? 't' : o.y >= H - 23 ? 'b' : o.x <= 23 ? 'l' : 'r');
     const LW = o => o.label.length * 7 + 22, LH = 22;
+    const frame = M.els.view.getBoundingClientRect();
+    const boxOf = el => { if (!el || el.hidden || !el.offsetWidth) return null; const r = el.getBoundingClientRect(); return { l: r.left - frame.left, t: r.top - frame.top, r: r.right - frame.left, b: r.bottom - frame.top }; };
+    const legend = boxOf(M.els.legend), stamp = boxOf(M.els.stamp);
+    out.forEach(o => {
+      const e = edgeOf(o);
+      if (legend && e === 't' && o.x - LW(o) / 2 < legend.r + 4) o.x = legend.r + 4 + LW(o) / 2;
+      if (legend && e === 'l' && o.y - LH / 2 < legend.b + 4) o.y = legend.b + 4 + LH / 2;
+      if (stamp && e === 't' && o.x + LW(o) / 2 > stamp.l - 4) o.x = Math.max(LW(o) / 2 + 4, stamp.l - 4 - LW(o) / 2);
+      if (stamp && e === 'r' && o.y - LH / 2 < stamp.b + 4) o.y = stamp.b + 4 + LH / 2;
+      // Whole label inside the map.
+      o.x = Math.min(W - LW(o) / 2 - 4, Math.max(LW(o) / 2 + 4, o.x));
+      o.y = Math.min(H - LH / 2 - 4, Math.max(LH / 2 + 4, o.y));
+    });
     ['t', 'b', 'l', 'r'].forEach(e => {
       const on = out.filter(o => edgeOf(o) === e);
       const horiz = e === 't' || e === 'b';
@@ -993,13 +1022,19 @@
     if (!M.ready) throw new Error('the map is still loading');
     resolvePins();
     if (!shownPins().length && !M.anchor) return null;
-    // Working aids (Flood-Net's recorded position, its other stations) stay off the report's picture.
-    const aids = [M.gl.ghost, M.gl.nearby, M.layers.labels && null].filter(Boolean);
-    const was = aids.map(l => l.visible);
-    aids.forEach(l => { l.visible = false; });
+    // Working aids (Flood-Net's recorded position, its other stations) stay off
+    // the report's picture: the picture is taken of the other layers only, so
+    // the live map never blinks while the preview refreshes.
+    const aids = [M.gl.ghost, M.gl.nearby];
     let shot;
-    try { await whenReady(); shot = await M.view.takeScreenshot(); }
-    finally { aids.forEach((l, i) => { l.visible = was[i]; }); }
+    await whenReady();
+    try { shot = await M.view.takeScreenshot({ layers: M.map.layers.toArray().filter(l => !aids.includes(l)) }); }
+    catch (_) {
+      const was = aids.map(l => l.visible);
+      aids.forEach(l => { l.visible = false; });
+      try { await whenReady(); shot = await M.view.takeScreenshot(); }
+      finally { aids.forEach((l, i) => { l.visible = was[i]; }); }
+    }
     const img = new Image(); img.src = shot.dataUrl;
     await (img.decode ? img.decode().catch(() => new Promise(r => { img.onload = r; })) : new Promise(r => { img.onload = r; }));
     const W = img.naturalWidth, H = img.naturalHeight;
@@ -1125,5 +1160,6 @@
     return null;
   }
 
-  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, CFG, _M: M };
+  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, CFG, _M: M,
+    ready: () => M.ready && !M.failed, version: () => M.version };
 })(window);

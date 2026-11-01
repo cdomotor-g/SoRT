@@ -359,6 +359,29 @@
     const root = $('#preview'); if (!root || !A.ctx) return;
     const out = S.word.build(A.ctx, A.session.include.map ? A.picture : null);
     root.innerHTML = out.html;
+    if (A.session.include.map && !A.picture) refreshPicture();
+  }
+  // The preview shows the map picture as it will land in Word. It is re-taken
+  // once the map settles after a change — only while the preview is on screen,
+  // and never two at once. Copy for Word takes its own fresh picture anyway.
+  let picBusy = false, picFor = -1, previewSeen = false;
+  const refreshPicture = U.debounce(async () => {
+    if (!previewSeen || picBusy || !A.session.include.map || !S.mapView || !S.mapView.ready()) return;
+    const v = S.mapView.version();
+    if (A.picture && v === picFor) return;
+    picBusy = true;
+    try { const pic = await S.mapView.picture(); A.picture = pic; picFor = v; renderPreviewNow(); }
+    catch (_) { /* no picture yet (still drawing, no location): the next change tries again */ }
+    finally { picBusy = false; }
+  }, 1500);
+  function renderPreviewNow() {
+    const root = $('#preview'); if (!root || !A.ctx) return;
+    root.innerHTML = S.word.build(A.ctx, A.session.include.map ? A.picture : null).html;
+  }
+  A.mapChanged = () => refreshPicture();
+  function watchPreview() {
+    const el = $('#preview'); if (!el || !G.IntersectionObserver) { previewSeen = true; return; }
+    new G.IntersectionObserver(es => { previewSeen = es.some(e => e.isIntersecting); if (previewSeen) refreshPicture(); }, { rootMargin: '200px' }).observe(el);
   }
   // The clipboard is handed a promise the moment Copy is pressed, so the time
   // the map picture takes can't outlast the browser's "just clicked" window;
@@ -454,7 +477,9 @@
     const b = $('#layoutBtn');
     if (b) b.addEventListener('click', () => setLayout(!document.body.classList.contains('layout-side')));
     G.addEventListener('resize', measureTop);
-    setLayout(U.LS.get(LS_LAYOUT) === 'side');
+    // Beside the questions unless this browser chose otherwise.
+    const saved = U.LS.get(LS_LAYOUT);
+    setLayout(saved ? saved === 'side' : true);
   }
 
   /* ---------------- theme ---------------- */
@@ -496,6 +521,7 @@
     $('#sessionsClose').addEventListener('click', () => $('#sessionsDlg').close());
     G.addEventListener('beforeunload', () => { saveSoon.flush(); if (A.session) S.store.save(A.session); });
     if (S.mapView) S.mapView.mount($('#mapMount'), A);
+    watchPreview();
     if (S.playbook) S.playbook.init(A);
     renderAll();
   }

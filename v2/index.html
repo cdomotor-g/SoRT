@@ -18,7 +18,7 @@
 </script>
 <!-- Every script and the stylesheet carry ?v=<stamp>; bump it (all of them at
      once) on any change, or browsers keep the old copy for up to 10 minutes. -->
-<link rel="stylesheet" href="app.css?v=20261101a">
+<link rel="stylesheet" href="app.css?v=20261101c">
 </head>
 <body>
 <header class="top">
@@ -49,7 +49,7 @@
   <section class="card" id="station" aria-label="Station"></section>
   <section class="card" id="map-card" aria-label="Map">
     <header class="sec-head"><h2>Map</h2><span class="hint" id="mapHint">Check the station’s position, then mark the other points.</span>
-      <button type="button" class="btn-mini layout-btn" id="layoutBtn" aria-pressed="false" title="Show the map above the questions, or keep it beside them while you scroll (wide screens)">⇆ Map beside the questions</button></header>
+      <button type="button" class="btn-mini layout-btn" id="layoutBtn" aria-pressed="true" title="Show the map above the questions, or keep it beside them while you scroll (wide screens)">⇅ Map above the questions</button></header>
     <div id="mapMount"><div class="map-placeholder">Loading the map…</div></div>
   </section>
   <div id="form"></div>
@@ -64,7 +64,7 @@
       <span id="playbookActs"></span>
       <button type="button" class="btn" id="downloadBtn" title="Save this session as a file (to send, or to open on another computer)">Download session</button>
     </div>
-    <h3>Preview — what will paste into Word</h3>
+    <h3>Preview — what will paste into Word <span class="hint">(the map picture is re-taken when the map settles; Copy for Word takes a fresh one)</span></h3>
     <div id="preview" class="paper" aria-label="Preview of the copy"></div>
   </section>
   <footer class="foot"><span id="savedChip"></span> · <span id="defsChip"></span> · <a href="../">Version 1</a></footer>
@@ -81,18 +81,18 @@
   </div>
 </dialog>
 
-<script src="js/util.js?v=20261101a"></script>
-<script src="js/schema.js?v=20261101a"></script>
-<script src="js/rules.js?v=20261101a"></script>
-<script src="js/store.js?v=20261101a"></script>
-<script src="js/github.js?v=20261101a"></script>
-<script src="js/floodnet.js?v=20261101a"></script>
-<script src="js/word.js?v=20261101a"></script>
-<script src="js/form.js?v=20261101a"></script>
-<script src="js/map.js?v=20261101a"></script>
-<script src="js/playbook.js?v=20261101a"></script>
-<script src="js/tasks.js?v=20261101a"></script>
-<script src="js/editor.js?v=20261101a"></script>
-<script src="js/app.js?v=20261101a"></script>
+<script src="js/util.js?v=20261101c"></script>
+<script src="js/schema.js?v=20261101c"></script>
+<script src="js/rules.js?v=20261101c"></script>
+<script src="js/store.js?v=20261101c"></script>
+<script src="js/github.js?v=20261101c"></script>
+<script src="js/floodnet.js?v=20261101c"></script>
+<script src="js/word.js?v=20261101c"></script>
+<script src="js/form.js?v=20261101c"></script>
+<script src="js/map.js?v=20261101c"></script>
+<script src="js/playbook.js?v=20261101c"></script>
+<script src="js/tasks.js?v=20261101c"></script>
+<script src="js/editor.js?v=20261101c"></script>
+<script src="js/app.js?v=20261101c"></script>
 </body>
 </html>
