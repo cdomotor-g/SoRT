@@ -184,6 +184,11 @@ input.pre-map, textarea.pre-map { background: var(--src-map); }
 .fu:first-child { border-top: 0; }
 .fu.done .fu-body { color: var(--muted); text-decoration: line-through; }
 .fu-meta { font-size: 12px; color: var(--muted); text-decoration: none; }
+.fu-task { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 4px; font-size: 14px; }
+.fu-task select, .fu-add select { width: auto; padding: 3px 8px; }
+.fu-add { margin: 8px 0; }
+.fu-add summary { cursor: pointer; color: var(--accent); }
+.fu-add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 8px; align-items: end; }
 .owner { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--warn-bg); color: var(--warn); }
 .out-grid { display: flex; gap: 12px 18px; flex-wrap: wrap; align-items: end; margin-top: 10px; }
 .out-grid .fld:first-child { width: 260px; }

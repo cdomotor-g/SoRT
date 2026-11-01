@@ -53,7 +53,10 @@
       .filter(r => r.lines.length || inc.empty);
   }
   function openFollowUps(ctx, table) {
-    return R().followUps(ctx).filter(f => !f.done && f.table === table);
+    const list = R().followUps(ctx).filter(f => !f.done && f.table === table);
+    // The forum's own tasks (tasks.js) are follow-up actions too.
+    if (table === 'scope' && S.tasks && S.app && S.app.session === ctx.session) list.push(...S.tasks.forWord(S.app));
+    return list;
   }
   function scopeHtml(ctx) {
     const s = ctx.session, inc = s.include, tpl = ctx.tpl || {};

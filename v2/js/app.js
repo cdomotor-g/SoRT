@@ -332,20 +332,8 @@
   /* ---------------- follow-ups + output ---------------- */
   function renderFollowUps() {
     const root = $('#followups'); if (!root) return;
-    const list = R.followUps(A.ctx);
+    if (S.tasks) { S.tasks.render(A, root); return; }
     root.innerHTML = '';
-    if (!list.length) { root.appendChild(h('p', { class: 'muted' }, 'None — the answers so far don’t call for any.')); return; }
-    const st = A.session.followUpState;
-    list.forEach(f => {
-      const s = st[f.id] = st[f.id] || {};
-      const box = h('input', { type: 'checkbox', checked: f.done, disabled: f.doneAuto, title: f.doneAuto ? 'Done — the answer it was waiting for is in' : 'Tick when done' });
-      box.addEventListener('change', ev => { s.status = ev.target.checked ? 'done' : 'open'; s.at = Date.now(); changed({ light: true }); });
-      root.appendChild(h('div', { class: 'fu' + (f.done ? ' done' : '') },
-        h('label', { class: 'fu-check' }, box),
-        h('div', { class: 'fu-body' },
-          h('div', null, h('span', { class: 'owner' }, f.owner), ' ', f.text, f.link ? [' ', h('a', { href: f.link.url, target: '_blank', rel: 'noopener' }, f.link.label + ' ↗')] : null),
-          h('div', { class: 'fu-meta' }, f.table === 'ps' ? 'Goes in the Property Services table' : f.table === 'scope' ? 'Goes in the scope table’s Follow-up Actions row' : '', f.done ? ' · done' : ''))));
-    });
   }
   function renderOutputControls() {
     const s = A.session, inc = s.include;

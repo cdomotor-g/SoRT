@@ -42,6 +42,13 @@ At cutover one small commit makes the v1 address open v2, and keeps v1 at
   [`playbook/README.md`](playbook/README.md).
 - **Edit questions** (footer): quick changes mid-forum, as a draft in your
   browser until *Publish to GitHub* commits `v2/definitions.json`.
+- **Tasks for Flood-Net**: any follow-up can go to Flood-Net as a task for a
+  team (the definitions suggest one: `followUps[].team` is `{"hub": true}` —
+  the station's hub team — or `{"name": "…"}`), and the forum can add its own.
+  *Create these tasks in Flood-Net* opens Flood-Net with them filled in
+  (`https://floodwarning.net/#tasks=<base64url JSON>`, see `js/tasks.js`); a
+  person who may hand out tasks checks them and presses Create there. Flood-Net
+  keeps them, private to the teams and people allowed to see them.
 
 ## Files
 
@@ -59,6 +66,7 @@ At cutover one small commit makes the v1 address open v2, and keeps v1 at
 | `js/github.js` | The GitHub token (shared with v1) and the contents API. |
 | `js/playbook.js` | Save to / continue from / precedents in the playbook. |
 | `js/editor.js` | Edit questions, and publishing them. |
+| `js/tasks.js` | Follow-ups, and the tasks handed to Flood-Net. |
 | `js/app.js` | Boot and wiring. |
 | `playbook/` | The playbook's tools (importer, index builder, Dataverse export). No data. |
 | `tests/e2e.cjs` | End-to-end checks in headless Chromium (see its header). |

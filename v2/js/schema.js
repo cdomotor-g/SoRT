@@ -187,6 +187,7 @@
       checkCond(where, f.when); checkCond(`${where} doneWhen`, f.doneWhen);
       if (f.link && !links[f.link]) E(`${where}: link "${f.link}" is not in links`);
       if (f.table && !['scope', 'ps', 'none'].includes(f.table)) E(`${where}: table must be scope, ps or none`);
+      if (f.team && !(f.team.hub === true || (typeof f.team.name === 'string' && f.team.name.trim()))) E(`${where}: team must be {"hub": true} or {"name": "<team>"}`);
     });
     return { errors, warnings };
   }

@@ -1,9 +1,9 @@
 {
   "schema": "sort-definitions/2",
-  "version": 3,
+  "version": 4,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
-    "updated": "2026-10-31",
+    "updated": "2026-11-01",
     "note": "Seeded from v1 definitions.json by v2/tools/convert-v1.mjs; edited directly since. Codes are permanent: reword a label freely, never reuse a code."
   },
   "links": {
@@ -2174,6 +2174,10 @@
         "q": "commsChange",
         "field": "newAlertIds",
         "filled": true
+      },
+      "taskTitle": "New ALERT IDs",
+      "team": {
+        "hub": true
       }
     },
     {
@@ -2184,7 +2188,11 @@
         "q": "acmaLicence",
         "is": "transfer"
       },
-      "text": "Engage {f:acmaLicence.holder|the licence holder} to transfer ACMA licence {f:acmaLicence.licenceNo|(number to confirm)} to the Bureau."
+      "text": "Engage {f:acmaLicence.holder|the licence holder} to transfer ACMA licence {f:acmaLicence.licenceNo|(number to confirm)} to the Bureau.",
+      "taskTitle": "ACMA licence transfer",
+      "team": {
+        "name": "Radio licensing"
+      }
     },
     {
       "id": "acmaNew",
@@ -2194,7 +2202,11 @@
         "q": "acmaLicence",
         "is": "new"
       },
-      "text": "New ACMA licence needed — network assessment and licence application."
+      "text": "New ACMA licence needed — network assessment and licence application.",
+      "taskTitle": "New ACMA licence and network assessment",
+      "team": {
+        "name": "Radio licensing"
+      }
     },
     {
       "id": "vegetationScope",
@@ -2213,7 +2225,11 @@
           }
         ]
       },
-      "text": "Complete the FWIN – ID – Scope of Works document for the vegetation management, including a detailed paragraph on its scope for the SAR."
+      "text": "Complete the FWIN – ID – Scope of Works document for the vegetation management, including a detailed paragraph on its scope for the SAR.",
+      "taskTitle": "Scope of Works: vegetation management",
+      "team": {
+        "name": "SoRT Forum"
+      }
     },
     {
       "id": "trackScope",
@@ -2224,7 +2240,11 @@
         "q": "remediation",
         "has": "track"
       },
-      "text": "Complete the FWIN – ID – Scope of Works document for the access track / stairs."
+      "text": "Complete the FWIN – ID – Scope of Works document for the access track / stairs.",
+      "taskTitle": "Scope of Works: access track / stairs",
+      "team": {
+        "name": "SoRT Forum"
+      }
     },
     {
       "id": "bridgeMeeting",
@@ -2234,7 +2254,23 @@
         "ps": "bridgeAttach",
         "is": "yes"
       },
-      "text": "Equipment attaches to bridge infrastructure — Property Services to coordinate a meeting with the Technical Lead, OTE and ID."
+      "text": "Equipment attaches to bridge infrastructure — Property Services to coordinate a meeting with the Technical Lead, OTE and ID.",
+      "taskTitle": "Bridge attachment: coordinate meeting",
+      "team": {
+        "name": "Property Services"
+      }
     }
-  ]
+  ],
+  "tasks": {
+    "floodnet": "https://floodwarning.net/",
+    "teams": [
+      "SoRT Forum",
+      "Property Services",
+      "Radio licensing",
+      "OTE",
+      "ID"
+    ],
+    "note": "Tasks go to Flood-Net's Tasks tab for review; Flood-Net decides who may create them. 'enabled' switches the task controls on (once Flood-Net's receiving screen is live). 'team' on a follow-up: {hub:true} = the station's hub team, or {name}.",
+    "enabled": false
+  }
 }

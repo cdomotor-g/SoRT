@@ -18,7 +18,7 @@ const csv = (name, header, rows) => {
   writeFileSync(join(out, name), [header.join(','), ...rows.map(r => header.map(h => q(r[h])).join(','))].join('\r\n') + '\r\n');
   console.log(`${name}: ${rows.length} row(s)`);
 };
-const T = { stations: [], sessions: [], answers: [], fields: [], ps: [], followUps: [], features: [], marks: [] };
+const T = { stations: [], sessions: [], answers: [], fields: [], ps: [], followUps: [], tasks: [], features: [], marks: [] };
 for (const f of readdirSync(join(root, 'stations')).filter(f => f.endsWith('.json'))) {
   const file = JSON.parse(readFileSync(join(root, 'stations', f), 'utf8')), st = file.station || {};
   T.stations.push({ stationKey: file.key, bureauNumber: st.number, name: st.name, floodnetId: st.floodnetId, latitude: st.lat, longitude: st.lon, lga: st.lga, hub: st.hub, owner: st.owner });
@@ -36,6 +36,9 @@ for (const f of readdirSync(join(root, 'stations')).filter(f => f.endsWith('.jso
     for (const [k, v] of Object.entries(sum.ps || {})) T.ps.push({ psId: `${s.id}:${k}`, sessionId: s.id, rowKey: k, value: v });
     if (sum.psGeneral) T.ps.push({ psId: `${s.id}:general`, sessionId: s.id, rowKey: 'general', value: sum.psGeneral });
     for (const fu of sum.followUps || []) T.followUps.push({ followUpId: `${s.id}:${fu.id}`, sessionId: s.id, rule: fu.id, owner: fu.owner, text: fu.text, done: !!fu.done });
+    // Tasks sent to Flood-Net from this session: Flood-Net files each as source_ref "sort:<session>:<ref>".
+    for (const t of sum.tasks || []) T.tasks.push({ taskRef: `sort:${s.id}:${t.ref}`, sessionId: s.id, ref: t.ref, title: t.title || '', detail: t.detail || '',
+      team: t.team ? (t.team.hub ? `hub:${t.team.hub}` : t.team.name) : '', due: t.due || '', sentAt: t.sentAt ? new Date(t.sentAt).toISOString() : '' });
     const map = sum.map || {};
     for (const ft of map.features || []) T.features.push({ featureId: ft.id, sessionId: s.id, kind: ft.kind, questionCode: ft.q, ref: ft.ref || '', latitude: ft.lat, longitude: ft.lon,
       lengthM: ft.lengthM || '', wkt: ft.path ? `LINESTRING (${ft.path.map(p => p.join(' ')).join(', ')})` : (ft.lat != null ? `POINT (${ft.lon} ${ft.lat})` : '') });
@@ -48,6 +51,7 @@ csv('answers.csv', ['answerId', 'sessionId', 'questionCode', 'optionCode', 'opti
 csv('answer_fields.csv', ['fieldId', 'sessionId', 'questionCode', 'fieldCode', 'value'], T.fields);
 csv('property_services.csv', ['psId', 'sessionId', 'rowKey', 'value'], T.ps);
 csv('follow_ups.csv', ['followUpId', 'sessionId', 'rule', 'owner', 'text', 'done'], T.followUps);
+csv('tasks.csv', ['taskRef', 'sessionId', 'ref', 'title', 'detail', 'team', 'due', 'sentAt'], T.tasks);
 csv('map_features.csv', ['featureId', 'sessionId', 'kind', 'questionCode', 'ref', 'latitude', 'longitude', 'lengthM', 'wkt'], T.features);
 csv('survey_marks.csv', ['sessionMarkId', 'sessionId', 'ref', 'markId', 'name', 'latitude', 'longitude', 'ahdM', 'condition', 'lastVisited', 'reportUrl'], T.marks);
 // The data dictionary: every code a CSV above can hold, with its wording.

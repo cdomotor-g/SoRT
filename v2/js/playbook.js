@@ -74,6 +74,7 @@
     const p = R().psState(session);
     return { answers, ps, psComments: Object.assign({}, p.comments), psGeneral: p.general || '',
       followUps: R().followUps(ctx).map(f => ({ id: f.id, owner: f.owner, text: f.text, done: f.done })),
+      tasks: S.tasks ? S.tasks.summary(session) : [],
       map: { checked: (session.station || {}).checked || null, features: session.map.features || [], marks: session.map.marks || [], bridges: session.map.bridges || [] } };
   }
   function record(defs, session) {

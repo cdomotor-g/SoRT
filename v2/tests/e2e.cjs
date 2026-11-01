@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, editor, layout, map. They use the live Flood-Net
+   Scenarios: station, copy, playbook, editor, tasks, layout, map. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
@@ -49,7 +49,9 @@ async function page(browser, opts) {
   const o = opts || {};
   const ctx = await browser.newContext({ viewport: { width: 1360, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
   if (o.token) await ctx.addInitScript(() => { try { localStorage.setItem('sort.github', JSON.stringify({ token: 'fake', login: 'tester' })); } catch (e) { /* */ } });
-  const gh = fakeGithub(require('fs').readFileSync(require('path').join(__dirname, '..', 'definitions.json'), 'utf8'));
+  let defsText = require('fs').readFileSync(require('path').join(__dirname, '..', 'definitions.json'), 'utf8');
+  if (o.defsPatch) { const d = JSON.parse(defsText); o.defsPatch(d); defsText = JSON.stringify(d); }
+  const gh = fakeGithub(defsText);
   await ctx.route(/api\.github\.com/, gh.handler);
   await ctx.route(o.map ? /raw\.githubusercontent\.com/ : /raw\.githubusercontent\.com|js\.arcgis\.com/, r => r.abort());
   const p = await ctx.newPage();
@@ -148,6 +150,35 @@ const scenarios = {
     const pub = JSON.parse(p.gh.files.get('SoRT/v2/definitions.json').text);
     ok(pub.questions.txPower.options.map(o => o.code).join() === 'na,1w,2w,5w,25w,other_specify', 'new option added, existing codes kept');
     ok(pub.version === JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'definitions.json'), 'utf8')).version + 1, 'version bumped on publish');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
+  async tasks(b) {
+    const p = await page(b, { defsPatch: d => { d.tasks.enabled = true; } });
+    await p.pick('41506');
+    await p.click('#q-comms .opt:has-text("Local Processing Unit")');
+    await p.click('#q-remediation .opt:has-text("Vegetation management")');
+    await p.waitForTimeout(400);
+    const teams = await p.$$eval('#followups .fu-task select', e => e.map(x => x.selectedOptions[0].textContent));
+    ok(teams.includes('Brisbane Hub') && teams.includes('SoRT Forum'), `teams suggested (${teams.join(', ')})`);
+    await p.click('#followups .fu-add summary');
+    await p.fill('#followups .fu-add input[type=text]', 'Check the gauge board datum');
+    await p.selectOption('#followups .fu-add select', 'name:OTE');
+    await p.click('#followups .fu-add .btn-primary');
+    await p.waitForTimeout(300);
+    const [tab] = await Promise.all([p.context().waitForEvent('page'), p.click('#followups .out-acts .btn')]);
+    const url = tab.url();
+    const data = JSON.parse(Buffer.from(url.split('#tasks=')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    await tab.close();
+    ok(url.startsWith('https://floodwarning.net/#tasks='), 'opens Flood-Net with the tasks in the address fragment');
+    ok(data.v === 1 && data.source === 'sort' && data.station.id === 'bengalla_tm' && data.station.hub === 'brisbane', 'station and session in the hand-off');
+    const refs = data.tasks.map(t => t.ref);
+    ok(refs.includes('alertIds') && refs.includes('vegetationScope') && refs.includes('custom-1'), `follow-ups and the added task sent (${refs.join(', ')})`);
+    ok(JSON.stringify(data.tasks.find(t => t.ref === 'alertIds').team) === '{"hub":"brisbane"}', 'ALERT IDs task goes to the station’s hub team');
+    ok((await p.$$eval('#followups .fu-task .hint', e => e.map(x => x.textContent))).some(t => /sent to Flood-Net/.test(t)), 'marked as sent');
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
+    ok(/Check the gauge board datum/.test(await p.clip()), 'the forum’s own task is in the Word copy’s follow-up row');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
