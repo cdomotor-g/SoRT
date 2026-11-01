@@ -18,19 +18,19 @@
   },
   "status": {
     "phase": "live",
-    "updated": "2026-10-31",
-    "summary": "v1 is in use at forums; the v2 beta (Flood-Net station lookup, saved sessions, the map on the page with survey marks and bridges) landed today at /SoRT/v2/ and runs beside v1 until it has been through some forums.",
+    "updated": "2026-11-01",
+    "summary": "v1 is in use at forums; the v2 beta at /SoRT/v2/ runs beside it — Flood-Net station lookup (ACMA licences included), the map on the page (or beside the questions) with survey marks and bridges, saved sessions, the playbook of past sessions, an in-page question editor, and tasks handed to Flood-Net (built, switched off until Flood-Net's receiving screen is live).",
     "now": [
       "v2 beta: try it at real forums beside v1",
-      "Property Services: the Check QLD Globe deep-link button (ROADMAP §1, still planned)"
+      "Tasks: switch on (definitions.tasks.enabled) once Flood-Net's teams-and-tasks receiving screen is live",
+      "Radio path: show Flood-Net's modelled fade margins from the station through its repeaters to base, once its API route lands"
     ],
     "next": [
       "v2 cutover: one commit makes /SoRT/ open v2 and keeps v1 at /SoRT/v1/",
-      "Station picker (ROADMAP §2) — v2's Flood-Net lookup may stand in for stations.json",
-      "Load from repo also reloads stations.json (ROADMAP §3), once §2 exists"
+      "Playbook: push the five seeded stations once the private repo exists; import more Word reports in batches"
     ],
     "later": [
-      "A Dataverse import keyed on v2's permanent question and option codes"
+      "A Dataverse import keyed on v2's permanent question and option codes (v2/playbook/export_tables.mjs writes the tables)"
     ],
     "blocked": [
       {
@@ -68,6 +68,50 @@
             "cons": "the first real forum on v2 is the test"
           }
         ]
+      },
+      {
+        "id": "playbook-repo",
+        "what": "The playbook's private repo cdomotor-g/SoRT-playbook doesn't exist yet; the GitHub integration may not create repositories",
+        "on": "human",
+        "kind": "access",
+        "since": "2026-10-31",
+        "holds": [
+          "Save to playbook, Continue and precedents in v2 (sessions stay in the browser meanwhile)",
+          "the five seeded stations from the Word reports"
+        ],
+        "options": [
+          {
+            "what": "github.com/new → owner cdomotor-g → name SoRT-playbook → Private → Add a README → Create; then edit the SoRT fine-grained token to include it. An agent then pushes the seed.",
+            "by": "human",
+            "effort": "5 min",
+            "recommended": true
+          },
+          {
+            "what": "Keep sessions in the browser and download them as files until the repo exists.",
+            "by": "human",
+            "effort": "none",
+            "cons": "no precedents across people"
+          }
+        ]
+      },
+      {
+        "id": "tasks-receiver",
+        "what": "Task hand-off waits on Flood-Net's teams and tasks (the #tasks= receiving screen)",
+        "on": "flood-net",
+        "kind": "dependency",
+        "since": "2026-11-01",
+        "holds": [
+          "definitions.tasks.enabled — the task controls in v2's follow-ups"
+        ],
+        "options": [
+          {
+            "what": "An agent is building teams and tasks in Flood-Net now (migration 0095, Teams, Tasks tab, the receiving screen); then flip tasks.enabled in v2/definitions.json.",
+            "by": "agent",
+            "effort": "same day",
+            "model": "Opus5/High",
+            "recommended": true
+          }
+        ]
       }
     ]
   },
@@ -76,7 +120,9 @@
       "id": "scope-builder",
       "name": "Scope Builder (v1)",
       "what": "The live app: pick a station type, fill the rows, Copy table for Word; Manage Tables and Table Map edit the definitions in place.",
-      "paths": ["index.html"],
+      "paths": [
+        "index.html"
+      ],
       "url": "https://cdomotor-g.github.io/SoRT/",
       "status": "live"
     },
@@ -84,28 +130,44 @@
       "id": "definitions",
       "name": "Definitions (v1)",
       "what": "Every table, row and option, read from GitHub on start; Publish to GitHub commits edits back, so its history is the audit trail and the rollback.",
-      "paths": ["definitions.json"],
+      "paths": [
+        "definitions.json"
+      ],
       "status": "live"
     },
     {
       "id": "property-services",
       "name": "Property Services table",
       "what": "A second table copied into Word under the scope, pre-filled from the scope's coordinates and relocation answer, with its own editor tab.",
-      "paths": ["index.html", "definitions.json"],
+      "paths": [
+        "index.html",
+        "definitions.json"
+      ],
       "status": "live"
     },
     {
       "id": "site-map",
       "name": "Site Map (v1)",
       "what": "A modal map of the table's pins over Queensland Government imagery, LiDAR contours, the road reserve and rail, with pin write-back and a picture captured for Word.",
-      "paths": ["index.html"],
+      "paths": [
+        "index.html"
+      ],
       "status": "live"
     },
     {
       "id": "v2-app",
       "name": "Scope Builder v2 (beta)",
       "what": "One flowing page — forum, station, map, questions, Property Services, follow-ups, preview and Copy for Word — with answers saved in the browser as sessions.",
-      "paths": ["v2/index.html", "v2/app.css", "v2/js/app.js", "v2/js/form.js", "v2/js/rules.js", "v2/js/store.js", "v2/js/word.js", "v2/js/util.js"],
+      "paths": [
+        "v2/index.html",
+        "v2/app.css",
+        "v2/js/app.js",
+        "v2/js/form.js",
+        "v2/js/rules.js",
+        "v2/js/store.js",
+        "v2/js/word.js",
+        "v2/js/util.js"
+      ],
       "url": "https://cdomotor-g.github.io/SoRT/v2/",
       "status": "beta"
     },
@@ -113,36 +175,79 @@
       "id": "v2-definitions",
       "name": "v2 question bank",
       "what": "One question bank with permanent codes, four station-type templates, and conditions and follow-up rules as data; checked by the page and by a Node tool before use.",
-      "paths": ["v2/definitions.json", "v2/js/schema.js", "v2/tools/check-definitions.mjs", "v2/tools/convert-v1.mjs"],
+      "paths": [
+        "v2/definitions.json",
+        "v2/js/schema.js",
+        "v2/tools/check-definitions.mjs",
+        "v2/tools/convert-v1.mjs"
+      ],
       "status": "beta"
     },
     {
       "id": "floodnet-lookup",
       "name": "Flood-Net station lookup",
       "what": "Searches Flood-Net's read-only API and pre-fills name, number, ALERT IDs, frequency, current comms, repeater details and ACMA licences, marked until confirmed.",
-      "paths": ["v2/js/floodnet.js"],
+      "paths": [
+        "v2/js/floodnet.js"
+      ],
       "status": "beta"
     },
     {
       "id": "v2-map",
       "name": "v2 map",
       "what": "The map on the page: QLD imagery, contours, road reserve and rail; survey marks from the State's control register and bridges from TMR and QLD Roads and Tracks; Flood-Net stations within 3 km.",
-      "paths": ["v2/js/map.js"],
+      "paths": [
+        "v2/js/map.js"
+      ],
       "status": "beta"
     },
     {
       "id": "tests",
       "name": "Browser tests",
       "what": "Playwright regression tests that drive the real v1 page in headless Chromium: map framing, pin write-back, Word geometry, GitHub publishing.",
-      "paths": ["tests/", ".claude/skills/verify/"],
+      "paths": [
+        "tests/",
+        ".claude/skills/verify/"
+      ],
       "status": "live"
     },
     {
       "id": "supabase-backup",
       "name": "Retired Supabase store",
       "what": "The last dump of the old definitions database and the script that rebuilds definitions.json from it, kept for the record.",
-      "paths": ["backups/"],
+      "paths": [
+        "backups/"
+      ],
       "status": "retired"
+    },
+    {
+      "id": "v2-playbook",
+      "name": "Playbook (v2)",
+      "what": "Every session saved under its station in the private repo cdomotor-g/SoRT-playbook: Continue from a station's earlier session, similar stations as precedents, open follow-ups across stations; the tools import Word reports and export flat tables for Dataverse.",
+      "paths": [
+        "v2/js/playbook.js",
+        "v2/js/github.js",
+        "v2/playbook/"
+      ],
+      "status": "beta"
+    },
+    {
+      "id": "v2-editor",
+      "name": "Edit questions (v2)",
+      "what": "Quick changes to the questions mid-forum: a draft in the browser until Publish to GitHub commits v2/definitions.json.",
+      "paths": [
+        "v2/js/editor.js"
+      ],
+      "status": "beta"
+    },
+    {
+      "id": "v2-tasks",
+      "name": "Tasks for Flood-Net (v2)",
+      "what": "Follow-ups and the forum's own tasks, handed to Flood-Net's Tasks tab for a person who may hand out tasks to check and create.",
+      "paths": [
+        "v2/js/tasks.js"
+      ],
+      "status": "building"
     }
   ],
   "provides": [
@@ -151,7 +256,20 @@
       "name": "QLD Globe map layer recipes",
       "what": "Which Queensland Government ArcGIS services and sublayers draw imagery, LiDAR contours (resolved by name), the road reserve, rail and survey marks, and how they are styled. Flood-Net's contour and survey-mark layers were ported from it.",
       "component": "site-map",
-      "paths": ["index.html", "v2/js/map.js"]
+      "paths": [
+        "index.html",
+        "v2/js/map.js"
+      ]
+    },
+    {
+      "id": "tasks-handoff",
+      "name": "Task hand-off to Flood-Net",
+      "what": "Opens https://floodwarning.net/#tasks=<base64url UTF-8 JSON> with {v:1, source:'sort', session, forum, station:{id, number, name, hub}, tasks:[{ref, title, detail, team:{hub}|{name}, due?}]}; Flood-Net reviews them and files each as source_ref sort:<session>:<ref>.",
+      "component": "v2-tasks",
+      "paths": [
+        "v2/js/tasks.js"
+      ],
+      "url": "https://cdomotor-g.github.io/SoRT/v2/"
     }
   ],
   "consumes": [
@@ -160,11 +278,17 @@
       "from": "flood-net",
       "provider": "agent-api",
       "into": "floodnet-lookup",
-      "what": "Flood-Net's public read-only agent API: station search and stations near a point, each station's dossier and record, and the ACMA licences at its site.",
+      "what": "Flood-Net's public read-only agent API: station search and stations near a point, each station's dossier and record, the ACMA licences at its site, and (when it lands) its radio path to base with modelled fade margins.",
       "how": "live",
       "url": "https://floodwarning.net/api/v1",
-      "watch": ["docs/api-changelog.json", "worker/api.js", "worker/acma.js"],
-      "since": { "date": "2026-10-31" },
+      "watch": [
+        "docs/api-changelog.json",
+        "worker/api.js",
+        "worker/acma.js"
+      ],
+      "since": {
+        "date": "2026-10-31"
+      },
       "on_change": "Read the new docs/api-changelog.json entries; if a route or field SoRT reads changed, update v2/js/floodnet.js, bump v2's ?v= stamp and look up a station on /SoRT/v2/."
     }
   ]
