@@ -19,10 +19,9 @@
   "status": {
     "phase": "live",
     "updated": "2026-11-01",
-    "summary": "v1 is in use at forums; the v2 beta at /SoRT/v2/ runs beside it — Flood-Net station lookup (ACMA licences, and the radio path to base with the fade margin Flood-Net saved for each hop), the map on the page (or beside the questions) with survey marks and bridges, saved sessions, the playbook of past sessions, an in-page question editor, a Help guide, and tasks handed to Flood-Net (built, switched off until Flood-Net's receiving screen is live).",
+    "summary": "v1 is in use at forums; the v2 beta at /SoRT/v2/ runs beside it — Flood-Net station lookup (ACMA licences, and the radio path to base with the fade margin Flood-Net saved for each hop), the map on the page (or beside the questions) with survey marks and bridges, saved sessions, the playbook of past sessions, an in-page question editor, a Help guide, and follow-ups handed to Flood-Net's teams as tasks (live since 1 Nov 2026; a SoRT Forum member creates them there).",
     "now": [
-      "v2 beta: try it at real forums beside v1",
-      "Tasks: switch on (definitions.tasks.enabled) once Flood-Net's teams-and-tasks receiving screen is live"
+      "v2 beta: try it at real forums beside v1"
     ],
     "next": [
       "v2 cutover: one commit makes /SoRT/ open v2 and keeps v1 at /SoRT/v1/",
@@ -94,25 +93,6 @@
         ]
       },
       {
-        "id": "tasks-receiver",
-        "what": "Task hand-off waits on Flood-Net's teams and tasks (the #tasks= receiving screen)",
-        "on": "flood-net",
-        "kind": "upstream",
-        "since": "2026-11-01",
-        "holds": [
-          "definitions.tasks.enabled — the task controls in v2's follow-ups"
-        ],
-        "options": [
-          {
-            "what": "An agent is building teams and tasks in Flood-Net now (migration 0095, Teams, Tasks tab, the receiving screen); then flip tasks.enabled in v2/definitions.json.",
-            "by": "agent",
-            "effort": "same day",
-            "model": "Opus5/High",
-            "recommended": true
-          }
-        ]
-      },
-      {
         "id": "fade-figures",
         "what": "v2 shows Flood-Net's radio path with each hop's fade margin, but every saved figure is stale (worked out with Flood-Net's older model, which reads far too low), so it is a rough guide and can't fill in Fade Margin >20 dB yet",
         "on": "flood-net",
@@ -127,6 +107,25 @@
             "what": "On Flood-Net, signed in as an editor: Stations map → Layers → Link colour: By fade margin, let it work through every link, then Save to the datastore (Flood-Net's own fade-resweep blocker). v2 picks the fresh figures up by itself; Refresh from Flood-Net updates a station already open.",
             "by": "human",
             "effort": "one sitting; the sweep runs by itself",
+            "recommended": true
+          }
+        ]
+      },
+      {
+        "id": "team-owners",
+        "what": "Tasks SoRT hands over can only be created in Flood-Net by an administrator until its teams have owners and members (all 13 teams are empty)",
+        "on": "human",
+        "kind": "access",
+        "since": "2026-11-01",
+        "holds": [
+          "SoRT Forum members creating the tasks a forum hands over",
+          "hub, Property Services, Radio licensing, OTE and ID teams seeing their tasks"
+        ],
+        "options": [
+          {
+            "what": "Flood-Net → Admin tab → Teams: for SoRT Forum, type the address of an approved account under 'Add somebody', tick 'As an owner', press Add; give each hub team and Property Services, Radio licensing, OTE and ID at least one owner. Owners then add their members on the Tasks tab → My teams.",
+            "by": "human",
+            "effort": "15 min",
             "recommended": true
           }
         ]

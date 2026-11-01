@@ -58,6 +58,11 @@
       'A follow-up you **tick as done** is left out of the Word tables; untick it to put it back. The ticks under **Follow-ups and output** choose what else goes in (header, empty rows, map picture, survey marks, Property Services).',
       '**“Copied as plain text only”** means the browser refused the formatted copy: click anywhere on the page and press Copy again.'
     ] },
+    { id: 'tasks', title: 'Handing tasks to teams (Flood-Net)', items: [
+      'A follow-up can go to Flood-Net as a task: tick **Send as a task to** and pick the team — the station’s hub team, SoRT Forum, Property Services, Radio licensing, OTE or ID. The forum’s own jobs go under **Other tasks from this forum**.',
+      '**Create N tasks in Flood-Net ↗** opens Flood-Net with them filled in. Nothing is made until someone who may hand out tasks (a SoRT Forum member, or an administrator) checks them there and presses **Create**. If your account can’t, Flood-Net offers **Copy the link** to pass to someone who can.',
+      'Sending again is safe: tasks already made are recognised and left out. Each team sees its tasks on Flood-Net’s **Tasks** tab; who is on a team is seen only by that team and Flood-Net’s administrators.'
+    ] },
     { id: 'ps', title: 'Property Services', items: [
       'It copies the coordinates and the relocation answer from the scope questions **until you change one there** — then it says **Overridden**, with a link back to the scope answer.',
       'On a rainfall table the water-level rows read **NA** by themselves.',

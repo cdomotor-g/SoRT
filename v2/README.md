@@ -48,7 +48,7 @@ At cutover one small commit makes the v1 address open v2, and keeps v1 at
 - **Tasks for Flood-Net**: any follow-up can go to Flood-Net as a task for a
   team (the definitions suggest one: `followUps[].team` is `{"hub": true}` —
   the station's hub team — or `{"name": "…"}`), and the forum can add its own.
-  *Create these tasks in Flood-Net* opens Flood-Net with them filled in
+  *Create N tasks in Flood-Net* opens Flood-Net with them filled in
   (`https://floodwarning.net/#tasks=<base64url JSON>`, see `js/tasks.js`); a
   person who may hand out tasks checks them and presses Create there. Flood-Net
   keeps them, private to the teams and people allowed to see them.

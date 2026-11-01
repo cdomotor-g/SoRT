@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 4,
+  "version": 5,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-11-01",
@@ -2270,7 +2270,7 @@
       "OTE",
       "ID"
     ],
-    "note": "Tasks go to Flood-Net's Tasks tab for review; Flood-Net decides who may create them. 'enabled' switches the task controls on (once Flood-Net's receiving screen is live). 'team' on a follow-up: {hub:true} = the station's hub team, or {name}.",
-    "enabled": false
+    "note": "Tasks go to Flood-Net's Tasks tab for review; Flood-Net decides who may create them. 'enabled' switches the task controls on (on since 1 Nov 2026, when Flood-Net's receiving screen went live). 'team' on a follow-up: {hub:true} = the station's hub team, or {name}.",
+    "enabled": true
   }
 }
