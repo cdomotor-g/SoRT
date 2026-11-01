@@ -62,11 +62,12 @@ At cutover one small commit makes the v1 address open v2, and keeps v1 at
 | `js/floodnet.js` | Flood-Net's read-only API: search, station facts, prefill, hints. |
 | `js/form.js` | The question cards and the Property Services block. |
 | `js/word.js` | The tables copied into Word (v1's geometry). |
-| `js/map.js` | The map: layers, pins, location check, drawings, survey marks, bridges, the picture. |
+| `js/map.js` | The map: layers, pins, location check, drawings, survey marks, bridges, the picture, the zoom lock (on when the page opens), and going back to all of Queensland on a new session. |
 | `js/github.js` | The GitHub token (shared with v1) and the contents API. |
 | `js/playbook.js` | Save to / continue from / precedents in the playbook. |
 | `js/editor.js` | Edit questions, and publishing them. |
 | `js/tasks.js` | Follow-ups, and the tasks handed to Flood-Net. |
+| `js/help.js` | The ❔ Help guide (top right). Its text is one list in the file — keep it in step when a control is renamed or moved. |
 | `js/app.js` | Boot and wiring. |
 | `playbook/` | The playbook's tools (importer, index builder, Dataverse export). No data. |
 | `tests/e2e.cjs` | End-to-end checks in headless Chromium (see its header). |

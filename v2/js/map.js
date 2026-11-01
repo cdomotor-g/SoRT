@@ -45,6 +45,7 @@
     nearby: { radiusKm: 3, max: 30 },
     dynamicMinScale: 20000,                           // contours and road reserve stop at ~1:20,000
     siteZoom: 17,
+    qld: { xmin: 137.6, ymin: -29.4, xmax: 154.0, ymax: -9.0 },   // the map's home: all of Queensland, Torres Strait included
     order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, pins: 10 },
     timeouts: { esri: 20000, view: 20000, meta: 10000, layer: 10000, query: 12000 },
     attribution: '© State of Queensland (Department of Natural Resources and Mines; Department of Resources; Transport and Main Roads) — CC BY 4.0'
@@ -59,7 +60,8 @@
     contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true },
     move: false, hover: null, drag: null, place: null, measure: null, sketch: null,
     pins: [], anchor: null, fetchedAt: null, marks: [], bridges: [], nearby: [], diag: {}, log: [],
-    framedFor: null, ready: false, failed: null, contourIds: null, railIds: null
+    framedFor: null, ready: false, failed: null, contourIds: null, railIds: null,
+    zoomLocked: true, homeNext: false   // the wheel scrolls the page until 🔒 is pressed; a new session goes home
   };
 
   /* ---------------- small plumbing ---------------- */
@@ -85,9 +87,9 @@
         if (!G.require) { reject(new Error('the Esri loader did not start')); return; }
         G.require(['esri/Map', 'esri/views/MapView', 'esri/layers/ImageryLayer', 'esri/layers/ImageryTileLayer', 'esri/layers/MapImageLayer',
           'esri/layers/FeatureLayer', 'esri/layers/GroupLayer', 'esri/layers/GraphicsLayer', 'esri/Graphic', 'esri/core/reactiveUtils',
-          'esri/geometry/geometryEngine', 'esri/geometry/support/webMercatorUtils', 'esri/widgets/Sketch/SketchViewModel', 'esri/widgets/DistanceMeasurement2D'],
-        (Map, MapView, ImageryLayer, ImageryTileLayer, MapImageLayer, FeatureLayer, GroupLayer, GraphicsLayer, Graphic, reactiveUtils, geometryEngine, webMercatorUtils, SketchViewModel, DistanceMeasurement2D) => {
-          M.esri = { Map, MapView, ImageryLayer, ImageryTileLayer, MapImageLayer, FeatureLayer, GroupLayer, GraphicsLayer, Graphic, reactiveUtils, geometryEngine, webMercatorUtils, SketchViewModel, DistanceMeasurement2D };
+          'esri/geometry/geometryEngine', 'esri/geometry/support/webMercatorUtils', 'esri/widgets/Sketch/SketchViewModel', 'esri/widgets/DistanceMeasurement2D', 'esri/geometry/Extent'],
+        (Map, MapView, ImageryLayer, ImageryTileLayer, MapImageLayer, FeatureLayer, GroupLayer, GraphicsLayer, Graphic, reactiveUtils, geometryEngine, webMercatorUtils, SketchViewModel, DistanceMeasurement2D, Extent) => {
+          M.esri = { Map, MapView, ImageryLayer, ImageryTileLayer, MapImageLayer, FeatureLayer, GroupLayer, GraphicsLayer, Graphic, reactiveUtils, geometryEngine, webMercatorUtils, SketchViewModel, DistanceMeasurement2D, Extent };
           resolve(M.esri);
         }, reject);
       };
@@ -184,6 +186,8 @@
     M.els.drawActs = h('div', { class: 'map-drawacts', hidden: true },
       h('button', { type: 'button', class: 'btn btn-primary', onclick: () => { if (M.sketch) M.sketch.complete(); } }, '✓ Finish route'),
       h('button', { type: 'button', class: 'btn', onclick: () => cancelPlace() }, 'Cancel'));
+    M.els.lockBtn = h('button', { type: 'button', class: 'map-lock', id: 'zoomLock', 'aria-label': 'Zoom lock', onclick: () => setZoomLock(!M.zoomLocked) });
+    M.els.lockHint = h('div', { class: 'map-lockhint', 'aria-hidden': 'true' }, 'Zoom is locked so the page scrolls — zoom with + / − or Ctrl + scroll, or press 🔒 to unlock');
     M.els.banners = h('div', { class: 'map-banners' });
     M.els.side = h('aside', { class: 'map-side' });
     M.els.diag = h('pre', { class: 'map-diag' });
@@ -191,12 +195,21 @@
       M.els.check,
       h('div', { class: 'map-grid' },
         h('div', { class: 'map-main' }, tools,
-          h('div', { class: 'map-frame' }, M.els.view, M.els.legend, M.els.stamp, M.els.edges, M.els.placeHint, M.els.drawActs, M.els.status, M.els.progress),
+          M.els.frame = h('div', { class: 'map-frame' }, M.els.view, M.els.legend, M.els.stamp, M.els.edges, M.els.placeHint, M.els.drawActs, M.els.lockHint, M.els.status, M.els.progress),
           M.els.banners),
         M.els.side),
       h('details', { class: 'map-details' }, h('summary', null, 'Map details (for troubleshooting)'),
         h('button', { type: 'button', class: 'btn-mini', onclick: () => { navigator.clipboard.writeText(M.els.diag.textContent).then(() => M.app.toast('Map details copied.')); } }, 'Copy map details'),
         M.els.diag)));
+    // Zoom lock: while it's on, a wheel over the map never reaches the map (caught
+    // on the way down), so the map doesn't zoom and the page scrolls past it as
+    // usual. Ctrl + wheel (and a trackpad pinch, which arrives as one) still zooms.
+    M.els.frame.addEventListener('wheel', ev => {
+      if (!M.zoomLocked || ev.ctrlKey || ev.metaKey) return;
+      ev.stopPropagation();
+      lockHint();
+    }, { capture: true, passive: true });
+    paintLock();
     G.addEventListener('keydown', ev => {
       if (ev.key === 'Escape' && (M.place || M.drawing)) cancelPlace();
       else if (ev.key === 'Enter' && M.drawing && M.sketch) { ev.preventDefault(); M.sketch.complete(); }
@@ -234,14 +247,16 @@
       await ready;
     }
     M.view.ui.move('zoom', 'bottom-right');
+    M.view.ui.add(M.els.lockBtn, { position: 'bottom-right', index: 0 });
+    applyZoomLock();
     diag('view', 'ready', '', now() - t0);
     M.ready = true;
     M.els.status.hidden = true;
     // A station chosen while the map library was still loading: frame it now
     // (the view started wherever the anchor was when it was built, maybe nowhere).
     resolvePins();
-    M.framedFor = null;
-    if (M.anchor) { M.framedFor = key(M.anchor); frame(false); }
+    M.framedFor = null; M.homeNext = false;
+    if (M.anchor) { M.framedFor = key(M.anchor); frame(false); } else home();
     attachInteraction();
     E.reactiveUtils.watch(() => M.view.updating, u => { M.els.progress.hidden = !u; });
     E.reactiveUtils.watch(() => [M.view.extent, M.view.scale], () => { renderEdges(); renderStamp(); });
@@ -761,6 +776,36 @@
     M.els.moveBtn.setAttribute('aria-pressed', String(M.move));
     M.els.moveBtn.classList.toggle('on', M.move);
     if (!M.move) { M.hover = null; M.drag = null; M.els.view.classList.remove('grab', 'grabbing'); }
+    applyZoomLock();
+  }
+  /* Zoom lock (🔒, above + / −): on when the page opens. */
+  function setZoomLock(on) {
+    M.zoomLocked = !!on;
+    if (!M.zoomLocked) M.els.lockHint.classList.remove('show');
+    applyZoomLock();
+  }
+  function paintLock() {
+    const b = M.els.lockBtn; if (!b) return;
+    b.textContent = M.zoomLocked ? '🔒' : '🔓';
+    b.setAttribute('aria-pressed', String(M.zoomLocked));
+    b.classList.toggle('off', !M.zoomLocked);
+    b.title = M.zoomLocked
+      ? 'Zoom locked: the mouse wheel scrolls the page past the map. Zoom with + / − or Ctrl + scroll (on a touch screen, one finger scrolls the page and two move the map). Click to unlock.'
+      : 'Zoom unlocked: the mouse wheel zooms the map. Click to lock it again, so the wheel scrolls the page.';
+  }
+  function applyZoomLock() {
+    paintLock();
+    // Touch screens: while locked, one finger scrolls the page and two move the
+    // map — except while moving pins, which needs a one-finger drag.
+    const nav = M.view && M.view.navigation;
+    if (nav && 'browserTouchPanEnabled' in nav) nav.browserTouchPanEnabled = !M.zoomLocked || M.move;
+  }
+  let lockHintTimer = null;
+  function lockHint() {
+    if (!M.ready) return;
+    M.els.lockHint.classList.add('show');
+    clearTimeout(lockHintTimer);
+    lockHintTimer = setTimeout(() => M.els.lockHint.classList.remove('show'), 1800);
   }
   function setMeasure(on) {
     if (!M.ready) return;
@@ -775,6 +820,14 @@
   }
 
   /* ---------------- framing ---------------- */
+  // Home: the whole of Queensland (a new session, or no station yet).
+  function home() {
+    if (!M.ready) return;
+    const q = CFG.qld, W = M.esri.webMercatorUtils;
+    const [x0, y0] = W.lngLatToXY(q.xmin, q.ymin), [x1, y1] = W.lngLatToXY(q.xmax, q.ymax);
+    M.view.goTo(new M.esri.Extent({ xmin: x0, ymin: y0, xmax: x1, ymax: y1, spatialReference: { wkid: 3857 } }), { animate: false })
+      .catch(e => log(`Going back to Queensland didn’t finish: ${e && (e.name || e.message)}`));
+  }
   async function frame(all) {
     if (!M.ready) return;
     const pts = shownPins();
@@ -950,7 +1003,7 @@
     const LW = o => o.label.length * 7 + 22, LH = 22;
     const frame = M.els.view.getBoundingClientRect();
     const boxOf = el => { if (!el || el.hidden || !el.offsetWidth) return null; const r = el.getBoundingClientRect(); return { l: r.left - frame.left, t: r.top - frame.top, r: r.right - frame.left, b: r.bottom - frame.top }; };
-    const legend = boxOf(M.els.legend), stamp = boxOf(M.els.stamp);
+    const legend = boxOf(M.els.legend), stamp = boxOf(M.els.stamp), ui = boxOf(M.els.view.querySelector('.esri-ui-bottom-right'));
     out.forEach(o => {
       const e = edgeOf(o);
       if (legend && e === 't' && o.x - LW(o) / 2 < legend.r + 4) o.x = legend.r + 4 + LW(o) / 2;
@@ -973,8 +1026,9 @@
       // Keep the last ones on the map.
       for (let i = on.length - 1; i >= 0; i--) {
         const o = on[i];
-        if (horiz) { const max = (i === on.length - 1 ? W - LW(o) / 2 - 4 : on[i + 1].x - (LW(o) + LW(on[i + 1])) / 2 - 4); if (o.x > max) o.x = max; }
-        else { const max = (i === on.length - 1 ? H - LH : on[i + 1].y - LH - 4); if (o.y > max) o.y = max; }
+        // The last on the bottom or right edge also stops short of the zoom buttons.
+        if (horiz) { const max = (i === on.length - 1 ? (e === 'b' && ui && ui.b > H - LH - 8 ? ui.l - 4 : W - 4) - LW(o) / 2 : on[i + 1].x - (LW(o) + LW(on[i + 1])) / 2 - 4); if (o.x > max) o.x = max; }
+        else { const max = (i === on.length - 1 ? (e === 'r' && ui ? ui.t - 4 - LH / 2 : H - LH) : on[i + 1].y - LH - 4); if (o.y > max) o.y = max; }
       }
     });
     return out;
@@ -1127,6 +1181,9 @@
     const k = key(M.anchor);
     if (k && k !== lastAnchor) { lastAnchor = k; refreshNearSoon(); }
     if (!M.ready) return;
+    // Straight after a new (or another) session: start from its station, or from
+    // the whole of Queensland when it has none yet.
+    if (M.homeNext) { M.homeNext = false; if (M.anchor) { M.framedFor = key(M.anchor); frame(false); } else home(); }
     if (M.anchor && M.view.center && near(M.anchor, { lat: M.view.center.latitude, lon: M.view.center.longitude }) > 5000 && M.framedFor !== key(M.anchor)) { M.framedFor = key(M.anchor); frame(false); }
     drawPins(); drawMarks(); drawBridges(); drawFeatures(); renderEdges();
   }
@@ -1140,9 +1197,9 @@
     refreshNear(true);
     if (!M.ready) return;
     const k = key(M.anchor);
-    if (k && M.framedFor !== k) { M.framedFor = k; frame(false); }
+    if (k && M.framedFor !== k) { M.framedFor = k; M.homeNext = false; frame(false); }
   }
-  function reset() { M.marks = []; M.bridges = []; M.nearby = []; M.fetchedAt = null; M.framedFor = null; lastAnchor = ''; cancelPlace(); setMove(false); }
+  function reset() { M.marks = []; M.bridges = []; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); }
   function focusPin(code, field) {
     resolvePins();
     const p = M.pins.find(x => x.code === code && x.field === field);

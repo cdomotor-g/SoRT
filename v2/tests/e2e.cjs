@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, editor, tasks, layout, map. They use the live Flood-Net
+   Scenarios: station, copy, playbook, editor, tasks, layout, help, map. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
@@ -47,7 +47,7 @@ function fakeGithub(defsText) {
 
 async function page(browser, opts) {
   const o = opts || {};
-  const ctx = await browser.newContext({ viewport: { width: 1360, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  const ctx = await browser.newContext({ viewport: o.viewport || { width: 1360, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
   if (o.token) await ctx.addInitScript(() => { try { localStorage.setItem('sort.github', JSON.stringify({ token: 'fake', login: 'tester' })); } catch (e) { /* */ } });
   let defsText = require('fs').readFileSync(require('path').join(__dirname, '..', 'definitions.json'), 'utf8');
   if (o.defsPatch) { const d = JSON.parse(defsText); o.defsPatch(d); defsText = JSON.stringify(d); }
@@ -59,7 +59,9 @@ async function page(browser, opts) {
   p.on('pageerror', e => p.errors.push(e.message));
   p.on('dialog', d => (d.type() === 'prompt' ? d.accept('Test change') : d.accept()));
   await p.goto(BASE, { waitUntil: 'load' });
-  await p.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('sortv2.')) localStorage.removeItem(k); });
+  // A clean browser — but past the first-visit Help nudge, so its toast never
+  // lands on top of a toast a check is waiting for (the help scenario wants it).
+  await p.evaluate(fresh => { for (const k of Object.keys(localStorage)) if (k.startsWith('sortv2.')) localStorage.removeItem(k); if (!fresh) localStorage.setItem('sortv2.helpSeen', '1'); }, !!o.freshHelp);
   await p.reload({ waitUntil: 'load' });
   await p.waitForSelector('#stationSearch', { timeout: 20000 });
   p.gh = gh;
@@ -196,6 +198,32 @@ const scenarios = {
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
+  async help(b) {
+    const p = await page(b, { freshHelp: true });
+    ok(await p.waitForFunction(() => /New to this page\?/.test(document.querySelector('#toast').textContent), null, { timeout: 8000 }).then(() => true).catch(() => false), 'first visit: a nudge towards Help');
+    await p.click('#toast button:has-text("Open help")');
+    ok(await p.evaluate(() => document.querySelector('#helpDlg').open), 'the nudge opens the guide');
+    const text = await p.innerText('#helpDlg');
+    ok(/Starting a new session/.test(text) && /Sessions/.test(text) && /New session/.test(text), 'it says how to start a new session');
+    ok(/Start here/.test(text) && /Copy for Word/.test(text) && /Zoom lock/.test(text) && /plain text only/.test(text), 'and covers the basics and the catches');
+    await p.click('#helpDlg .help-toc a:has-text("The map")');
+    await p.waitForTimeout(700);
+    ok(await p.evaluate(() => { const b = document.querySelector('#helpDlg .help-body'); return b.scrollTop > 0; }), 'its contents links jump down the guide');
+    await p.click('#helpDlg .dlg-foot .btn-primary');
+    ok(!(await p.evaluate(() => document.querySelector('#helpDlg').open)), 'Close closes it');
+    await p.reload({ waitUntil: 'load' }); await p.waitForSelector('#stationSearch', { timeout: 20000 });
+    await p.waitForTimeout(1800);
+    ok(!/New to this page/.test(await p.evaluate(() => document.querySelector('#toast').hidden ? '' : document.querySelector('#toast').textContent)), 'the nudge comes once');
+    await p.click('#helpBtn');
+    ok(await p.evaluate(() => document.querySelector('#helpDlg').open && document.querySelector('#helpDlg .help-body').scrollTop === 0), '❔ Help (top right) opens it at the top');
+    await p.keyboard.press('Escape');
+    ok(!(await p.evaluate(() => document.querySelector('#helpDlg').open)), 'Esc closes it');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+    const m = await page(b, { viewport: { width: 390, height: 800 } });
+    ok(await m.evaluate(() => { const r = document.querySelector('#helpBtn').getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && document.documentElement.scrollWidth <= innerWidth; }), 'on a phone the Help button fits, with no sideways scroll');
+    await m.context().close();
+  },
   async map(b) {
     const p = await page(b, { map: true });
     await p.pick('abergowrie bridge');
@@ -220,6 +248,37 @@ const scenarios = {
     await p.$eval('#preview', e => e.scrollIntoView({ block: 'center' }));
     ok(await p.waitForFunction(() => !!document.querySelector('#preview img[alt="Site map"]'), null, { timeout: 30000 }).then(() => true).catch(() => false), 'the preview shows the map picture');
     ok(/Survey marks near Abergowrie Bridge AL \(532028\)/.test(html), 'survey marks table copied, headed with the station');
+    // Zoom lock: on by default; the wheel scrolls past the map instead of zooming it.
+    await p.evaluate(() => { document.querySelector('#map-card').scrollTop = 0; scrollTo(0, 0); });
+    await p.waitForTimeout(400);
+    const zoom = () => p.evaluate(() => SoRT.mapView._M.view.zoom);
+    const scrolled = () => p.evaluate(() => document.querySelector('#map-card').scrollTop + scrollY);
+    ok(await p.getAttribute('#zoomLock', 'aria-pressed') === 'true' && /🔒/.test(await p.innerText('#zoomLock')), 'zoom lock on when the page opens');
+    const fr = await (await p.$('.map-frame')).boundingBox();
+    await p.mouse.move(fr.x + fr.width / 2, fr.y + fr.height / 2);
+    let z0 = await zoom(), s0 = await scrolled();
+    await p.mouse.wheel(0, 400); await p.waitForTimeout(900);
+    ok(Math.abs((await zoom()) - z0) < 0.01, 'locked: the wheel doesn’t zoom the map');
+    ok((await scrolled()) > s0, 'locked: the wheel scrolls on past the map');
+    ok(await p.evaluate(() => document.querySelector('.map-lockhint').classList.contains('show')), 'and says why the map didn’t zoom');
+    await p.evaluate(() => { document.querySelector('#map-card').scrollTop = 0; scrollTo(0, 0); });
+    await p.waitForTimeout(400);
+    await p.mouse.move(fr.x + fr.width / 2, fr.y + fr.height / 2);
+    z0 = await zoom();
+    await p.keyboard.down('Control'); await p.mouse.wheel(0, -300); await p.keyboard.up('Control'); await p.waitForTimeout(1200);
+    p.ctrlZooms = Math.abs((await zoom()) - z0) > 0.01;
+    ok(p.ctrlZooms, 'locked: Ctrl + wheel still zooms the map');
+    await p.click('#zoomLock');
+    ok(await p.getAttribute('#zoomLock', 'aria-pressed') === 'false' && /🔓/.test(await p.innerText('#zoomLock')), 'the button unlocks it');
+    await p.mouse.move(fr.x + fr.width / 2, fr.y + fr.height / 2);
+    z0 = await zoom(); s0 = await scrolled();
+    await p.mouse.wheel(0, 400); await p.waitForTimeout(1200);
+    const z1 = await zoom(), s1 = await scrolled();
+    ok(z1 < z0 - 0.01 && s1 === s0, `unlocked: the wheel zooms the map, the page stays put (zoom ${z0.toFixed(2)} → ${z1.toFixed(2)}, scroll ${s0} → ${s1})`);
+    // A new session starts the map back at the whole of Queensland.
+    await p.newSession(); await p.waitForTimeout(1500);
+    const v = await p.evaluate(() => { const w = SoRT.mapView._M.view; return { lat: w.center.latitude, lon: w.center.longitude, zoom: w.zoom }; });
+    ok(v.lat < -15 && v.lat > -24 && v.lon > 142 && v.lon < 150 && v.zoom < 7, `a new session puts the map back on Queensland (centre ${v.lat.toFixed(1)}, ${v.lon.toFixed(1)}, zoom ${v.zoom.toFixed(1)})`);
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   }

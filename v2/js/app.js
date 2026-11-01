@@ -505,6 +505,7 @@
   }
   async function boot() {
     initTheme(); initLayout();
+    if (S.help) S.help.init(A);   // first, so Help works even if the questions don't load
     S.form.bind(A);
     try { await loadDefs(); }
     catch (e) { $('#bootMsg').textContent = e.message; $('#bootMsg').classList.add('error'); return; }
