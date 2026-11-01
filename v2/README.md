@@ -22,7 +22,10 @@ At cutover one small commit makes the v1 address open v2, and keeps v1 at
   (inferred from the repeaters that pass the station's ALERT IDs), current
   comms, repeater radio details, ACMA licences (Flood-Net's `/acma` route:
   what it records, what the ACMA register has at the site, the repeaters that
-  relay it) and fade-margin hints. Anything filled in for you is marked
+  relay it) and the radio path to base (the dossier's `radio_path`: each hop's
+  saved fade margin, flagged when stale, and the attenuator tests measured on
+  site — shown under Fade Margin; it fills Fade Margin in only from fresh
+  figures). Anything filled in for you is marked
   (Flood-Net / Map / Precedent / Earlier session / Auto) until you confirm or
   change it.
 - **The map is on the page**: v1's imagery, contours, road reserve and rail; the

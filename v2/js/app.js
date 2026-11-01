@@ -294,6 +294,12 @@
     if (st.commsGuess) add('Comms now', `${({ errts: 'ERRTS / ALERT VHF', cellular: 'IP logger – cellular (probably)', satellite: 'IP logger – satellite', unknown: 'not known' })[st.commsGuess]} — ${st.commsWhy}`, 'Flood-Net’s best guess at what is on site now; the Current Comms question starts from it');
     if (st.repeater) add('Repeater radio', `RX ${fn.freqText(st.repeater.rx)} · TX ${fn.freqText(st.repeater.tx)}${st.repeater.passRanges ? ' · passes ' + st.repeater.passRanges : ''}`);
     else if (st.txFrequency) add('Frequency', `${fn.freqText(st.txFrequency.mhz)} — inferred from ${st.txFrequency.from.join(', ')}`, 'Flood-Net records frequencies on repeaters; a field station transmits on what the repeaters passing its ALERT IDs listen on');
+    const rp = st.radioPath;
+    if (rp && rp.status === 'ok' && rp.best && rp.best.hops.length) {
+      const stale = rp.best.hops.some(x => x.stale);
+      add('Radio path', `${fn.pathText(rp, st.name).replace(/^[^→]*→ /, '→ ')}${stale ? ' · saved figures stale' : ''}`,
+        'Flood-Net’s best route to a base station, with the fade margin it saved for each hop. Stale figures were worked out with an older model or before a station changed, so they are a rough guide only. The Fade Margin question has the detail.');
+    }
     if (st.acma) {
       const own = st.acma.recorded.concat(st.acma.register).slice(0, 3);
       add('ACMA licence', own.length ? own.map(a => `${a.licence}${a.holder ? ' — ' + a.holder : ''}${a.expired ? ' (expired)' : ''}`).join('; ')

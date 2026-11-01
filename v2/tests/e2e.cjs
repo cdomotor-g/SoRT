@@ -97,6 +97,14 @@ const scenarios = {
     await p.pick('540601');
     ok(/151\.525 MHz/.test(await p.innerText('.station-card')), 'frequency inferred from the listening repeaters');
     ok((await p.$$eval('#q-frequency .opt.on', e => e.map(x => x.textContent))).join() === '151.525 MHz', 'frequency filled in');
+    // The radio path: every saved figure is stale today, so it's shown, flagged, and not used as an answer.
+    ok(/Radio path\s*→ Toowoomba AL \(−?\d/.test(await p.innerText('.station-card')), 'radio path on the station card');
+    const fm = await p.innerText('#q-fadeMargin [data-hint="station.fadeMargin"]').catch(() => '');
+    ok(/Fifteen Mile AL → Toowoomba AL \([+−]?[\d.]+ dB\) → /.test(fm), 'fade margin question shows the path to base, hop by hop');
+    ok(/Stale/.test(fm) ? /not a pass or fail/.test(fm) : true, 'stale figures are flagged as a rough guide');
+    ok(/Measured on site/.test(fm), 'the attenuator test measured on site is shown');
+    ok(/stations&station=fifteen_mile_al/.test(await p.getAttribute('#q-fadeMargin .hint-link', 'href')), 'and links to the station on Flood-Net’s map');
+    ok(/Stale/.test(fm) ? !(await p.$$eval('#q-fadeMargin .opt.on', e => e.length)) : true, 'stale figures don’t answer the question');
     await p.click('#q-acmaLicence .opt:has-text("transfer")');
     await p.fill('[data-fk="acmaLicence::f::licenceNo"]', '1441013/1'); await p.press('[data-fk="acmaLicence::f::licenceNo"]', 'Tab');
     await p.click('[data-ps="bridgeAttach"] .opt:has-text("Yes")');

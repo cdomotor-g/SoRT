@@ -19,11 +19,10 @@
   "status": {
     "phase": "live",
     "updated": "2026-11-01",
-    "summary": "v1 is in use at forums; the v2 beta at /SoRT/v2/ runs beside it — Flood-Net station lookup (ACMA licences included), the map on the page (or beside the questions) with survey marks and bridges, saved sessions, the playbook of past sessions, an in-page question editor, and tasks handed to Flood-Net (built, switched off until Flood-Net's receiving screen is live).",
+    "summary": "v1 is in use at forums; the v2 beta at /SoRT/v2/ runs beside it — Flood-Net station lookup (ACMA licences, and the radio path to base with the fade margin Flood-Net saved for each hop), the map on the page (or beside the questions) with survey marks and bridges, saved sessions, the playbook of past sessions, an in-page question editor, a Help guide, and tasks handed to Flood-Net (built, switched off until Flood-Net's receiving screen is live).",
     "now": [
       "v2 beta: try it at real forums beside v1",
-      "Tasks: switch on (definitions.tasks.enabled) once Flood-Net's teams-and-tasks receiving screen is live",
-      "Radio path: show Flood-Net's modelled fade margins from the station through its repeaters to base, once its API route lands"
+      "Tasks: switch on (definitions.tasks.enabled) once Flood-Net's teams-and-tasks receiving screen is live"
     ],
     "next": [
       "v2 cutover: one commit makes /SoRT/ open v2 and keeps v1 at /SoRT/v1/",
@@ -98,7 +97,7 @@
         "id": "tasks-receiver",
         "what": "Task hand-off waits on Flood-Net's teams and tasks (the #tasks= receiving screen)",
         "on": "flood-net",
-        "kind": "dependency",
+        "kind": "upstream",
         "since": "2026-11-01",
         "holds": [
           "definitions.tasks.enabled — the task controls in v2's follow-ups"
@@ -109,6 +108,25 @@
             "by": "agent",
             "effort": "same day",
             "model": "Opus5/High",
+            "recommended": true
+          }
+        ]
+      },
+      {
+        "id": "fade-figures",
+        "what": "v2 shows Flood-Net's radio path with each hop's fade margin, but every saved figure is stale (worked out with Flood-Net's older model, which reads far too low), so it is a rough guide and can't fill in Fade Margin >20 dB yet",
+        "on": "flood-net",
+        "kind": "upstream",
+        "since": "2026-11-01",
+        "holds": [
+          "Fade Margin >20 dB filled in from Flood-Net's figures (built: Yes once a fresh figure on the station's own hop is over 20 dB)",
+          "the radio path's figures read as margins rather than a rough guide"
+        ],
+        "options": [
+          {
+            "what": "On Flood-Net, signed in as an editor: Stations map → Layers → Link colour: By fade margin, let it work through every link, then Save to the datastore (Flood-Net's own fade-resweep blocker). v2 picks the fresh figures up by itself; Refresh from Flood-Net updates a station already open.",
+            "by": "human",
+            "effort": "one sitting; the sweep runs by itself",
             "recommended": true
           }
         ]
@@ -278,16 +296,17 @@
       "from": "flood-net",
       "provider": "agent-api",
       "into": "floodnet-lookup",
-      "what": "Flood-Net's public read-only agent API: station search and stations near a point, each station's dossier and record, the ACMA licences at its site, and (when it lands) its radio path to base with modelled fade margins.",
+      "what": "Flood-Net's public read-only agent API: station search and stations near a point, each station's dossier and record, the ACMA licences at its site, and its radio path to base with the fade margin Flood-Net saved for each hop (the dossier's radio_path section).",
       "how": "live",
       "url": "https://floodwarning.net/api/v1",
       "watch": [
         "docs/api-changelog.json",
         "worker/api.js",
-        "worker/acma.js"
+        "worker/acma.js",
+        "worker/radio-path.js"
       ],
       "since": {
-        "date": "2026-10-31"
+        "date": "2026-11-01"
       },
       "on_change": "Read the new docs/api-changelog.json entries; if a route or field SoRT reads changed, update v2/js/floodnet.js, bump v2's ?v= stamp and look up a station on /SoRT/v2/."
     }

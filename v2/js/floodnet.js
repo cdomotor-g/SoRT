@@ -102,6 +102,9 @@
       modelled: links.slice(0, 2).map(l => ({ to: (l.other_station || {}).name || '', db: l.margin_db, verdict: l.verdict || '', km: l.distance_km })),
       measured
     };
+    // The radio path to base, with each hop's saved fade margin (it supersedes
+    // fadeMargin above, which stays for sessions saved before it).
+    facts.radioPath = radioPathFacts(d.radio_path);
     // Frequency: the repeaters that pass its addresses listen on it.
     const rpt = (((nr.repeaters_listening || {}).repeaters) || []).slice(0, 3);
     if (rpt.length && !facts.repeater) {
@@ -193,6 +196,16 @@
       rx: st.repeater.rx != null ? Number(st.repeater.rx).toFixed(4).replace(/0$/, '') : '',
       tx: st.repeater.tx != null ? Number(st.repeater.tx).toFixed(4).replace(/0$/, '') : '',
       passRanges: st.repeater.passRanges || '', owner: st.repeater.owner || '' } });
+    // Fade Margin >20 dB, only once Flood-Net has worked the station's own hops
+    // out afresh (stale figures read far too low). Its own hop is what an
+    // attenuator test at the station measures: the best of its first hops.
+    const fmq = has('fadeMargin'), rp = st.radioPath;
+    if (fmq && rp && rp.status === 'ok' && S.schema.option(fmq, 'yes') && S.schema.option(fmq, 'no')) {
+      const firsts = rp.repeaters.map(r => r.first).filter(Boolean);
+      const fresh = firsts.filter(x => x.db != null && !x.stale);
+      if (fresh.some(x => x.db > 20)) put('fadeMargin', { value: 'yes' });
+      else if (firsts.length && fresh.length === firsts.length) put('fadeMargin', { value: 'no' });
+    }
     // Station type, where the kinds make the answer plain.
     const stq = has('stationType');
     if (stq) {
@@ -204,15 +217,90 @@
     }
   }
 
-  // Hints shown under a question (q.hintFrom).
+  /* The radio path to base, as the dossier carries Flood-Net's /radio-path: the
+     best route with each hop's saved fade margin, the repeaters that pass the
+     station's ALERT IDs (its possible first hops), and the attenuator tests
+     measured on site. A saved margin can be stale — worked out with an older
+     model, or an end of the hop has changed since — so it is kept with that
+     flag, and said in words, never read as a pass or fail. */
+  function radioPathFacts(rp) {
+    if (!rp) return null;
+    if (rp.status !== 'ok') return { status: rp.status || 'unknown', summary: (rp.summary || [])[0] || rp.reason || '' };
+    const names = {}, full = {};
+    (rp.hops || []).forEach(x => {
+      if (x.from) names[x.from.id] = x.from.name;
+      if (x.to) names[x.to.id] = x.to.name;
+      if (x.from && x.to) full[`${x.from.id}>${x.to.id}`] = x;
+    });
+    const learn = r => {   // names along a route, from its "A → B → C" and its ids
+      if (!r || !r.route || !r.stations) return;
+      const ns = r.route.split(' → ');
+      if (ns.length === r.stations.length) r.stations.forEach((id, i) => { if (!names[id]) names[id] = ns[i]; });
+    };
+    const items = (rp.repeaters || {}).items || [];
+    learn(rp.best_path);
+    items.forEach(it => { names[it.id] = it.name; ((it.to_base || {}).routes || []).forEach(learn); });
+    const hop = x => {
+      if (!x) return null;
+      const f = full[`${x.from}>${x.to}`] || {};
+      return { from: names[x.from] || x.from, to: names[x.to] || x.to, db: x.status === 'ok' && x.margin_db != null ? x.margin_db : null,
+        stale: !!x.stale, at: f.computed_at || null, why: (f.stale_reasons || []).map(r => r.reason) };
+    };
+    const b = rp.best_path && rp.best_path.status === 'ok' ? rp.best_path : null;
+    const model = rp.model || {};
+    return {
+      status: 'ok', startsAs: rp.starts_as || '',
+      best: b ? { route: b.route || '', base: (b.base || {}).name || '', km: b.distance_km, complete: !!b.complete, hops: (b.hops || []).map(hop) } : null,
+      repeaters: items.slice(0, 5).map(it => ({ name: it.name, km: it.distance_km, first: it.first_hop ? hop(it.first_hop) : null, routes: (it.to_base || {}).routes_found || 0 })),
+      oldModel: Object.keys(model.saved_models || {}).some(m => m !== model.current),
+      tests: ((rp.measured || {}).tests || []).map(t => ({ date: t.date, db: t.this_visit_db != null ? t.this_visit_db : t.original_db }))
+        .filter(t => t.db != null).slice(0, 3),
+      summary: (rp.summary || [])[0] || ''
+    };
+  }
+  const dbText = v => (v == null ? 'not modelled' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)} dB`);
+  // "A → B (−22.8 dB) → C (+5.2 dB)": each hop's margin after the station it reaches.
+  function pathText(rp, fromName) {
+    const hs = (rp.best && rp.best.hops) || [];
+    return [hs.length ? hs[0].from : fromName].concat(hs.map(x => `${x.to} (${dbText(x.db)})`)).join(' → ');
+  }
+  const STALE_WORDS = { model: 'worked out with an older model', moved: 'a station has moved since', height: 'a ground height has changed since',
+    antenna: 'an antenna has changed since', radio: 'a radio has changed since', frequency: 'the frequency has changed since', unreadable: 'the saved inputs can’t be checked' };
+  function radioPathHint(st, rp) {
+    const lines = [], b = rp.best;
+    if (b && b.hops.length) lines.push({ text: `Radio path to base (Flood-Net): ${pathText(rp, st.name)}${b.complete ? '' : ' — not every hop is modelled yet'}.` });
+    else if (rp.startsAs === 'base station') lines.push({ text: 'Flood-Net: a base station — there is no radio path on from it.' });
+    else lines.push({ text: `Flood-Net: ${rp.summary || 'no radio path to a base station found.'}` });
+    const stale = b ? b.hops.filter(x => x.stale) : [];
+    if (stale.length) {
+      const when = stale.map(x => x.at).filter(Boolean).sort()[0];
+      const why = [...new Set([].concat(...stale.map(x => x.why)))].map(r => STALE_WORDS[r] || r);
+      lines.push({ warn: true, title: why.length ? `Why: ${why.join('; ')}.` : null,
+        text: `Stale — ${stale.length === b.hops.length ? 'every figure was' : `${stale.length} of ${b.hops.length} figures were`} saved${when ? ' ' + U().dmy(when) : ''}${rp.oldModel ? ' with Flood-Net’s older model, which reads far too low' : ', and a station or its radio has changed since'}: a rough guide, not a pass or fail.` });
+    }
+    if (rp.tests.length) {
+      const [t, ...earlier] = rp.tests;
+      lines.push({ text: `Measured on site: its reports still reached base through ${t.db} dB of added loss (${U().dmy(t.date)})${earlier.length ? `; earlier ${earlier.map(x => `${x.db} dB (${U().dmy(x.date)})`).join(', ')}` : ''}.` });
+    }
+    const firstTo = b && b.hops[0] ? b.hops[0].to : null;
+    const others = rp.repeaters.filter(r => r.first && r.name !== firstTo);
+    if (others.length) lines.push({ text: `Also passed by ${others.map(r => `${r.name} (${Math.round(r.km)} km, ${r.first.db == null ? 'not modelled' : dbText(r.first.db) + (r.first.stale ? ', stale' : '')})`).join('; ')}.` });
+    return { lines, link: { href: `https://floodwarning.net/?tab=stations&station=${encodeURIComponent(st.id)}`, label: 'On Flood-Net’s Stations map ↗',
+      title: 'Opens the station on Flood-Net’s Stations map, where Path tools can work a hop out afresh' } };
+  }
+
+  // Hints shown under a question (q.hintFrom): a sentence, or { lines, link }.
   function hint(st, key) {
     if (!st) return null;
+    if (key === 'station.fadeMargin' && st.radioPath && st.radioPath.status === 'ok') return radioPathHint(st, st.radioPath);
     if (key === 'station.fadeMargin' && st.fadeMargin) {
       const fm = st.fadeMargin, parts = [];
       fm.modelled.forEach(m => parts.push(`modelled ${m.db > 0 ? '+' : ''}${m.db} dB to ${m.to}${m.verdict ? ` (${m.verdict})` : ''}`));
       if (fm.measured) parts.push(`last measured on site ${fm.measured.db} dB (${U().dmy(fm.measured.date)})`);
       return parts.length ? `Flood-Net: ${parts.join('; ')}.` : null;
     }
+    // No path to show (a base station, a station without ALERT IDs): Flood-Net's reason.
+    if (key === 'station.fadeMargin' && st.radioPath && st.radioPath.summary) return `Flood-Net: ${st.radioPath.summary}`;
     if (key === 'station.acma' && st.acma) {
       const A = st.acma, parts = [];
       const one = l => `${l.licence}${l.what ? ' (' + l.what + ')' : ''}${l.holder ? ' — ' + l.holder : ''}${l.expired ? ', EXPIRED' : ''}`;
@@ -229,5 +317,5 @@
     return null;
   }
 
-  S.floodnet = { API, search, dossier, record, near, acma, stationFacts, suggestTemplate, applyPrefill, hint, commsGuess, freqText, KIND_LABEL };
+  S.floodnet = { API, search, dossier, record, near, acma, stationFacts, radioPathFacts, pathText, dbText, suggestTemplate, applyPrefill, hint, commsGuess, freqText, KIND_LABEL };
 })(typeof window !== 'undefined' ? window : globalThis);

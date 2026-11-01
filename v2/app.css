@@ -140,6 +140,11 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .q-clear { background: none; border: 0; padding: 0; font-size: 13px; color: var(--muted); cursor: pointer; text-decoration: underline; }
 .q-note { font-size: 13px; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: 5px 8px; }
 .q-note.info { background: var(--info-bg); color: var(--info); }
+.q-hint { max-width: 76ch; }
+.hint-lines { display: grid; gap: 4px; }
+.hint-line.warn { color: var(--warn); font-weight: 600; }
+.hint-line[title] { cursor: help; }
+.hint-link { font-weight: 600; color: inherit; }
 .q-extra { font-size: 13px; }
 .src { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 1px 4px 1px 8px; }
 .src-floodnet { background: var(--src-floodnet); color: var(--src-floodnet-ink); }

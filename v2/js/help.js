@@ -49,6 +49,7 @@
       '**Current Comms** is Flood-Net’s best guess (ALERT IDs → ERRTS; a satellite terminal → satellite; otherwise probably a cellular IP logger). Check it — **Comms Change** is worked out from it.',
       'A change **to ERRTS** adds a follow-up for the hub rep to supply new ALERT IDs. IDs are never allocated in the forum.',
       'The **ERRTS/ALERT Frequency** is inferred from the repeaters that relay the station — confirm it.',
+      '**Fade Margin** shows Flood-Net’s radio path to base, hop by hop, with the margin it saved for each, and the attenuator test measured on site when there is one. A figure marked **Stale** was worked out with an older model (which reads far too low) or before a station changed: a rough guide, not a pass or fail. Once Flood-Net has fresh figures, a station whose own hop clears 20 dB gets **Yes** filled in for you to confirm.',
       '**ACMA Licence**: the hint shows what Flood-Net and the ACMA register know about the site. The register copy can be months old — check anything recent on the ACMA register itself.'
     ] },
     { id: 'word', title: 'Copying into Word', items: [

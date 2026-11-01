@@ -101,11 +101,16 @@
         } }, 'Clear')));
     const side = h('div', { class: 'q-side' }, head);
     R().notesFor(ctx, q).forEach(n => side.appendChild(h('div', { class: 'q-note' + (n.level === 'info' ? ' info' : '') }, n.text)));
+    card.appendChild(side);
+    // What Flood-Net or the map knows (q.hintFrom): beside the answer, where there's room.
+    let hintEl = null;
     if (q.hintFrom) {
       const t = app.hint(q.hintFrom);
-      if (t) side.appendChild(h('div', { class: 'q-note info' }, t));
+      if (typeof t === 'string' && t) hintEl = h('div', { class: 'q-note info q-hint', 'data-hint': q.hintFrom }, t);
+      else if (t && t.lines) hintEl = h('div', { class: 'q-note info q-hint hint-lines', 'data-hint': q.hintFrom },
+        t.lines.map(l => h('div', { class: 'hint-line' + (l.warn ? ' warn' : ''), title: l.title || null }, l.text)),
+        t.link ? h('a', { class: 'hint-link', href: t.link.href, target: '_blank', rel: 'noopener', title: t.link.title || null }, t.link.label) : null);
     }
-    card.appendChild(side);
 
     const body = h('div', { class: 'q-body' });
     if (q.type !== 'none') body.appendChild(optionsEl(q, e));
@@ -120,6 +125,7 @@
             onchange: () => app.changed() })));
       }
     }
+    if (hintEl) body.appendChild(hintEl);
     (q.fields || []).forEach(f => { if (R().fieldVisible(ctx, f)) body.appendChild(fieldEl(q, f, e)); });
     body.appendChild(noteEl(q, e));
     card.appendChild(body);
