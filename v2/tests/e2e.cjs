@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, editor, tasks, layout, help, map. They use the live Flood-Net
+   Scenarios: station, copy, playbook, editor, tasks, manual, layout, help, map. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
@@ -189,6 +189,43 @@ const scenarios = {
     await p.click('.top .copy-btn');
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
     ok(/Check the gauge board datum/.test(await p.clip()), 'the forum’s own task is in the Word copy’s follow-up row');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
+  async manual(b) {
+    const p = await page(b);
+    await p.fill('#stationSearch', 'Zzyzx Qqq Creek');
+    await p.waitForFunction(() => /No station by that name/.test(document.querySelector('.station-find .hint').textContent), null, { timeout: 20000 });
+    await p.click('.station-find .hint button:has-text("Enter it by hand")');
+    ok((await p.inputValue('.manual-grid [name=name]')) === 'Zzyzx Qqq Creek', 'the search words carry into the hand form');
+    await p.fill('.manual-grid [name=name]', 'Zzyzx Creek AL');
+    await p.fill('.manual-grid [name=number]', '599999');
+    await p.fill('.manual-grid [name=pos]', '-27.5123, 152.9456');
+    await p.selectOption('.manual-grid [name=measures]', 'river');
+    await p.fill('.manual-grid [name=alert]', '9001, 9002');
+    await p.selectOption('.manual-grid [name=hub]', 'brisbane');
+    await p.fill('.manual-grid [name=lga]', 'Somerset');
+    await p.click('.manual-grid button:has-text("Use this station")');
+    await p.waitForSelector('.station-card', { timeout: 10000 });
+    const card = await p.innerText('.station-card');
+    ok(/Zzyzx Creek AL/.test(card) && /599999/.test(card) && /entered by hand/.test(card), 'a hand-entered station gets its card');
+    ok(/9001, 9002/.test(card) && /Brisbane Hub · Somerset/.test(card) && /-27\.5123, 152\.9456/.test(card), 'with its ALERT IDs, hub, council and position');
+    ok(/Water Level/.test(await p.textContent('.seg.on')), 'what it measures picks the scope table');
+    ok((await p.$$eval('#q-currentComms .opt.on', e => e.map(x => x.textContent))).join() === 'ERRTS / ALERT VHF radio', 'ALERT IDs make it ERRTS to confirm');
+    ok(/You entered -27\.5123, 152\.9456/.test(await p.innerText('#mapCheck')), 'the map asks to check the position entered, not Flood-Net’s');
+    await p.click('#q-remediation .opt:has-text("Vegetation management")');
+    await p.click('.st-links button:has-text("Edit details")');
+    ok((await p.inputValue('.manual-edit [name=lga]')) === 'Somerset', 'Edit details opens with what was entered');
+    await p.fill('.manual-edit [name=lga]', 'Somerset Regional');
+    await p.click('.manual-edit button:has-text("Save the details")');
+    await p.waitForSelector('.station-card', { timeout: 10000 });
+    ok(/Somerset Regional/.test(await p.innerText('.station-card')), 'and saves the correction');
+    ok((await p.$$eval('#q-remediation .opt.on', e => e.length)) > 0, 'answers kept through the edit');
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
+    ok(/Water Level \(\+\/- Rainfall\) Table — Zzyzx Creek AL \(599999\)/.test(await p.clip()), 'its name and number head the Word table');
+    const sent = await p.evaluate(() => SoRT.tasks.payload(SoRT.app, SoRT.tasks.pending(SoRT.app)).station);
+    ok(sent.id === '' && sent.number === '599999' && sent.hub === 'brisbane', 'tasks go with its number and hub (no Flood-Net id)');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },

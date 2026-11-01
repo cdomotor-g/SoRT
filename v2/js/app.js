@@ -219,11 +219,13 @@
         const res = await S.floodnet.search(q.trim(), 8);
         if (my !== searchSeq) return;
         rows = res.stations || []; active = rows.length ? 0 : -1; draw();
-        status.textContent = rows.length ? '' : 'No station by that name or number in Flood-Net. You can enter it by hand below.';
+        status.innerHTML = '';
+        if (!rows.length) status.append('No station by that name or number in Flood-Net. ', byHandLink(q));
       } catch (e) {
         if (my !== searchSeq) return;
         rows = []; draw();
-        status.textContent = `Flood-Net didn’t answer (${e.message}). Enter the station by hand below.`;
+        status.innerHTML = '';
+        status.append(`Flood-Net didn’t answer (${e.message}). `, byHandLink(q));
       }
     }, 250);
     input.addEventListener('input', ev => run(ev.target.value));
@@ -233,24 +235,91 @@
       else if (ev.key === 'Enter' && rows[active]) { ev.preventDefault(); pick(rows[active]); }
       else if (ev.key === 'Escape' && replacing) renderStation();
     });
-    const manual = h('details', { class: 'manual' }, h('summary', null, 'Not in Flood-Net? Enter it by hand'), manualForm());
+    const manual = h('details', { class: 'manual' }, h('summary', null, 'Not in Flood-Net? Enter it by hand'), manualForm(null));
+    // The search's words go into the form: digits as the number, anything else as the name.
+    function byHandLink(q) {
+      return h('button', { type: 'button', class: 'link', onclick: () => {
+        const t = String(q || '').trim(), f = manual.querySelector('.manual-grid');
+        if (t) f.querySelector(/^\d+$/.test(t) ? '[name=number]' : '[name=name]').value = t;
+        manual.open = true; f.querySelector('[name=name]').focus();
+      } }, 'Enter it by hand');
+    }
     const box = h('div', { class: 'station-find' }, input, status, list, manual);
     const card = root.querySelector('.station-card');
     if (card) root.insertBefore(box, card); else root.appendChild(box);
     setTimeout(() => input.focus(), 0);
   }
-  function manualForm() {
-    const name = h('input', { type: 'text', placeholder: 'Station name' });
-    const num = h('input', { type: 'text', placeholder: 'Bureau number (if any)' });
-    const pos = h('input', { type: 'text', placeholder: 'Latitude, longitude (e.g. -27.4710, 153.0234)' });
-    const go = h('button', { type: 'button', class: 'btn', onclick: () => {
-      const p = U.parseCoord(pos.value);
-      if (!name.value.trim()) { toast('Give the station a name.'); return; }
-      if (pos.value.trim() && !p.ok) { toast(p.error || 'That position doesn’t read as coordinates.'); return; }
-      setStation({ source: 'manual', id: '', number: num.value.trim(), name: name.value.trim(), lat: p.ok ? p.lat : null, lon: p.ok ? p.lon : null,
-        precision: p.ok ? U.coordPrecision(p.lat, p.lon) : null, kinds: [], roles: [], alertIds: [], acma: [] });
-    } }, 'Use this station');
-    return h('div', { class: 'manual-grid' }, name, num, pos, go);
+  /* A station Flood-Net doesn't have yet, typed in (rare). The same facts a
+     Flood-Net station has, so everything downstream treats it alike: the table
+     suggested from what it measures, the hub team for tasks, the map, Word.
+     `was` = the hand-entered station being edited (it stays the same station). */
+  const HUBS = [['adelaide', 'Adelaide Hub'], ['brisbane', 'Brisbane Hub'], ['cairns', 'Cairns Hub'], ['darwin', 'Darwin Hub'],
+    ['hobart', 'Hobart Hub'], ['melbourne', 'Melbourne Hub'], ['perth', 'Perth Hub'], ['sydney', 'Sydney Hub']];
+  const MEASURES = [['rain', 'Rainfall', { kinds: ['rain'] }], ['river', 'Water level', { kinds: ['river'] }],
+    ['both', 'Rainfall and water level', { kinds: ['rain', 'river'] }], ['repeater', 'Repeater', { roles: ['repeater'] }],
+    ['base', 'Base station', { roles: ['base'] }], ['', 'Not sure', {}]];
+  function manualForm(was) {
+    const w = was || {};
+    const fld = (label, el, hint) => h('label', { class: 'fld' }, h('span', { class: 'fld-label' }, label), el, hint ? h('span', { class: 'hint' }, hint) : null);
+    const text = (name, value, placeholder) => h('input', { type: 'text', name, value: value || '', placeholder: placeholder || '' });
+    const pick = (name, list, cur) => h('select', { name }, list.map(([v, t]) => h('option', { value: v, selected: v === cur }, t)));
+    const measureNow = (w.roles || []).includes('repeater') ? 'repeater' : (w.roles || []).includes('base') ? 'base'
+      : ['rain', 'river'].every(k => (w.kinds || []).includes(k)) ? 'both' : (w.kinds || [])[0] || '';
+    const f = {
+      name: text('name', w.name, 'e.g. Fifteen Mile AL'),
+      number: text('number', w.number, 'e.g. 540601'),
+      pos: text('pos', w.lat != null ? U.formatCoord(w.lat, w.lon) : '', 'e.g. -27.4710, 153.0234'),
+      measures: pick('measures', MEASURES.map(([v, t]) => [v, t]), measureNow),
+      alert: text('alert', (w.alertIds || []).map(a => a.id).join(', '), 'e.g. 4043, 4044'),
+      hub: pick('hub', [['', 'Not sure']].concat(HUBS), w.hubId || ''),
+      lga: text('lga', w.lga, 'e.g. Toowoomba Regional'),
+      owner: text('owner', w.owner, 'e.g. Bureau, or the council')
+    };
+    const go = h('button', { type: 'button', class: 'btn btn-primary', onclick: () => {
+      const name = f.name.value.trim(), p = U.parseCoord(f.pos.value);
+      if (!name) { toast('Give the station a name.'); f.name.focus(); return; }
+      if (f.pos.value.trim() && !p.ok) { toast(p.error || 'That position doesn’t read as coordinates.'); f.pos.focus(); return; }
+      const ids = [...new Set(f.alert.value.split(/[\s,;]+/).filter(Boolean))];
+      if (ids.some(x => !/^\d{1,5}$/.test(x))) { toast('ALERT IDs are whole numbers, e.g. 4043, 4044.'); f.alert.focus(); return; }
+      const hub = HUBS.find(x => x[0] === f.hub.value);
+      const kindRole = (MEASURES.find(x => x[0] === f.measures.value) || [, , {}])[2];
+      const facts = {
+        source: 'manual', id: '', number: f.number.value.trim(), name, awrc: '', proposed: false,
+        lat: p.ok ? p.lat : null, lon: p.ok ? p.lon : null, precision: p.ok ? U.coordPrecision(p.lat, p.lon) : null, elevation: null,
+        kinds: kindRole.kinds || [], roles: kindRole.roles || [],
+        hubId: hub ? hub[0] : '', hubName: hub ? hub[1] : '', lga: f.lga.value.trim(), basin: '', stream: '',
+        owner: f.owner.value.trim(), sls: null,
+        alertIds: ids.map(x => ({ id: Number(x), type: '' })), satcom: false,
+        commsGuess: ids.length ? 'errts' : null, commsWhy: ids.length ? 'you entered ALERT IDs for it' : '',
+        txFrequency: null, repeater: null, acma: null, acmaLicence: '', acmaHolder: '', fadeMargin: null, radioPath: null,
+        lastHeard: null, fetchedAt: Date.now(), app: ''
+      };
+      if (was) {
+        // Same station, details corrected: keep its map check if the position didn't change.
+        if (was.checked && was.lat === facts.lat && was.lon === facts.lon) facts.checked = was.checked;
+        A.session.station = facts;
+        const sug = S.floodnet.suggestTemplate(A.defs, facts);
+        if (sug && !Object.keys(A.session.answers).length) A.session.template = sug;
+        S.floodnet.applyPrefill(A.defs, A.session);
+        renderStation(); changed();
+        if (S.mapView) S.mapView.station(A);
+        toast('Station details saved.');
+      } else setStation(facts);
+    } }, was ? 'Save the details' : 'Use this station');
+    return h('div', { class: 'manual-grid' },
+      fld('Station name *', f.name), fld('Bureau number', f.number), fld('Position', f.pos, 'Or place it on the map later'),
+      fld('It measures', f.measures, 'Picks the scope table'), fld('ALERT IDs', f.alert), fld('Hub', f.hub, 'Its hub team gets the hub’s tasks'),
+      fld('Council', f.lga), fld('Owner', f.owner),
+      h('div', { class: 'manual-acts' }, go,
+        was ? h('button', { type: 'button', class: 'btn btn-quiet', onclick: () => renderStation() }, 'Cancel') : null,
+        h('span', { class: 'hint' }, 'Only the name is needed; the rest can be added later with ', h('b', null, 'Edit details'), ' on the station card.')));
+  }
+  function editManual() {
+    const root = $('#station'), card = root.querySelector('.station-card');
+    if (!card || root.querySelector('.manual-edit')) return;
+    const box = h('div', { class: 'manual-edit' }, h('h3', null, 'Station details (entered by hand)'), manualForm(A.session.station));
+    card.replaceWith(box);
+    box.querySelector('[name=name]').focus();
   }
   async function choose(id) {
     const root = $('#station');
@@ -266,12 +335,13 @@
   function setStation(facts) {
     const s = A.session, had = s.station;
     const busy = had && (Object.keys(s.answers).length || Object.keys(s.ps.answers || {}).length);
-    if (busy && had.id !== facts.id) {
+    const ident = x => (x.id ? 'fn:' + x.id : 'manual:' + (x.number || x.name || ''));
+    if (busy && ident(had) !== ident(facts)) {
       // A different station on a session with answers: keep that one, start afresh.
       newSession(facts);
       toast(`New session for ${facts.name}. The previous one is under Sessions.`);
     } else {
-      if (had && had.id === facts.id && had.checked) facts.checked = had.checked;
+      if (had && ident(had) === ident(facts) && had.checked) facts.checked = had.checked;
       s.station = facts;
     }
     const sug = S.floodnet.suggestTemplate(A.defs, facts);
@@ -320,7 +390,8 @@
       facts.length ? h('dl', { class: 'st-facts' }, facts) : null,
       h('div', { class: 'st-links' },
         st.app ? h('a', { href: st.app, target: '_blank', rel: 'noopener' }, 'Open in Flood-Net ↗') : null,
-        st.source === 'floodnet' ? h('button', { type: 'button', class: 'link', onclick: refreshStation }, 'Refresh from Flood-Net') : null),
+        st.source === 'floodnet' ? h('button', { type: 'button', class: 'link', onclick: refreshStation }, 'Refresh from Flood-Net') : null,
+        st.source === 'manual' ? h('button', { type: 'button', class: 'link', onclick: editManual }, 'Edit details') : null),
       S.playbook ? S.playbook.stationStrip(A) : null);
   }
   function templatePicker() {

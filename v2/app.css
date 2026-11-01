@@ -104,7 +104,11 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .res-num { font-weight: 400; color: var(--muted); margin-left: 8px; font-variant-numeric: tabular-nums; }
 .res-meta { font-size: 13px; color: var(--muted); }
 .manual summary { cursor: pointer; color: var(--muted); font-size: 14px; }
-.manual-grid { display: grid; grid-template-columns: 1fr 160px 1.2fr auto; gap: 8px; margin-top: 8px; }
+.manual-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 12px; margin-top: 10px; align-items: start; }
+.manual-grid .fld .hint { font-size: 12px; }
+.manual-acts { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.manual-edit { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.manual-edit h3 { margin: 0; font-size: 15px; }
 .station-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; }
 .st-title { font-size: 18px; font-weight: 700; }
 .st-num { font-weight: 400; color: var(--muted); margin-left: 8px; font-variant-numeric: tabular-nums; }

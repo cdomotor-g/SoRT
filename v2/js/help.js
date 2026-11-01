@@ -81,7 +81,7 @@
     { id: 'small', title: 'Small things worth knowing', items: [
       'Attendees: comma, space or Enter adds initials; Backspace in the empty box removes the last; **Same as last forum** brings back the last list.',
       '**Refresh from Flood-Net** (station card) fetches the station again; **Open in Flood-Net ↗** opens it there.',
-      'Not in Flood-Net? **Enter it by hand** under the station search.',
+      'Not in Flood-Net? **Enter it by hand** under the station search (or from the search’s “no station” line): only the name is needed; what it measures picks the scope table, and its hub sends the hub’s tasks to the right team. **Edit details** on the station card corrects it later.',
       '🌙 / ☀️ switches dark mode. **Version 1** (footer) opens the old page if you need it.'
     ] }
   ];

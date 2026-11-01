@@ -602,7 +602,7 @@
     const cur = M.pins.find(p => p.anchor && p.shown && p.ok);
     if (st && st.lat != null && (!cur || near(cur, st) >= 10)) {
       M.gl.ghost.add(G_(pt(st.lon, st.lat), { type: 'simple-marker', style: 'circle', size: 20, color: [0, 0, 0, 0], outline: { color: [214, 40, 40, 1], width: 2, style: 'dash' } }, { kind: 'fn' }));
-      M.gl.ghost.add(G_(pt(st.lon, st.lat), text(`Flood-Net position${cur ? ' (' + U().fmtDist(near(cur, st)) + ' away)' : ''}`, [255, 220, 220], -20, 10)));
+      M.gl.ghost.add(G_(pt(st.lon, st.lat), text(`${st.source === 'manual' ? 'Position entered' : 'Flood-Net position'}${cur ? ' (' + U().fmtDist(near(cur, st)) + ' away)' : ''}`, [255, 220, 220], -20, 10)));
     }
     shownPins().forEach(p => {
       L.add(G_(pt(p.lon, p.lat), { type: 'simple-marker', style: 'circle', size: 15, color: rgb(p.colour).concat(1), outline: { color: [255, 255, 255, 1], width: 2 } }, { pin: p.key }));
@@ -844,9 +844,10 @@
     const st = M.app.session.station;
     const cur = M.pins.find(p => p.anchor && p.shown && p.ok);
     if (!st) { el.appendChild(h('p', { class: 'hint' }, 'Choose a station above — or place its location on the map from the list beside it.')); return; }
-    if (st.lat == null) { el.appendChild(h('p', { class: 'hint' }, 'Flood-Net has no position for this station. Place it on the map from the list beside it.')); return; }
+    const byHand = st.source === 'manual', rec = byHand ? 'the position entered' : 'Flood-Net’s record';
+    if (st.lat == null) { el.appendChild(h('p', { class: 'hint' }, `${byHand ? 'No position entered for this station yet' : 'Flood-Net has no position for this station'}. Place it on the map from the list beside it.`)); return; }
     if (st.checked) {
-      el.appendChild(h('div', { class: 'check-ok' }, `✓ Position checked ${U().fmtWhen(st.checked.at)} — ${st.checked.movedM >= 1 ? `moved ${U().fmtDist(st.checked.movedM)} from Flood-Net’s record` : 'Flood-Net’s record was right'}.`, ' ',
+      el.appendChild(h('div', { class: 'check-ok' }, `✓ Position checked ${U().fmtWhen(st.checked.at)} — ${st.checked.movedM >= 1 ? `moved ${U().fmtDist(st.checked.movedM)} from ${rec}` : `${rec.charAt(0).toUpperCase() + rec.slice(1)} was right`}.`, ' ',
         h('button', { type: 'button', class: 'link', onclick: () => { st.checked = null; M.app.changed(); } }, 'Check again')));
       return;
     }
@@ -854,8 +855,8 @@
     const coarse = p.places <= 4;
     el.appendChild(h('div', { class: 'check-todo' + (coarse ? ' coarse' : '') },
       h('div', null, h('b', null, 'Check the station’s position. '),
-        `Flood-Net has it at ${U().formatCoord(st.lat, st.lon)} — ${p.places} decimal places (${p.metres < 1 ? 'under 1 m' : '±' + U().fmtDist(p.metres)}). `,
-        coarse ? 'Older records are often rounded like this. ' : '',
+        `${byHand ? 'You entered' : 'Flood-Net has it at'} ${U().formatCoord(st.lat, st.lon)} — ${p.places} decimal places (${p.metres < 1 ? 'under 1 m' : '±' + U().fmtDist(p.metres)}). `,
+        coarse && !byHand ? 'Older records are often rounded like this. ' : '',
         'Turn on ', h('b', null, '✥ Move pins'), ' and drag the red pin onto the equipment in the imagery, or type the position in the list — then:'),
       h('button', { type: 'button', class: 'btn btn-primary', onclick: confirmPosition }, '✓ Position checked')));
   }
@@ -865,7 +866,7 @@
     const cur = M.pins.find(p => p.anchor && p.shown && p.ok);
     const pos = cur ? { lat: cur.lat, lon: cur.lon } : { lat: st.lat, lon: st.lon };
     const moved = st.lat != null ? near(st, pos) : 0;
-    if (moved > 500 && !G.confirm(`The position you’ve set is ${U().fmtDist(moved)} from where Flood-Net has ${st.name}. Is that right? (A move this big is usually the wrong station or a typo.)`)) return;
+    if (moved > 500 && !G.confirm(`The position you’ve set is ${U().fmtDist(moved)} from ${st.source === 'manual' ? 'the position entered for' : 'where Flood-Net has'} ${st.name}. Is that right? (A move this big is usually the wrong station or a typo.)`)) return;
     st.checked = { lat: pos.lat, lon: pos.lon, movedM: st.lat != null ? Math.round(near(st, pos) * 10) / 10 : 0, at: Date.now() };
     if (cur) ans(cur.code).fields[cur.field] = U().formatCoord(pos.lat, pos.lon);
     M.app.changed();
