@@ -61,7 +61,13 @@
     { id: 'tasks', title: 'Handing tasks to teams (Flood-Net)', items: [
       'A follow-up can go to Flood-Net as a task: tick **Send as a task to** and pick the team — the station’s hub team, SoRT Forum, Property Services, Radio licensing, OTE or ID. The forum’s own jobs go under **Other tasks from this forum**.',
       '**Create N tasks in Flood-Net ↗** opens Flood-Net with them filled in. Nothing is made until someone who may hand out tasks (a SoRT Forum member, or an administrator) checks them there and presses **Create**. If your account can’t, Flood-Net offers **Copy the link** to pass to someone who can.',
+      'A **desktop task** (the local TBM to look up in HDB or the station file, for one) stays in the Word tables for technical staff and is never sent to Flood-Net.',
       'Sending again is safe: tasks already made are recognised and left out. Each team sees its tasks on Flood-Net’s **Tasks** tab; who is on a team is seen only by that team and Flood-Net’s administrators.'
+    ] },
+    { id: 'tbm', title: 'Local TBM (water level tables)', items: [
+      'If the forum has the site’s TBM to hand (HDB or the hardcopy station file), choose **On hand – AHD value** or **On hand – LGH value** and type the value and where the TBM is.',
+      'If not, choose **Not on hand** (or leave it): the Word table gets a **DESKTOP TASK** for technical staff to look it up. It leaves the table once the value and its location are filled in.',
+      'It is the site’s own benchmark, not a State survey mark — those are the S1–S5 marks on the map.'
     ] },
     { id: 'ps', title: 'Property Services', items: [
       'It copies the coordinates and the relocation answer from the scope questions **until you change one there** — then it says **Overridden**, with a link back to the scope answer.',

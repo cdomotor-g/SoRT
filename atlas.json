@@ -18,7 +18,7 @@
   },
   "status": {
     "phase": "live",
-    "updated": "2026-11-01",
+    "updated": "2026-11-03",
     "summary": "v1 is in use at forums; the v2 beta at /SoRT/v2/ runs beside it — Flood-Net station lookup (ACMA licences, and the radio path to base with the fade margin Flood-Net saved for each hop), the map on the page (or beside the questions) with survey marks and bridges, saved sessions, the playbook of past sessions, an in-page question editor, a Help guide, and follow-ups handed to Flood-Net's teams as tasks (live since 1 Nov 2026; a SoRT Forum member creates them there).",
     "now": [
       "v2 beta: try it at real forums beside v1"
@@ -109,7 +109,8 @@
             "effort": "one sitting; the sweep runs by itself",
             "recommended": true
           }
-        ]
+        ],
+        "issue": "cdomotor-g/MegaNet#235"
       },
       {
         "id": "team-owners",
@@ -128,7 +129,8 @@
             "effort": "15 min",
             "recommended": true
           }
-        ]
+        ],
+        "issue": "cdomotor-g/MegaNet#261"
       }
     ]
   },

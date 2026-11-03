@@ -54,7 +54,7 @@
     R().followUps(A.ctx).forEach(f => {
       const st = s.followUpState[f.id] = s.followUpState[f.id] || {};
       const t = st.task || (st.task = { send: !!(rules[f.id] && rules[f.id].team), team: teamFor(A, rules[f.id]) });
-      if (!t.send || f.done) return;
+      if (!t.send || f.done || desktop(rules[f.id])) return;   // a desktop task stays in Word
       out.push({ ref: f.id, title: (rules[f.id] && rules[f.id].taskTitle) || shortTitle(f.text),
         detail: f.text + (f.link ? `\n${f.link.label}: ${f.link.url}` : ''), team: t.team, sentAt: t.sentAt || null });
     });
@@ -106,6 +106,9 @@
     return sel;
   }
   const enabled = A => !!(A.defs.tasks && A.defs.tasks.enabled);
+  // A desktop task ("floodnet": false): technical staff chase it from the Word
+  // table; it is never offered to Flood-Net.
+  const desktop = rule => !!(rule && rule.floodnet === false);
   // Where a follow-up lands in Word, and that ticking it done takes it out.
   function whereText(f) {
     const where = f.table === 'ps' ? 'Property Services table' : f.table === 'scope' ? 'scope table’s Follow-up Actions row' : '';
@@ -130,7 +133,7 @@
         h('div', { class: 'fu-body' },
           h('div', null, h('span', { class: 'owner' }, f.owner), ' ', f.text, f.link ? [' ', h('a', { href: f.link.url, target: '_blank', rel: 'noopener' }, f.link.label + ' ↗')] : null),
           h('div', { class: 'fu-meta' }, whereText(f)),
-          f.done ? null : h('div', { class: 'fu-task' },
+          f.done ? null : desktop(rules[f.id]) ? h('div', { class: 'fu-meta fu-desk', title: 'Desktop tasks are kept out of Flood-Net: whoever chases it works from the Word table' }, 'Desktop task — stays in the Word tables, not sent to Flood-Net') : h('div', { class: 'fu-task' },
             h('label', { class: 'inline-check', title: 'Send it to Flood-Net as a task for a team' }, sendBox, ' Send as a task to'),
             teamSelect(A, t.team, team => { t.team = team; t.send = true; A.changed({ light: true }); }),
             t.sentAt ? h('span', { class: 'hint' }, ` sent to Flood-Net ${U().fmtWhen(t.sentAt)}`) : null))));

@@ -92,7 +92,9 @@ At cutover one small commit makes the v1 address open v2, and keeps v1 at
   `followUps[].when`): `{q, is}`, `{q, isNot}`, `{q, in:[…]}`, `{q, has}`,
   `{q, tag}`, `{q, filled, field?}`, `{ps, is}`, `{template}`, `{station}`,
   `{all:[…]}`, `{any:[…]}`, `{not:…}`.
-- `followUps` — `{ id, owner, table: "scope"|"ps"|"none", when, text, link?, doneWhen? }`.
+- `followUps` — `{ id, owner, table: "scope"|"ps"|"none", when, text, link?, doneWhen?, taskTitle?, team?, floodnet? }`.
+  `"floodnet": false` makes it a **desktop task**: it goes into the Word table and
+  is never offered to Flood-Net (the local TBM's `tbmDetails` is one).
   Text may use `{hub}`, `{lga}`, `{owner}`, `{station}`, `{f:question.field|fallback}`.
 - `propertyServices` — v1's block, with a cultural heritage question and the
   bridge question added.

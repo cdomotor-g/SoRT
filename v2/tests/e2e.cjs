@@ -170,6 +170,9 @@ const scenarios = {
     await p.click('#q-remediation .opt:has-text("Vegetation management")');
     await p.waitForTimeout(400);
     const teams = await p.$$eval('#followups .fu-task select', e => e.map(x => x.selectedOptions[0].textContent));
+    // The local TBM: a desktop task until it's entered, never offered to Flood-Net.
+    const tbmFu = await p.$$eval('#followups .fu', e => e.filter(x => /DESKTOP TASK/.test(x.textContent)).map(x => ({ desk: !!x.querySelector('.fu-desk'), send: !!x.querySelector('.fu-task') })));
+    ok(tbmFu.length === 1 && tbmFu[0].desk && !tbmFu[0].send, 'local TBM: a desktop task, with no Send to Flood-Net');
     ok(teams.includes('Brisbane Hub') && teams.includes('SoRT Forum'), `teams suggested (${teams.join(', ')})`);
     await p.click('#followups .fu-add summary');
     await p.fill('#followups .fu-add input[type=text]', 'Check the gauge board datum');
@@ -184,11 +187,24 @@ const scenarios = {
     ok(data.v === 1 && data.source === 'sort' && data.station.id === 'bengalla_tm' && data.station.hub === 'brisbane', 'station and session in the hand-off');
     const refs = data.tasks.map(t => t.ref);
     ok(refs.includes('alertIds') && refs.includes('vegetationScope') && refs.includes('custom-1'), `follow-ups and the added task sent (${refs.join(', ')})`);
+    ok(!refs.includes('tbmDetails'), 'the TBM desktop task stays out of the hand-off');
     ok(JSON.stringify(data.tasks.find(t => t.ref === 'alertIds').team) === '{"hub":"brisbane"}', 'ALERT IDs task goes to the station’s hub team');
     ok((await p.$$eval('#followups .fu-task .hint', e => e.map(x => x.textContent))).some(t => /sent to Flood-Net/.test(t)), 'marked as sent');
     await p.click('.top .copy-btn');
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
-    ok(/Check the gauge board datum/.test(await p.clip()), 'the forum’s own task is in the Word copy’s follow-up row');
+    const clip1 = await p.clip();
+    ok(/Check the gauge board datum/.test(clip1), 'the forum’s own task is in the Word copy’s follow-up row');
+    ok(/Technical staff:<\/b> DESKTOP TASK — get the site’s local TBM from HDB or the hardcopy station file/.test(clip1.replace(/&#39;|&rsquo;|'/g, '’')), 'the TBM desktop task lands in the Word follow-up row');
+    await p.click('#q-localTbm .opt:has-text("On hand – AHD value")');
+    await p.fill('[data-fk="localTbm::f::value"]', '123.456'); await p.press('[data-fk="localTbm::f::value"]', 'Tab');
+    ok(/DESKTOP TASK/.test(await p.innerText('#followups')), 'still a task until its location is described');
+    await p.fill('[data-fk="localTbm::f::location"]', 'Brass plug in the concrete pad'); await p.press('[data-fk="localTbm::f::location"]', 'Tab');
+    await p.waitForTimeout(300);
+    ok(!/DESKTOP TASK/.test(await p.innerText('#followups')), 'value and location entered: the desktop task goes');
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
+    const clip2 = await p.clip();
+    ok(/Local TBM/.test(clip2) && /On hand – AHD value/.test(clip2) && /TBM value: 123\.456 m/.test(clip2) && /TBM location: Brass plug in the concrete pad/.test(clip2) && !/DESKTOP TASK/.test(clip2), 'and the TBM is in the Word table instead');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },

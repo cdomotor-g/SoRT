@@ -1,7 +1,7 @@
 {
   "version": 1,
   "meta": {
-    "updated": "2026-09-28",
+    "updated": "2026-11-03",
     "appTitle": "SORT Forum Scope Builder"
   },
   "optionSets": {},
@@ -397,6 +397,32 @@
       ]
     },
     {
+      "id": "localTbm",
+      "item": "Local TBM",
+      "instruction": "(Value in AHD or LGH, and where it is — from HDB or the hardcopy station file)",
+      "type": "single",
+      "icon": "📏",
+      "options": [
+        "On hand – AHD value",
+        "On hand – LGH value",
+        "Not on hand – DESKTOP TASK: technical staff to get the TBM value (AHD or LGH) and its location from HDB or the hardcopy station file"
+      ],
+      "fields": [
+        {
+          "key": "value",
+          "label": "TBM value (m)",
+          "type": "text",
+          "placeholder": "e.g. 123.456"
+        },
+        {
+          "key": "location",
+          "label": "TBM location",
+          "type": "textarea",
+          "placeholder": "e.g. brass plug in the concrete pad, 2 m upstream of the gauge boards"
+        }
+      ]
+    },
+    {
       "id": "photos",
       "item": "Site Assessment Photos",
       "instruction": "",
@@ -696,6 +722,9 @@
           "shared": "Benchmark"
         },
         {
+          "shared": "localTbm"
+        },
+        {
           "id": "DipPoint",
           "item": "Dip point",
           "instruction": "(eg. radars)",
@@ -908,6 +937,9 @@
         },
         {
           "shared": "Benchmark"
+        },
+        {
+          "shared": "localTbm"
         },
         {
           "id": "DipPoint",

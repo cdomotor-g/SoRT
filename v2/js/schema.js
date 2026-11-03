@@ -8,7 +8,7 @@
      templates: [ { id, label, title, suggest?, waterLevel?,
                     questions: [ <code> | { q:<code>, ...overrides } ] } ],
      propertyServices: { title, note, rows[] },
-     followUps: [ { id, owner, table, when, text, link?, doneWhen? } ]
+     followUps: [ { id, owner, table, when, text, link?, doneWhen?, team?, floodnet? } ]
    QUESTION = { label, section, type:"single"|"multi"|"none", hint?, icon?,
      options?: [ {code,label,tags?,other?} | {group, options:[...]} ],
      fields?: [ {code,label,type,unit?,placeholder?,default?,emptyText?,showIf?} ],
@@ -188,6 +188,8 @@
       if (f.link && !links[f.link]) E(`${where}: link "${f.link}" is not in links`);
       if (f.table && !['scope', 'ps', 'none'].includes(f.table)) E(`${where}: table must be scope, ps or none`);
       if (f.team && !(f.team.hub === true || (typeof f.team.name === 'string' && f.team.name.trim()))) E(`${where}: team must be {"hub": true} or {"name": "<team>"}`);
+      if (f.floodnet != null && typeof f.floodnet !== 'boolean') E(`${where}: floodnet must be true or false`);
+      if (f.floodnet === false && f.team) W(`${where}: a desktop task (floodnet: false) is never sent, so its team is unused`);
     });
     return { errors, warnings };
   }

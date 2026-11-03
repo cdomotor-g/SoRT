@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 5,
+  "version": 6,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-11-01",
@@ -1360,6 +1360,71 @@
           "type": "text"
         }
       ]
+    },
+    "localTbm": {
+      "label": "Local TBM",
+      "section": "sensors",
+      "icon": "📏",
+      "hint": "(Its value in AHD or LGH, and where it is)",
+      "type": "single",
+      "options": [
+        {
+          "code": "ahd",
+          "label": "On hand – AHD value"
+        },
+        {
+          "code": "lgh",
+          "label": "On hand – LGH value"
+        },
+        {
+          "code": "chase",
+          "label": "Not on hand – desktop task for technical staff (HDB or the hardcopy station file)"
+        }
+      ],
+      "fields": [
+        {
+          "code": "value",
+          "label": "TBM value",
+          "type": "number",
+          "unit": "m",
+          "placeholder": "e.g. 123.456",
+          "emptyText": "to be found",
+          "showIf": {
+            "q": "localTbm",
+            "in": [
+              "ahd",
+              "lgh"
+            ]
+          },
+          "precedent": false
+        },
+        {
+          "code": "location",
+          "label": "TBM location",
+          "type": "textarea",
+          "placeholder": "e.g. brass plug in the concrete pad, 2 m upstream of the gauge boards",
+          "emptyText": "to be described",
+          "showIf": {
+            "q": "localTbm",
+            "in": [
+              "ahd",
+              "lgh"
+            ]
+          },
+          "precedent": false
+        }
+      ],
+      "notes": [
+        {
+          "text": "The site's own temporary benchmark, from HDB or the hardcopy station file — not a State survey mark (those are on the map). If the forum doesn't have it, choose Not on hand: it goes into the Word table as a desktop task for technical staff.",
+          "when": {
+            "q": "localTbm",
+            "filled": false
+          },
+          "level": "info"
+        }
+      ],
+      "precedent": false
     }
   },
   "templates": [
@@ -1577,6 +1642,7 @@
         "terminationType",
         "gaugeBoards",
         "benchmark",
+        "localTbm",
         "dipPoint",
         "currentComms",
         "comms",
@@ -1761,6 +1827,7 @@
         },
         "gaugeBoards",
         "benchmark",
+        "localTbm",
         {
           "q": "dipPoint",
           "options": [
@@ -2259,6 +2326,35 @@
       "team": {
         "name": "Property Services"
       }
+    },
+    {
+      "id": "tbmDetails",
+      "owner": "Technical staff",
+      "table": "scope",
+      "when": {
+        "any": [
+          {
+            "q": "localTbm",
+            "filled": false
+          },
+          {
+            "q": "localTbm",
+            "is": "chase"
+          },
+          {
+            "q": "localTbm",
+            "filled": false,
+            "field": "value"
+          },
+          {
+            "q": "localTbm",
+            "filled": false,
+            "field": "location"
+          }
+        ]
+      },
+      "text": "DESKTOP TASK — get the site's local TBM from HDB or the hardcopy station file: its value (AHD or LGH) and a description of where the TBM is, then add them to this scope.",
+      "floodnet": false
     }
   ],
   "tasks": {
@@ -2270,7 +2366,7 @@
       "OTE",
       "ID"
     ],
-    "note": "Tasks go to Flood-Net's Tasks tab for review; Flood-Net decides who may create them. 'enabled' switches the task controls on (on since 1 Nov 2026, when Flood-Net's receiving screen went live). 'team' on a follow-up: {hub:true} = the station's hub team, or {name}.",
+    "note": "Tasks go to Flood-Net's Tasks tab for review; Flood-Net decides who may create them. 'enabled' switches the task controls on (on since 1 Nov 2026, when Flood-Net's receiving screen went live). 'team' on a follow-up: {hub:true} = the station's hub team, or {name}. A follow-up with \"floodnet\": false is a desktop task: it stays in the Word tables and is never sent.",
     "enabled": true
   }
 }
