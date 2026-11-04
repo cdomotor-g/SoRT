@@ -34,7 +34,7 @@
   const m3 = v => (v == null || !isFinite(v) ? '' : Number(v).toFixed(3));
   const label = m => `B${m.ord + 1}`;
 
-  let pending = null;     // { nonce, key } — the request this tab is waiting on
+  let pending = null;     // { nonce, key, win } — the request this tab is waiting on, and the tab it opened
 
   function nonce() { return U().uuid().replace(/[^A-Za-z0-9]/g, '').slice(0, 24); }
   const b64url = text => S.github.b64encode(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -78,6 +78,7 @@
       station: { id: st.source === 'floodnet' ? st.id : '', number: st.number || '', name: st.name || '' } };
     // A named tab, opener kept: Flood-Net answers this tab through it.
     const w = G.open(`${FN}/#benchmarks-for-sort=${b64url(JSON.stringify(payload))}`, 'floodnet-sort-bridge');
+    pending.win = w || null;
     if (!w) A.toast('The browser stopped the Flood-Net tab opening — allow pop-ups for this page, or use Paste from Flood-Net.');
     A.changed({ light: true });
     S.form.render(document.getElementById('form'));
@@ -96,6 +97,7 @@
       const got = clean(ev.data);
       if (!got) return;
       if (!pending || got.nonce !== pending.nonce) return;   // not this tab's request
+      if (pending.win && ev.source !== pending.win) return;   // nor from the Flood-Net tab it opened
       store(A, got, 'floodnet');
     });
   }

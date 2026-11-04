@@ -147,7 +147,8 @@
         "v2/js/rules.js",
         "v2/js/store.js",
         "v2/js/word.js",
-        "v2/js/util.js"
+        "v2/js/util.js",
+        "v2/js/benchmarks.js"
       ],
       "url": "https://cdomotor-g.github.io/SoRT/",
       "status": "beta"
@@ -272,6 +273,22 @@
         "date": "2026-11-01"
       },
       "on_change": "Read the new docs/api-changelog.json entries; if a route or field SoRT reads changed, update v2/js/floodnet.js, bump v2's ?v= stamp and look up a station on /SoRT/v2/."
+    },
+    {
+      "id": "floodnet-benchmarks",
+      "from": "flood-net",
+      "provider": "benchmarks-for-sort",
+      "into": "v2-app",
+      "what": "The Bureau's benchmarks (HDB's Benchmark Details), editors only in Flood-Net: the Local TBM question opens floodwarning.net/#benchmarks-for-sort=<base64url {v:1, source:'sort', nonce, station}>, a signed-in editor presses Send to SoRT, and Flood-Net posts {type:'floodnet:benchmarks', v:1, nonce, station, printed_on, benchmarks[]} to this origin alone (or Copy for SoRT text for Paste from Flood-Net). Read by v2/js/benchmarks.js.",
+      "how": "protocol",
+      "url": "https://floodwarning.net/",
+      "watch": [
+        "sort-benchmarks.js"
+      ],
+      "since": {
+        "date": "2026-11-04"
+      },
+      "on_change": "Read Flood-Net's sort-benchmarks.js and its atlas entry; if the request or the message changed, update v2/js/benchmarks.js (clean() and request()) and the e2e 'bureau' stand-in, bump v2's ?v= stamp."
     }
   ]
 }
