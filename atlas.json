@@ -19,7 +19,7 @@
   "status": {
     "phase": "live",
     "updated": "2026-11-04",
-    "summary": "v2 is the Scope Builder since 4 Nov 2026 (/SoRT/ opens /SoRT/v2/; v1 kept at /SoRT/v1/): Flood-Net station lookup with corrections of its particulars for the Word tables, ACMA licences, and the radio path to base with fresh fade margins; the map beside the questions (each pane scrolling on its own) with survey marks and bridges; saved sessions, the playbook, an in-page question editor, a Help guide, the local TBM as a desktop task, and follow-ups handed to Flood-Net's teams as tasks.",
+    "summary": "v2 is the Scope Builder since 4 Nov 2026 (/SoRT/ opens /SoRT/v2/; v1 kept at /SoRT/v1/): Flood-Net station lookup with corrections of its particulars for the Word tables, ACMA licences, and the radio path to base with fresh fade margins; the map beside the questions (each pane scrolling on its own) with survey marks and bridges; sessions shared with the whole forum through Flood-Net's server (a forum passphrase, no accounts or tokens), an in-page question editor, a Help guide, the local TBM as a desktop task, and follow-ups handed to Flood-Net's teams as tasks.",
     "now": [
       "v2 at real forums as the default; v1 kept at /SoRT/v1/ in case"
     ],
@@ -30,43 +30,6 @@
       "A Dataverse import keyed on v2's permanent question and option codes (v2/playbook/export_tables.mjs writes the tables)"
     ],
     "blocked": [
-      {
-        "id": "shared-sessions",
-        "what": "Sessions shared between people with no setup on each computer: the private playbook repo exists (seeded with five stations) and v2 saves to it by itself, but only from a browser holding a GitHub token, which the owner ruled out for forum computers",
-        "on": "human",
-        "kind": "decision",
-        "since": "2026-11-04",
-        "holds": [
-          "every forum computer seeing the same sessions",
-          "the existing-session warning and Sessions search seeing other computers' sessions",
-          "precedents from other people's sessions"
-        ],
-        "options": [
-          {
-            "what": "Serve SoRT from Flood-Net's own address (floodwarning.net/sort/, Flood-Net's Worker passing through the GitHub Pages copy) and keep sessions in Flood-Net's database: anyone signed in to Flood-Net is signed in to SoRT, no tokens; the Bureau benchmarks become a direct read for editors",
-            "by": "agent",
-            "effort": "High",
-            "model": "Opus5",
-            "recommended": true,
-            "pros": "no setup per computer; one sign-in people already have",
-            "cons": "needs approved Flood-Net accounts; outside sign-ups wait on #237's email"
-          },
-          {
-            "what": "A second Supabase project just for SoRT, with its own sign-in",
-            "by": "agent",
-            "effort": "High",
-            "model": "Opus5",
-            "cons": "a second set of accounts to approve, and its own email sending"
-          },
-          {
-            "what": "No sign-in: a shared forum passphrase typed once per browser, sessions kept by Flood-Net's Worker",
-            "by": "agent",
-            "effort": "Med",
-            "model": "Opus5",
-            "cons": "still a step on each computer; anyone with the passphrase reads every session"
-          }
-        ]
-      },
       {
         "id": "team-owners",
         "what": "Tasks SoRT hands over can only be created in Flood-Net by an administrator until its teams have owners and members (all 13 teams are empty)",
@@ -217,10 +180,11 @@
     {
       "id": "v2-playbook",
       "name": "Playbook (v2)",
-      "what": "Every session saved under its station in the private repo cdomotor-g/SoRT-playbook: Continue from a station's earlier session, similar stations as precedents, open follow-ups across stations; the tools import Word reports and export flat tables for Dataverse.",
+      "what": "Every session shared with the forum through Flood-Net's server (the forum passphrase, once per computer): shared by itself a few seconds after a change, listed and searched in Sessions, Open / Start from it / Use as a precedent (orange until checked, then green), and a warning when a station already has sessions. The private repo cdomotor-g/SoRT-playbook holds the five stations it was seeded with.",
       "paths": [
-        "v2/js/playbook.js",
         "v2/js/github.js",
+        "v2/js/playbook.js",
+        "v2/js/store-remote.js",
         "v2/playbook/"
       ],
       "status": "beta"
@@ -301,6 +265,23 @@
         "date": "2026-11-04"
       },
       "on_change": "Read Flood-Net's sort-benchmarks.js and its atlas entry; if the request or the message changed, update v2/js/benchmarks.js (clean() and request()) and the e2e 'bureau' stand-in, bump v2's ?v= stamp."
+    },
+    {
+      "id": "floodnet-sort-store",
+      "from": "flood-net",
+      "provider": "sort-session-store",
+      "into": "v2-playbook",
+      "what": "The shared sessions: Flood-Net's Worker keeps SoRT's index.json and stations/<key>.json (ETags, If-Match / If-None-Match) at floodwarning.net/api/sort/v1 for whoever sends the forum passphrase (X-SoRT-Passphrase), typed once per computer. Read and written by v2/js/store-remote.js and v2/js/playbook.js.",
+      "how": "live",
+      "url": "https://floodwarning.net/api/sort/v1",
+      "watch": [
+        "worker/sort.js",
+        "docs/sort-store.md"
+      ],
+      "since": {
+        "date": "2026-11-04"
+      },
+      "on_change": "Read Flood-Net's docs/sort-store.md; if a route, status, header or the passphrase check changed, update v2/js/store-remote.js and the e2e fakeStore, bump v2's ?v= stamp."
     }
   ]
 }
