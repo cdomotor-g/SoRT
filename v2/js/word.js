@@ -108,22 +108,42 @@
     if (!marks.length) return '';
     const th = (t, i) => `<td width="${MARK_COLS[i].px}" style="background:#e8e8e8;font-weight:bold;padding:4px 6px;${B}width:${MARK_COLS[i].cm}cm;">${t}</td>`;
     const tdm = (t, i) => `<td width="${MARK_COLS[i].px}" style="vertical-align:top;padding:4px 6px;${B}width:${MARK_COLS[i].cm}cm;">${t}</td>`;
-    let rows = `<tr><td colspan="6"${wAttr()} style="background:#1f2d3d;color:#fff;font-weight:bold;padding:6px 8px;${B}${wStyle()}">${esc(stationLine(s) ? `Survey marks near ${stationLine(s)}` : 'Survey marks near the station')}</td></tr>`;
+    let rows = `<tr><td colspan="6"${wAttr()} style="background:#1f2d3d;color:#fff;font-weight:bold;padding:6px 8px;${B}${wStyle()}">${esc(stationLine(s) ? `State survey marks near ${stationLine(s)}` : 'State survey marks near the station')}</td></tr>`;
     rows += `<tr>${['', 'Mark', 'Type', 'Condition', 'From station', 'Coordinates'].map(th).join('')}</tr>`;
     marks.forEach(m => {
-      const type = m.ahd != null ? `Benchmark · ${m.ahd} m AHD` : 'PSM (no AHD height)';
+      const type = m.ahd != null ? `State benchmark · ${m.ahd} m AHD` : 'PSM (no AHD height)';
       const cond = [m.condition, m.lastVisit ? `last visited ${m.lastVisit}` : ''].filter(Boolean).join(', ');
       const mark = m.report ? `<a href="${esc(m.report)}">${esc(m.name)}</a>` : esc(m.name);
       rows += `<tr>${[esc(m.ref), mark, esc(type), esc(cond), esc(m.away || ''), esc(U().formatCoord(m.lat, m.lon))].map(tdm).join('')}</tr>`;
     });
     const t = `<table${wAttr()} style="border-collapse:collapse;table-layout:fixed;width:${FULL.cm}cm;font-family:Calibri,Arial,sans-serif;font-size:9pt;"><colgroup>${MARK_COLS.map(c => `<col style="width:${c.cm}cm;">`).join('')}</colgroup>${rows}</table>`;
-    return t + `<p style="margin:2px 0 0;font-family:Calibri,Arial,sans-serif;font-size:8pt;color:#555;">Survey marks © State of Queensland (Department of Resources). Click a mark for its Survey Control Mark Report.</p>`;
+    return t + `<p style="margin:2px 0 0;font-family:Calibri,Arial,sans-serif;font-size:8pt;color:#555;">State survey marks © State of Queensland (Department of Resources) — not the Bureau’s own station benchmarks. Click a mark for its Survey Control Mark Report.</p>`;
   }
   function marksText(s) {
     const marks = shownMarks(s);
     if (!marks.length) return '';
-    return `${stationLine(s) ? `Survey marks near ${stationLine(s)}` : 'Survey marks near the station'}\n` + marks.map(m =>
-      `${m.ref}\t${m.name}\t${m.ahd != null ? `Benchmark ${m.ahd} m AHD` : 'PSM'}\t${m.condition || ''}${m.lastVisit ? ', last visited ' + m.lastVisit : ''}\t${m.away || ''}\t${U().formatCoord(m.lat, m.lon)}\t${m.report || ''}`).join('\n') + '\n';
+    return `${stationLine(s) ? `State survey marks near ${stationLine(s)}` : 'State survey marks near the station'}\n` + marks.map(m =>
+      `${m.ref}\t${m.name}\t${m.ahd != null ? `State benchmark ${m.ahd} m AHD` : 'PSM'}\t${m.condition || ''}${m.lastVisit ? ', last visited ' + m.lastVisit : ''}\t${m.away || ''}\t${U().formatCoord(m.lat, m.lon)}\t${m.report || ''}`).join('\n') + '\n';
+  }
+
+  // ---- the Bureau's benchmarks (HDB, via Flood-Net) ---------------------------
+  const BM_COLS = [1.0, 2.0, 2.2, 2.4, 5.4, 3.0].map(wp);
+  function bureauHtml(s, b) {
+    const BB = S.bureauBM;
+    const th = (t, i) => `<td width="${BM_COLS[i].px}" style="background:#e8e8e8;font-weight:bold;padding:4px 6px;${B}width:${BM_COLS[i].cm}cm;">${t}</td>`;
+    const tdm = (t, i) => `<td width="${BM_COLS[i].px}" style="vertical-align:top;padding:4px 6px;${B}width:${BM_COLS[i].cm}cm;">${t}</td>`;
+    let rows = `<tr><td colspan="6"${wAttr()} style="background:#3b2f1d;color:#fff;font-weight:bold;padding:6px 8px;${B}${wStyle()}">${esc(stationLine(s) ? `Bureau benchmarks (HDB) — ${stationLine(s)}` : 'Bureau benchmarks (HDB)')}</td></tr>`;
+    rows += `<tr>${['', 'Level (m)', 'Datum', 'On the gauge (LGH)', 'What it is and where', 'HDB comment'].map(th).join('')}</tr>`;
+    b.marks.forEach(m => {
+      rows += `<tr>${[esc(BB.label(m)), esc(BB.m3(m.level)), esc(BB.DATUM_TEXT[m.datum]), esc(m.onGauge != null ? BB.m3(m.onGauge) + ' m' : '—'), esc(m.description || ''), esc(m.comment || '')].map(tdm).join('')}</tr>`;
+    });
+    const t = `<table${wAttr()} style="border-collapse:collapse;table-layout:fixed;width:${FULL.cm}cm;font-family:Calibri,Arial,sans-serif;font-size:9pt;"><colgroup>${BM_COLS.map(c => `<col style="width:${c.cm}cm;">`).join('')}</colgroup>${rows}</table>`;
+    return t + `<p style="margin:2px 0 0;font-family:Calibri,Arial,sans-serif;font-size:8pt;color:#555;">The station’s own benchmarks, from the Bureau’s HDB Benchmark Details${b.printedOn ? ` (${U().dmy(b.printedOn)})` : ''} via Flood-Net — not State survey marks. LGH: the level on the gauge’s scale, worked out only where the mark and the gauge zero share a datum.</p>`;
+  }
+  function bureauText(s, b) {
+    const BB = S.bureauBM;
+    return `${stationLine(s) ? `Bureau benchmarks (HDB) — ${stationLine(s)}` : 'Bureau benchmarks (HDB)'}\n` + b.marks.map(m =>
+      `${BB.label(m)}\t${BB.m3(m.level)} m ${BB.DATUM_TEXT[m.datum]}\t${m.onGauge != null ? BB.m3(m.onGauge) + ' m on the gauge (LGH)' : ''}\t${m.description || ''}\t${m.comment || ''}`).join('\n') + '\n';
   }
 
   // ---- Property Services --------------------------------------------------------
@@ -197,6 +217,8 @@
       const mh = marksHtml(s);
       if (mh) { html += GAP + mh; text += '\n' + marksText(s); }
     }
+    const bb = inc.bureauBM !== false && S.bureauBM ? S.bureauBM.forWord(s) : null;
+    if (bb) { html += GAP + bureauHtml(s, bb); text += '\n' + bureauText(s, bb); }
     if (inc.ps) { html += GAP + psHtml(ctx); text += '\n\n' + psText(ctx); }
     return { html, text };
   }

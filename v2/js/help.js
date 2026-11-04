@@ -40,7 +40,7 @@
       '**Flood-Net’s position can be rounded** (older records are often only good to 10–100 m). Always check it: turn on **✥ Move pins** and drag the red pin onto the equipment, or type the position in **Locations**, then **✓ Position checked**. Once the pin has moved, a dashed red ring shows where Flood-Net has it.',
       '**Locations** (beside or below the map) lists every location the table asks for. Type a coordinate (decimal or degrees-minutes-seconds), or press **Place** and click the map. Placing the relocation site answers **Relocation: Yes** and measures the distance.',
       '**Drawn for the scope**: the vegetation clearance circle (its radius comes from the Vegetation Management question), trees to remove (**T1, T2…**), and the access track — click along the route, then double-click, press Enter or **✓ Finish route**. **Esc** cancels placing or drawing.',
-      '**Survey marks**: the nearest 5 within 2 km (**S1–S5**). An arrow at the edge points to one that’s off the map. Untick one to leave it out of Word; the mark’s number opens its State survey report.',
+      '**State survey marks** (Queensland’s, from QSpatial): the nearest 5 within 2 km (**S1–S5**). An arrow at the edge points to one that’s off the map. Untick one to leave it out of Word; the mark’s number opens its State survey report. They are not the station’s own **Bureau benchmarks** — those are on the Local TBM question.',
       '**The picture in Word is the map as you see it** — frame it first (**⤢ Fit locations**, zoom). Copy warns if a location falls outside the picture. Flood-Net’s ring and its other stations are left out of the picture.',
       '**⇅ Map above / ⇆ beside the questions** (on the map card) switches the layout; your choice is remembered.',
       'If the map won’t load (some networks block the map services), everything else still works — type coordinates into the questions. **Map details** at the bottom of the map card copies a report for troubleshooting.'
@@ -64,7 +64,9 @@
       'A **desktop task** (the local TBM to look up in HDB or the station file, for one) stays in the Word tables for technical staff and is never sent to Flood-Net.',
       'Sending again is safe: tasks already made are recognised and left out. Each team sees its tasks on Flood-Net’s **Tasks** tab; who is on a team is seen only by that team and Flood-Net’s administrators.'
     ] },
-    { id: 'tbm', title: 'Local TBM (water level tables)', items: [
+    { id: 'tbm', title: 'Local TBM and the Bureau benchmarks (water level tables)', items: [
+      '**Bureau benchmarks (HDB)** are the station’s own marks — level, datum, height on the gauge (LGH), what each is and where — from the Bureau’s HDB, kept in Flood-Net for its editors. On the Local TBM question press **Get them from Flood-Net ↗**: sign in there as an editor and press **Send to SoRT**, and they come back to this tab only. **Use** fills the Local TBM with one; they also go into Word as their own table (B1, B2…), apart from the State survey marks (S1–S5).',
+      'If Flood-Net says it can’t reach this tab (a sign-in can lose the link), press its **Copy for SoRT**, then **Paste from Flood-Net** here.',
       'If the forum has the site’s TBM to hand (HDB or the hardcopy station file), choose **On hand – AHD value** or **On hand – LGH value** and type the value and where the TBM is.',
       'If not, choose **Not on hand** (or leave it): the Word table gets a **DESKTOP TASK** for technical staff to look it up. It leaves the table once the value and its location are filled in.',
       'It is the site’s own benchmark, not a State survey mark — those are the S1–S5 marks on the map.'

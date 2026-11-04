@@ -156,6 +156,13 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .hint-line.warn { color: var(--warn); font-weight: 600; }
 .hint-line[title] { cursor: help; }
 .hint-link { font-weight: 600; color: inherit; }
+.bbm { display: grid; gap: 6px; }
+.bbm .term { border-bottom: 1px dotted currentColor; cursor: help; }
+.bbm-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.bbm-list li.on { font-weight: 600; }
+.bbm-list .btn-mini, .bbm-list .tag { margin-left: 6px; }
+.bbm-desc { font-weight: 400; color: var(--ink); opacity: .85; }
+.bbm-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .q-extra { font-size: 13px; }
 .src { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 1px 4px 1px 8px; }
 .src-floodnet { background: var(--src-floodnet); color: var(--src-floodnet-ink); }

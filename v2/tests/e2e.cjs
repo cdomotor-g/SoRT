@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, editor, tasks, manual, particulars, layout, help, cutover, map. They use the live Flood-Net
+   Scenarios: station, copy, playbook, editor, tasks, manual, particulars, bureau, layout, help, cutover, map. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
@@ -284,6 +284,47 @@ const scenarios = {
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
+  async bureau(b) {
+    // Flood-Net's tab, stood in for: it reads SoRT's request and posts made-up
+    // marks back to its opener — first with the wrong nonce (ignored), then right.
+    const p = await page(b);
+    let asked = null;
+    await p.context().route(/^https:\/\/floodwarning\.net\/$/, r => r.fulfill({ status: 200, contentType: 'text/html', body: `<!doctype html><script>
+      const q = JSON.parse(atob(location.hash.split('=')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const msg = n => ({ type: 'floodnet:benchmarks', v: 1, nonce: n, station: { id: q.station.id, number: q.station.number, name: q.station.name }, printed_on: '2026-10-15',
+        benchmarks: [{ ord: 0, level_m: 45.678, datum: 'AHD', on_gauge_m: 2.345, gauge_zero_m: 43.333, gauge_datum: 'AHD', description: 'Test mark one, made up for the check', comment: 'Made-up comment' },
+                     { ord: 1, level_m: 12.5, datum: 'STATE', on_gauge_m: 1.1, gauge_zero_m: 11.4, gauge_datum: 'STATE', description: 'Test mark two', comment: null },
+                     { ord: 2, level_m: 100, datum: 'ASSUM', on_gauge_m: null, gauge_zero_m: null, gauge_datum: null, description: 'Test mark three', comment: null }] });
+      window.__asked = q;
+      window.opener.postMessage(msg('wrongnonce123'), '*');
+      setTimeout(() => window.opener.postMessage(msg(q.nonce), '*'), 300);
+    </script>` }));
+    await p.pick('41506');
+    ok(/Water Level/.test(await p.textContent('.seg.on')), 'a water level station');
+    const box = '#q-localTbm [data-hint="bureau.benchmarks"]';
+    ok(/Bureau benchmarks \(HDB\)/.test(await p.innerText(box)) && /Not the State survey marks/.test(await p.innerText(box)), 'the Local TBM offers the Bureau benchmarks, told apart from the State marks');
+    const [fn] = await Promise.all([p.context().waitForEvent('page'), p.click(`${box} button:has-text("Get them from Flood-Net")`)]);
+    await fn.waitForLoadState('load');
+    asked = await fn.evaluate(() => window.__asked);
+    ok(asked && asked.v === 1 && asked.source === 'sort' && asked.station.id === 'bengalla_tm' && asked.station.number === '41506' && /^[A-Za-z0-9]{8,}$/.test(asked.nonce), 'it asks Flood-Net for this station’s, by id and number');
+    await p.waitForFunction(() => /Bureau benchmarks? from Flood-Net/.test(document.querySelector('#toast').textContent), null, { timeout: 10000 });
+    await fn.close();
+    const list = await p.innerText(`${box} .bbm-list`);
+    ok(/B1/.test(list) && /45\.678 m AHD/.test(list) && /2\.345 m on the gauge \(LGH\)/.test(list) && /B3/.test(list) && /not AHD or LGH/.test(list), 'the marks are listed, B1…, with level, datum and height on the gauge');
+    ok(await p.$$eval(`${box} .bbm-list li`, e => e.length) === 3, 'only the answer to its own request was taken');
+    await p.click(`${box} .bbm-list li:first-child button:has-text("Use")`);
+    ok((await p.$$eval('#q-localTbm .opt.on', e => e.map(x => x.textContent))).join() === 'On hand – AHD value', 'Use fills the Local TBM: AHD');
+    ok((await p.$eval('[data-fk="localTbm::f::value"]', e => e.value)) === '45.678' && /Test mark one.*2\.345 m on the gauge \(LGH\).*Bureau benchmark B1, HDB Benchmark Details 15\/10\/2026/.test(await p.$eval('[data-fk="localTbm::f::location"]', e => e.value)), 'with its level, where it is and where that came from');
+    ok(!/DESKTOP TASK/.test(await p.innerText('#followups')), 'so no desktop task for the TBM');
+    await p.click(`${box} .bbm-list li:nth-child(2) button:has-text("Use")`);
+    ok((await p.$$eval('#q-localTbm .opt.on', e => e.map(x => x.textContent))).join() === 'On hand – LGH value' && (await p.$eval('[data-fk="localTbm::f::value"]', e => e.value)) === '1.100', 'a State-datum mark gives its height on the gauge (LGH)');
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
+    const html = await p.clip();
+    ok(/Bureau benchmarks \(HDB\) — Bengalla TM \(41506\)/.test(html) && /Test mark three/.test(html) && /not State survey marks/.test(html), 'the Word copy has them as their own table');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
   async layout(b) {
     const p = await page(b);
     await p.pick('540601');
@@ -382,7 +423,7 @@ const scenarios = {
     ok(/<img/.test(html), 'map picture copied');
     await p.$eval('#preview', e => e.scrollIntoView({ block: 'center' }));
     ok(await p.waitForFunction(() => !!document.querySelector('#preview img[alt="Site map"]'), null, { timeout: 30000 }).then(() => true).catch(() => false), 'the preview shows the map picture');
-    ok(/Survey marks near Abergowrie Bridge AL \(532028\)/.test(html), 'survey marks table copied, headed with the station');
+    ok(/State survey marks near Abergowrie Bridge AL \(532028\)/.test(html), 'State survey marks table copied, headed with the station');
     // Zoom lock: on by default; the wheel scrolls past the map instead of zooming it.
     await p.evaluate(() => { document.querySelector('#map-card').scrollTop = 0; scrollTo(0, 0); });
     await p.waitForTimeout(400);

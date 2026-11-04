@@ -35,6 +35,15 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   (through Flood-Net's `/api/report` when that is switched on, or GitHub's
   ready-made *New issue* page until then). Refresh from Flood-Net keeps them,
   and drops any Flood-Net has since been corrected in.
+- **Two kinds of benchmark, kept apart.** *State survey marks* (Queensland's,
+  from QSpatial, public) are found by the map — S1–S5, their own Word table.
+  *Bureau benchmarks (HDB)* are the station's own marks, which Flood-Net keeps
+  for its editors only: on the Local TBM question, *Get them from Flood-Net*
+  opens a Flood-Net tab where a signed-in editor presses *Send to SoRT*, and
+  Flood-Net posts them back to this tab alone (`js/benchmarks.js`; the contract
+  is Flood-Net's Atlas `benchmarks-for-sort`; *Paste from Flood-Net* if the tab
+  link is lost). *Use* fills the Local TBM (AHD, or the height on the gauge —
+  LGH); they go into Word as their own table, B1, B2….
 - **Side by side, each pane scrolls on its own**: the questions on the left,
   the map pane on the right, and neither starts the other at its end.
 - **The map is on the page**: v1's imagery, contours, road reserve and rail; the
@@ -79,6 +88,7 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
 | `js/playbook.js` | Save to / continue from / precedents in the playbook. |
 | `js/editor.js` | Edit questions, and publishing them. |
 | `js/tasks.js` | Follow-ups, and the tasks handed to Flood-Net. |
+| `js/benchmarks.js` | The Bureau's benchmarks from Flood-Net (editors only, handed back to this tab), for the Local TBM and their own Word table. |
 | `js/help.js` | The ❔ Help guide (top right). Its text is one list in the file — keep it in step when a control is renamed or moved. |
 | `js/app.js` | Boot and wiring. |
 | `playbook/` | The playbook's tools (importer, index builder, Dataverse export). No data. |

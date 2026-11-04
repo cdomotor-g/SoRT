@@ -86,6 +86,7 @@
   function hint(key) {
     if (key.startsWith('station.')) return S.floodnet.hint(A.session.station, key);
     if (key.startsWith('map.') && S.mapView) return S.mapView.hint(key);
+    if (key === 'bureau.benchmarks' && S.bureauBM) return S.bureauBM.node(A);
     return null;
   }
   function focusMapOn(code, field) {
@@ -540,6 +541,7 @@
   function renderOutputControls() {
     const s = A.session, inc = s.include;
     const root = $('#outputControls'); root.innerHTML = '';
+    if (inc.bureauBM == null) inc.bureauBM = true;   // sessions from before it
     const tick = (key, label, title) => {
       const i = h('input', { type: 'checkbox', checked: inc[key] });
       i.addEventListener('change', ev => { inc[key] = ev.target.checked; changed({ light: true }); });
@@ -555,7 +557,8 @@
       h('label', { class: 'fld fld-grow' }, h('span', { class: 'fld-label' }, 'Outcome note'), ocn)));
     root.appendChild(h('div', { class: 'ticks' },
       tick('header', 'Title, date and attendees', 'The station’s name and number are on every table’s heading either way'), tick('empty', 'Rows with nothing filled in'),
-      tick('followUps', 'Follow-up actions'), tick('map', 'Map picture'), tick('marks', 'Survey marks table'), tick('ps', 'Property Services table')));
+      tick('followUps', 'Follow-up actions'), tick('map', 'Map picture'), tick('marks', 'State survey marks table', 'Queensland’s survey marks near the station (S1–S5 on the map)'),
+      tick('bureauBM', 'Bureau benchmarks table', 'The station’s own benchmarks from HDB, once fetched from Flood-Net on the Local TBM question'), tick('ps', 'Property Services table')));
   }
   function renderPreview() {
     const root = $('#preview'); if (!root || !A.ctx) return;
@@ -726,6 +729,7 @@
     if (S.mapView) S.mapView.mount($('#mapMount'), A);
     watchPreview();
     if (S.playbook) S.playbook.init(A);
+    if (S.bureauBM) S.bureauBM.init(A);
     renderAll();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

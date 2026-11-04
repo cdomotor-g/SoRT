@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 6,
+  "version": 7,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-11-01",
@@ -1416,7 +1416,7 @@
       ],
       "notes": [
         {
-          "text": "The site's own temporary benchmark, from HDB or the hardcopy station file — not a State survey mark (those are on the map). If the forum doesn't have it, choose Not on hand: it goes into the Word table as a desktop task for technical staff.",
+          "text": "The site's own temporary benchmark — the Bureau's, from HDB (Get them from Flood-Net below) or the hardcopy station file. Not a State survey mark: those are the S1–S5 marks on the map. If the forum doesn't have it, choose Not on hand: it goes into the Word table as a desktop task for technical staff.",
           "when": {
             "q": "localTbm",
             "filled": false
@@ -1424,7 +1424,8 @@
           "level": "info"
         }
       ],
-      "precedent": false
+      "precedent": false,
+      "hintFrom": "bureau.benchmarks"
     }
   },
   "templates": [

@@ -169,7 +169,7 @@
     M.els.measureBtn = h('button', { type: 'button', class: 'btn-mini', 'aria-pressed': 'false', title: 'Measure a distance on the map', onclick: () => setMeasure(!M.measure) }, '📏 Measure');
     const tools = h('div', { class: 'map-tools' },
       contourSel, tog('road', 'Road reserve', 'The cadastre’s road parcels, as on QLD Globe'), tog('rail', 'Rail'),
-      tog('marks', 'Survey marks', 'Permanent survey marks and benchmarks within 2 km (nearest 5)'),
+      tog('marks', 'State survey marks', 'Queensland’s permanent survey marks and benchmarks (QSpatial) within 2 km, nearest 5 — not the Bureau’s own station benchmarks, which are on the Local TBM question'),
       tog('bridges', 'Bridges', 'Road bridges within 1 km, and who manages them'),
       tog('nearby', 'Flood-Net stations', 'Other Flood-Net stations within 3 km — shown for the forum, left out of the Word picture'),
       h('span', { class: 'map-tools-gap' }),
@@ -926,7 +926,7 @@
       });
     }
     // Survey marks.
-    el.appendChild(h('h4', null, 'Survey marks ', h('span', { class: 'hint' }, `within ${U().fmtDist(CFG.marks.radiusM)}, nearest ${CFG.marks.max}`)));
+    el.appendChild(h('h4', null, 'State survey marks ', h('span', { class: 'hint', title: 'Queensland’s survey control (QSpatial). The station’s own Bureau benchmarks are on the Local TBM question.' }, `QSpatial, within ${U().fmtDist(CFG.marks.radiusM)}, nearest ${CFG.marks.max}`)));
     if (!M.on.marks) el.appendChild(h('p', { class: 'hint' }, 'Switched off.'));
     else if (!M.anchor) el.appendChild(h('p', { class: 'hint' }, 'Shown once the station has a location.'));
     else if (M.looking && !M.marks.length) el.appendChild(h('p', { class: 'hint' }, 'Asking the State’s survey register…'));
@@ -971,7 +971,7 @@
     if (line) items.push({ kind: 'line', colour: [255, 170, 0], label: `Access track (${line.lengthM} m)` });
     const hidden = new Set(M.app.session.map.hiddenMarks || []);
     const marks = M.on.marks ? M.marks.filter(m => !hidden.has(m.id)) : [];
-    if (marks.length) items.push({ kind: 'mark', colour: [27, 79, 114], label: `Survey marks ${marks.map(m => m.ref).join(', ')} — table below the map` });
+    if (marks.length) items.push({ kind: 'mark', colour: [27, 79, 114], label: `State survey marks ${marks.map(m => m.ref).join(', ')} — table below the map` });
     if (M.on.bridges && M.bridges.length) items.push({ kind: 'bridge', colour: [128, 0, 32], label: `Bridges ${M.bridges.map(b => b.ref).join(', ')}` });
     return items;
   }
@@ -1212,8 +1212,8 @@
     if (k === 'map.nearestBenchmark') {
       const b = M.marks.find(m => m.ahd != null);
       if (!M.anchor) return null;
-      if (!b) return M.marks.length || M.fetchedAt ? `No registered benchmark with an AHD height within ${U().fmtDist(CFG.marks.radiusM)} of the station.` : null;
-      return `Nearest benchmark: ${b.name} (${b.ref}), ${b.away}, ${b.ahd} m AHD${b.condition ? ', ' + b.condition.toLowerCase() : ''}${b.lastVisit ? ', last visited ' + b.lastVisit : ''}.`;
+      if (!b) return M.marks.length || M.fetchedAt ? `No State survey mark with an AHD height within ${U().fmtDist(CFG.marks.radiusM)} of the station.` : null;
+      return `Nearest State survey mark with an AHD height: ${b.name} (${b.ref}), ${b.away}, ${b.ahd} m AHD${b.condition ? ', ' + b.condition.toLowerCase() : ''}${b.lastVisit ? ', last visited ' + b.lastVisit : ''}.`;
     }
     return null;
   }

@@ -106,7 +106,8 @@
     let hintEl = null;
     if (q.hintFrom) {
       const t = app.hint(q.hintFrom);
-      if (typeof t === 'string' && t) hintEl = h('div', { class: 'q-note info q-hint', 'data-hint': q.hintFrom }, t);
+      if (t && typeof t === 'object' && t.nodeType === 1) hintEl = t;   // a block of its own (the Bureau benchmarks)
+      else if (typeof t === 'string' && t) hintEl = h('div', { class: 'q-note info q-hint', 'data-hint': q.hintFrom }, t);
       else if (t && t.lines) hintEl = h('div', { class: 'q-note info q-hint hint-lines', 'data-hint': q.hintFrom },
         t.lines.map(l => h('div', { class: 'hint-line' + (l.warn ? ' warn' : ''), title: l.title || null }, l.text)),
         t.link ? h('a', { class: 'hint-link', href: t.link.href, target: '_blank', rel: 'noopener', title: t.link.title || null }, t.link.label) : null);
