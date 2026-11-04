@@ -73,13 +73,14 @@
   function writeIndex(list) { U().LS.set(P + 'index', JSON.stringify(list)); }
   function summary(s) {
     const st = s.station || {};
-    return { id: s.id, name: st.name || '', number: st.number || '', template: s.template,
+    return { id: s.id, name: st.name || '', number: st.number || '', stationId: st.source === 'floodnet' ? (st.id || '') : '', template: s.template,
       forumDate: (s.forum || {}).date || '', outcome: s.outcome || null, updatedAt: s.updatedAt,
       playbookAt: (s.playbook && s.playbook.savedAt) || null };
   }
 
-  function save(s) {
-    s.updatedAt = Date.now();
+  // keepTime: a copy brought in as it was (from the playbook) keeps its own time.
+  function save(s, keepTime) {
+    if (!keepTime || !s.updatedAt) s.updatedAt = Date.now();
     const ok = U().LS.set(P + 's.' + s.id, JSON.stringify(s));
     const list = index().filter(x => x.id !== s.id);
     list.unshift(summary(s));

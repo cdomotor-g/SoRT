@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, editor, tasks, manual, particulars, bureau, layout, help, cutover, map. They use the live Flood-Net
+   Scenarios: station, copy, playbook, shared, editor, tasks, manual, particulars, bureau, layout, help, cutover, map. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
@@ -49,6 +49,7 @@ async function page(browser, opts) {
   const o = opts || {};
   const ctx = await browser.newContext({ viewport: o.viewport || { width: 1360, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
   if (o.token) await ctx.addInitScript(() => { try { localStorage.setItem('sort.github', JSON.stringify({ token: 'fake', login: 'tester' })); } catch (e) { /* */ } });
+  if (o.autosaveMs) await ctx.addInitScript(ms => { window.SORT_AUTOSAVE_MS = ms; }, o.autosaveMs);
   let defsText = require('fs').readFileSync(require('path').join(__dirname, '..', 'definitions.json'), 'utf8');
   if (o.defsPatch) { const d = JSON.parse(defsText); o.defsPatch(d); defsText = JSON.stringify(d); }
   const gh = fakeGithub(defsText);
@@ -146,6 +147,64 @@ const scenarios = {
     await p.newSession(); await p.pick('540601');
     await p.click('#pbStrip button:has-text("Continue")'); await p.waitForTimeout(2500);
     ok((await p.$$eval('.q.waiting .src', e => e.map(x => x.textContent))).some(t => /Earlier session/.test(t)), 'Continue carries answers over as Earlier session');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
+  async shared(b) {
+    // Not connected: the page says the session is only in this browser.
+    const n = await page(b);
+    await n.pick('540601');
+    ok(/Saved only in this browser/.test(await n.innerText('#saveBar')) && await n.isVisible('#saveBar button:has-text("Connect to the shared playbook")'), 'not connected: a warning that it is only in this browser');
+    await n.context().close();
+    // Connected: it saves to the shared playbook by itself.
+    const p = await page(b, { token: true, autosaveMs: 800 });
+    await p.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 10000 });
+    ok(true, 'connected: no warning bar');
+    await p.pick('540601');
+    await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
+    await p.click('#q-stockFence .opt:has-text("Yes (standard")');
+    await p.waitForFunction(() => /playbook/.test(document.querySelector('#savedChip').textContent), null, { timeout: 15000 }).catch(() => {});
+    ok(p.gh.files.has('SoRT-playbook/stations/540601.json') && p.gh.files.has('SoRT-playbook/index.json'), 'saved to the shared playbook by itself, with no button');
+    const first = JSON.parse(p.gh.files.get('SoRT-playbook/stations/540601.json').text).sessions[0].id;
+    await p.fill('[data-fk="installNotes::f::notes"]', 'Ring 0459 123 456'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
+    await p.waitForFunction(() => /Not saved to the shared playbook/.test(document.querySelector('#saveBar').textContent), null, { timeout: 8000 }).catch(() => {});
+    ok(/Not saved to the shared playbook/.test(await p.innerText('#saveBar')) && /phone number/.test(await p.innerText('#saveBar')), 'a phone number holds it, and the bar says why');
+    ok(!/0459/.test(p.gh.files.get('SoRT-playbook/stations/540601.json').text), 'nothing private went to the playbook');
+    await p.fill('[data-fk="installNotes::f::notes"]', 'Ring the hub before visiting'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
+    await p.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 8000 }).catch(() => {});
+    ok(/Ring the hub/.test(p.gh.files.get('SoRT-playbook/stations/540601.json').text), 'once it is removed, it saves again');
+    // The same station again: the card says it already has a session, and Sessions finds it.
+    await p.newSession(); await p.pick('540601');
+    await p.waitForSelector('#dupNote:not([hidden])', { timeout: 8000 });
+    ok(/already has (a session|sessions)/.test(await p.innerText('#dupNote')) && /in the shared playbook/.test(await p.innerText('#dupNote')), 'picking it again warns that a session already exists');
+    await p.click('#dupNote button:has-text("Show its sessions")');
+    ok(await p.evaluate(() => document.querySelector('#sessionsDlg').open) && (await p.inputValue('#sessionsSearch')) === '540601', 'which opens Sessions, searched for the station');
+    const res = await p.innerText('#sessionsResults');
+    ok(/In this browser[\s\S]*Fifteen Mile AL[\s\S]*In the shared playbook[\s\S]*Fifteen Mile AL/.test(res), 'its sessions are listed, here and in the shared playbook');
+    await p.fill('#sessionsSearch', 'zzz');
+    ok(!/Fifteen Mile AL/.test(await p.innerText('#sessionsResults')), 'the search narrows the list');
+    await p.fill('#sessionsSearch', 'fifteen');
+    await p.click('.pb-panel .sess button:has-text("Open")');
+    await p.waitForTimeout(800);
+    ok(await p.evaluate(id => SoRT.app.session.id === id, first) && (await p.$$eval('#q-stockFence .opt.on', e => e.length)) === 1, 'Open carries on with that saved session itself');
+    // A precedent: another station filled from this one, orange until checked, then green.
+    await p.newSession(); await p.pick('540335');
+    await p.click('#sessionsBtn'); await p.fill('#sessionsSearch', 'fifteen');
+    await p.click('.pb-panel .sess button:has-text("Use as a precedent")');
+    await p.waitForTimeout(1500);
+    ok((await p.$$('.q.waiting')).length >= 2 && (await p.$$eval('#q-stockFence .opt.on', e => e.map(x => x.className))).join().includes('from-precedent'), 'Use as a precedent fills its answers, each waiting to be checked');
+    ok(await p.$eval('#q-stockFence', e => getComputedStyle(e, '::before').backgroundColor) === 'rgb(224, 122, 16)', 'orange until checked');
+    await p.click('#q-stockFence .src-ok');
+    ok(await p.$eval('#q-stockFence', e => e.classList.contains('checked') && getComputedStyle(e, '::before').backgroundColor !== 'rgb(224, 122, 16)') && /✓ checked · Precedent/.test(await p.innerText('#q-stockFence')), 'then green, marked checked');
+    // Water level: the two stainless-steel tick boxes.
+    await p.newSession(); await p.pick('41506');
+    const opts = await p.$$eval('#q-infraOptions .opt', e => e.map(x => x.textContent.trim()));
+    ok(opts.join('|') === 'Stainless steel enclosure with stainless steel fixtures and fittings|Stainless steel capillary conduit with stainless steel fixtures and fittings' && await p.$$eval('#q-infraOptions input', e => e.every(x => x.type === 'checkbox')), 'water level infrastructure options: two tick boxes');
+    await p.click('#q-infraOptions .opt:has-text("enclosure")'); await p.click('#q-infraOptions .opt:has-text("capillary")');
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
+    const html = await p.clip();
+    ok(/Stainless steel enclosure with stainless steel fixtures and fittings/.test(html) && /Stainless steel capillary conduit with stainless steel fixtures and fittings/.test(html), 'both go into Word');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },

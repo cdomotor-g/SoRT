@@ -5,7 +5,7 @@
   --accent: #0f6e6a; --accent-ink: #ffffff; --accent-weak: #e1f0ef;
   --warn: #8a5300; --warn-bg: #fff3dc; --error: #b42318; --error-bg: #fdecea; --info: #1d5aa0; --info-bg: #e8f0fb;
   --ok: #1f7a43; --ok-bg: #e6f4ec;
-  --src-floodnet: #e7f0fd; --src-floodnet-ink: #1d5aa0; --src-precedent: #f1eafd; --src-precedent-ink: #6a3fb5;
+  --src-floodnet: #e7f0fd; --src-floodnet-ink: #1d5aa0; --src-precedent: #ffead2; --src-precedent-ink: #9a4a00;
   --src-map: #e6f4ec; --src-map-ink: #1f7a43; --src-auto: #eef0f3; --src-auto-ink: #4b5866;
   --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
   --radius: 12px; --gap: 14px;
@@ -17,7 +17,7 @@
   --accent: #3fb3aa; --accent-ink: #0b1a19; --accent-weak: #16312f;
   --warn: #f2bd6b; --warn-bg: #3a2c12; --error: #ff8a80; --error-bg: #3d1c1a; --info: #8ab8f5; --info-bg: #17283d;
   --ok: #7dd3a0; --ok-bg: #143023;
-  --src-floodnet: #17283d; --src-floodnet-ink: #8ab8f5; --src-precedent: #261c3a; --src-precedent-ink: #c4a8f5;
+  --src-floodnet: #17283d; --src-floodnet-ink: #8ab8f5; --src-precedent: #3a2612; --src-precedent-ink: #f5b26b;
   --src-map: #143023; --src-map-ink: #7dd3a0; --src-auto: #232c36; --src-auto-ink: #b4c1ce;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4);
   color-scheme: dark;
@@ -112,6 +112,16 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .manual-acts { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .manual-edit { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .manual-edit h3 { margin: 0; font-size: 15px; }
+.save-bar { border-radius: 10px; padding: 8px 14px; font-size: 14px; }
+.save-bar.warn { background: var(--warn-bg); color: var(--warn); }
+.save-bar.info { background: var(--info-bg); color: var(--info); }
+.save-bar .link { color: inherit; font-weight: 600; }
+.sess-search { width: 100%; font-size: 15px; padding: 8px 10px; margin: 6px 0 4px; position: sticky; top: 0; z-index: 1; }
+#sessionsResults h3 { margin: 12px 0 4px; font-size: 15px; }
+.pb-panel { border-top: 1px solid var(--line); margin-top: 10px; }
+.st-dup { margin: 0 0 8px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 14px; }
+.st-dup .link { color: inherit; }
+.st-dup-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 .st-edits { margin: 8px 0 4px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 14px; }
 .st-edits ul { margin: 4px 0; padding-left: 20px; }
 .st-edits .link { color: inherit; }
@@ -136,7 +146,10 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .sec .q:first-of-type { border-top: 0; }
 .q::before { content: ""; position: absolute; left: -18px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: transparent; }
 .q.filled::before { background: var(--accent); }
-.q.waiting::before { background: var(--info); }
+/* Filled in for you and not checked yet: orange. Checked: green. */
+.q.waiting::before { background: #e07a10; width: 4px; }
+.q.checked::before { background: var(--ok); width: 4px; }
+.src-checked { background: var(--ok-bg); color: var(--ok); padding-right: 8px; }
 .q.todo::before { background: var(--warn); }
 .q.flash { animation: flash 1.2s; }
 @keyframes flash { 0%, 100% { background: transparent; } 30% { background: var(--info-bg); } }

@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 7,
+  "version": 8,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-11-01",
@@ -1623,14 +1623,16 @@
         },
         {
           "q": "infraOptions",
+          "type": "multi",
+          "hint": "(Tick any that apply)",
           "options": [
             {
-              "code": "standard_enclosure_fixtures_and_fittings",
-              "label": "Standard enclosure, fixtures, and fittings."
+              "code": "ss_enclosure",
+              "label": "Stainless steel enclosure with stainless steel fixtures and fittings"
             },
             {
-              "code": "stainless_steel_enclosure_capillary_conduit_fixtures_and_fit",
-              "label": "Stainless steel enclosure, capillary conduit, fixtures, and fittings."
+              "code": "ss_capillary_conduit",
+              "label": "Stainless steel capillary conduit with stainless steel fixtures and fittings"
             }
           ]
         },

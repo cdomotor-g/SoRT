@@ -123,13 +123,16 @@
 
   /* ---------------- save ---------------- */
   async function putJson(path, obj, msg, sha) { return S.github.putFile(REPO, path, JSON.stringify(obj, null, 2) + '\n', msg, sha); }
-  async function save(A, session, quiet) {
+  async function save(A, session, quiet, auto) {
     session = session || A.session;
+    if (auto && (!S.github.auth() || P.status !== 'ready' || P.busy)) return false;
     if (!S.github.auth()) { S.github.connectDialog({ why: 'Saving to the playbook needs a GitHub token that can reach the private SoRT-playbook repo.', onDone: login => { if (login) { loadIndex().then(() => save(A, session)); } } }); return false; }
     const st = session.station, key = stationKey(st);
     if (!key) { A.toast('Choose (or enter) the station first — the playbook files sessions by station.'); return false; }
     const found = privacyScan(session);
-    if (found.length && !G.confirm(`This session’s text looks like it holds:\n\n• ${found.slice(0, 6).join('\n• ')}\n\nThe playbook keeps no landholder contact details and no gate, padlock or key codes. Cancel to remove it first, or OK if it is fine to keep.`)) return false;
+    // Saving by itself never asks: what looks private holds it until a person decides.
+    if (auto) { if (found.length) { P.held = { id: session.id, found }; refresh(); return false; } }
+    else if (found.length && !G.confirm(`This session’s text looks like it holds:\n\n• ${found.slice(0, 6).join('\n• ')}\n\nThe playbook keeps no landholder contact details and no gate, padlock or key codes. Cancel to remove it first, or OK if it is fine to keep.`)) return false;
     P.busy = true; refresh();
     try {
       const rec = record(A.defs, session);
@@ -147,6 +150,7 @@
           P.files.set(key, { data: file, sha: r.sha });
           await upsertIndex(file, msg);
           session.playbook = { savedAt: Date.now(), key, sha: r.sha };
+          if (P.held && P.held.id === session.id) P.held = null;
           S.store.save(session);
           if (!quiet) A.toast(`Saved to the playbook (${st.name}).`);
           return true;
@@ -219,7 +223,13 @@
         if (src === 'precedent' && (f.type === 'coord' || f.precedent === false)) return;
         if (a.fields && a.fields[f.code] != null) fields[f.code] = String(a.fields[f.code]).replace(new RegExp(`\\s*${f.unit || '@@'}$`), '');
       });
-      const value = q.type === 'none' ? null : a.value;
+      // Only answers the question still offers (an option retired since isn't carried).
+      let value = q.type === 'none' ? null : a.value;
+      if (q.type !== 'none') {
+        const ok = new Set(sch().flatOptions(q.options).map(o => o.code));
+        const vs = [].concat(value == null ? [] : value).filter(v => ok.has(v));
+        value = q.type === 'multi' ? (vs.length ? vs : null) : (vs[0] || null);
+      }
       if (R().emptyVal(value) && !Object.keys(fields).length) return;
       A.session.prefill[q.code] = { src, from, value, other: a.other || '', fields, note: src === 'earlier' ? (a.note || '') : '' };
       n++;
@@ -230,7 +240,7 @@
     try {
       const f = await loadStation(key);
       if (!f) { A.toast('That station’s file isn’t in the playbook.'); return; }
-      const rec = (f.data.sessions || []).filter(s => s.summary).slice(-1)[0];
+      const rec = (f.data.sessions || []).filter(s => s.summary && Object.keys(s.summary.answers || {}).length).slice(-1)[0];
       if (!rec) { A.toast('No answers recorded for that station yet.'); return; }
       const before = U().clone(A.session.prefill);
       const name = f.data.station.name;
@@ -319,22 +329,107 @@
     el.appendChild(h('button', { type: 'button', class: 'btn', disabled: P.busy, title: 'Keep this session in the private playbook, under its station', onclick: () => save(A) }, P.busy ? 'Saving…' : (at ? 'Save to playbook again' : 'Save to playbook')));
     el.appendChild(h('span', { class: 'hint' }, at ? ` In the playbook since ${U().fmtClock(at)}${stale ? ' — changed since' : ''}.` : ' Not in the playbook yet.'));
   }
-  function followUpsPanel(A) {
-    const box = h('div', { class: 'pb-fu' }, h('h3', null, 'Open follow-ups in the playbook'));
-    if (P.status !== 'ready') { box.appendChild(h('p', { class: 'hint' }, P.status === 'off' ? 'Connect GitHub to see them.' : 'The playbook can’t be read just now.')); return box; }
-    const rows = [];
-    (P.index || []).forEach(e => (e.openFollowUps || []).forEach(f => rows.push({ e, f })));
-    if (!rows.length) { box.appendChild(h('p', { class: 'hint' }, 'None — every follow-up in the playbook is done.')); return box; }
-    rows.sort((a, b) => a.f.owner.localeCompare(b.f.owner));
-    rows.forEach(({ e, f }) => box.appendChild(h('div', { class: 'sess' },
-      h('div', { class: 'sess-main' }, h('div', null, h('span', { class: 'owner' }, f.owner), ' ', h('b', null, e.name), e.number ? h('span', { class: 'res-num' }, e.number) : null),
-        h('div', { class: 'res-meta' }, f.text)),
-      h('div', { class: 'sess-acts' }, h('button', { type: 'button', class: 'btn', onclick: () => { const d = document.getElementById('sessionsDlg'); if (d.open) d.close(); continueFrom(A, e.key); } }, 'Open')))));
-    box.appendChild(h('div', { class: 'out-acts' }, h('button', { type: 'button', class: 'btn', onclick: () => saveAllUnsaved(A) }, 'Save every session in this browser to the playbook')));
+  /* ---------------- saving by itself, to the shared playbook ---------------- */
+  // A few seconds after the last change (and before another session opens),
+  // the open session goes to the playbook — once it has a station, while
+  // GitHub is connected and the playbook can be read.
+  const AUTOSAVE_MS = () => (typeof G.SORT_AUTOSAVE_MS === 'number' ? G.SORT_AUTOSAVE_MS : 12000);
+  let autoTimer = null, autoFor = null;
+  // Something worth keeping: a station, and at least one answer (looking a station up files nothing).
+  const answered = s => Object.values(s.answers || {}).some(a => a && (!R().emptyVal(a.value) || Object.values(a.fields || {}).some(v => String(v || '').trim())))
+    || Object.values((s.ps || {}).answers || {}).some(v => String(v || '').trim()) || !!s.outcome;
+  const needsSave = s => !!(s && s.station && stationKey(s.station) && answered(s) && (!s.playbook || !s.playbook.savedAt || s.updatedAt > s.playbook.savedAt + 1000));
+  function autosaveSoon(A) {
+    if (P.status !== 'ready' || !S.github.auth() || !A.session || !stationKey(A.session.station)) return;
+    clearTimeout(autoTimer); autoFor = A.session;
+    autoTimer = setTimeout(() => { const s = autoFor; autoTimer = null; autoFor = null; if (needsSave(s)) save(A, s, true, true); }, AUTOSAVE_MS());
+  }
+  function flush(A) {   // before switching away from a session
+    if (!autoTimer) return;
+    clearTimeout(autoTimer); autoTimer = null;
+    const s = autoFor; autoFor = null;
+    if (needsSave(s)) save(A, s, true, true);
+  }
+
+  // Open a session exactly as it was last saved to the playbook (another
+  // computer's, or this one's from before) — the newer of it and this browser's copy.
+  async function openSaved(A, key) {
+    try {
+      const f = await loadStation(key, true);
+      const rec = f && (f.data.sessions || []).filter(x => x.session).slice(-1)[0];
+      if (!rec) { continueFrom(A, key); return; }
+      const mine = S.store.load(rec.id);
+      const theirs = U().clone(rec.session);
+      theirs.playbook = { savedAt: Date.parse(rec.savedAt) || Date.now(), key, sha: f.sha };
+      if (!mine || (theirs.updatedAt || 0) >= (mine.updatedAt || 0)) { theirs.playbook.savedAt = Math.max(theirs.playbook.savedAt, theirs.updatedAt || 0); S.store.save(theirs, true); }
+      A.openSession(rec.id);
+    } catch (e) { A.toast(`Couldn’t read the playbook: ${e.message}`); }
+  }
+
+  /* ---------------- where this session is kept: the warning bar ---------------- */
+  function renderSaveBar(A) {
+    const el = document.getElementById('saveBar'); if (!el || !A || !A.session) return;
+    el.innerHTML = '';
+    const dl = () => { const b = document.getElementById('downloadBtn'); if (b) b.click(); };
+    const bar = (cls, ...kids) => { el.className = 'save-bar ' + cls; el.hidden = false; kids.forEach(k => k && el.appendChild(k)); };
+    const link = (label, run, title) => h('button', { type: 'button', class: 'link', onclick: run, title: title || null }, label);
+    if (P.held && P.held.id === A.session.id) {
+      bar('warn', h('span', null, h('b', null, 'Not saved to the shared playbook: '), `it looks like it holds ${P.held.found[0]}${P.held.found.length > 1 ? ` (and ${P.held.found.length - 1} more)` : ''}. The playbook keeps no landholder contact details and no gate, padlock or key codes — remove it, or `),
+        link('save it anyway', () => save(A)), document.createTextNode('.'));
+      return;
+    }
+    if (P.status === 'ready') { el.hidden = true; return; }
+    if (P.status === 'loading') { bar('info', h('span', null, 'Connecting to the shared playbook…')); return; }
+    const why = P.status === 'off' ? null : P.status === 'missing' ? 'the shared playbook can’t be reached with this computer’s GitHub token' : `the shared playbook can’t be read just now (${P.error})`;
+    bar('warn', h('span', null, h('b', null, '⚠ Saved only in this browser'), why ? ` — ${why}. ` : '. ',
+      'Nobody else can open this session, and clearing the browser loses it. '),
+      P.status === 'off' ? link('Connect to the shared playbook', () => S.github.connectDialog({ why: 'The shared playbook keeps every session where everyone can open it. Connect once per computer.', onDone: () => loadIndex() }))
+        : link('Try again', () => loadIndex()),
+      document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
+  }
+
+  /* ---------------- the Sessions dialog: the shared playbook ---------------- */
+  const matches = (q, ...xs) => !q || xs.some(x => String(x || '').toLowerCase().includes(q));
+  function panel(A, query, close) {
+    const q = String(query || '').trim().toLowerCase();
+    const box = h('div', { class: 'pb-panel' }, h('h3', null, 'In the shared playbook'));
+    if (P.status === 'off') { box.appendChild(h('p', { class: 'hint' }, 'Not connected — the sessions above are only in this browser. ', h('button', { type: 'button', class: 'link', onclick: () => S.github.connectDialog({ onDone: () => loadIndex() }) }, 'Connect to the shared playbook'))); return box; }
+    if (P.status !== 'ready') { box.appendChild(h('p', { class: 'hint' }, P.status === 'loading' ? 'Loading…' : `The shared playbook can’t be read just now${P.error ? ` (${P.error})` : ''}. `, P.status === 'loading' ? null : h('button', { type: 'button', class: 'link', onclick: () => loadIndex() }, 'Try again'))); return box; }
+    const o = OUTCOME(A), curKey = stationKey(A.session.station);
+    const all = (P.index || []).slice().sort((a, b) => String(b.lastForum).localeCompare(String(a.lastForum)));
+    const rows = all.filter(e => matches(q, e.name, e.number, e.lga, e.hub));
+    if (!rows.length) { box.appendChild(h('p', { class: 'hint' }, q ? 'No station in the playbook matches.' : 'Nothing in the playbook yet.')); }
+    (q ? rows : rows.slice(0, 12)).forEach(e => {
+      const other = curKey && e.key !== curKey;
+      box.appendChild(h('div', { class: 'sess' },
+        h('div', { class: 'sess-main' },
+          h('div', { class: 'sess-name' }, e.name, e.number ? h('span', { class: 'res-num' }, e.number) : null),
+          h('div', { class: 'res-meta' }, [`${e.sessions} session${e.sessions === 1 ? '' : 's'}`, e.lastForum && `last at the forum of ${U().dmy(e.lastForum)}`,
+            e.lastOutcome ? (o[e.lastOutcome] || e.lastOutcome) : 'not finished', e.lga].filter(Boolean).join(' · '))),
+        h('div', { class: 'sess-acts' },
+          h('button', { type: 'button', class: 'btn', title: 'Open its last session as it was saved, and carry on with it', onclick: () => { close(); openSaved(A, e.key); } }, 'Open'),
+          h('button', { type: 'button', class: 'btn btn-quiet', title: 'A new session for today’s forum, starting from its last answers (each to check)', onclick: () => { close(); continueFrom(A, e.key); } }, 'Start from it'),
+          other ? h('button', { type: 'button', class: 'btn btn-quiet', title: `Fill ${A.session.station ? A.session.station.name : 'this session'}’s unanswered questions from this station’s last session — each one orange until you check it`, onclick: () => { close(); usePrecedent(A, e.key); } }, 'Use as a precedent') : null)));
+    });
+    if (!q && rows.length > 12) box.appendChild(h('p', { class: 'hint' }, `${rows.length - 12} more — search to find them.`));
+    const unsaved = S.store.index().filter(x => !x.playbookAt && x.name).length;
+    if (unsaved) box.appendChild(h('div', { class: 'out-acts' }, h('button', { type: 'button', class: 'btn', onclick: () => saveAllUnsaved(A) }, `Save the ${unsaved} session${unsaved > 1 ? 's' : ''} only in this browser to the playbook`)));
     return box;
   }
-  function refresh() { fillStrip(); if (P.A) renderActs(P.A); }
-  function init(A) { P.A = A; loadIndex(); }
+  // The station's other sessions — in this browser and in the playbook — for the card's warning.
+  function existing(A) {
+    const s = A.session, st = s.station, key = stationKey(st);
+    if (!key) return null;
+    const local = S.store.index().filter(x => x.id !== s.id && stationKey({ number: x.number, id: x.stationId, name: x.name }) === key);
+    const e = (P.index || []).find(x => x.key === key);
+    let shared = e ? e.sessions - (s.playbook && s.playbook.key === key ? 1 : 0) : 0;
+    if (shared < 0) shared = 0;
+    if (!local.length && !shared) return null;
+    return { local, shared, entry: e };
+  }
 
-  S.playbook = { REPO, init, stationStrip, renderActs, followUpsPanel, save, saveAllUnsaved, usePrecedent, continueFrom, similar, summary, record, indexEntry, stationKey, privacyScan, loadIndex, state: P };
+  function refresh() { fillStrip(); if (P.A) { renderActs(P.A); renderSaveBar(P.A); if (P.A.playbookChanged) P.A.playbookChanged(); } }
+  function init(A) { P.A = A; renderSaveBar(A); loadIndex(); }
+
+  S.playbook = { REPO, init, stationStrip, renderActs, panel, existing, openSaved, autosaveSoon, flush, renderSaveBar, save, saveAllUnsaved, usePrecedent, continueFrom, similar, summary, record, indexEntry, stationKey, privacyScan, loadIndex, state: P };
 })(typeof window !== 'undefined' ? window : globalThis);

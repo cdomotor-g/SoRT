@@ -31,27 +31,39 @@
     ],
     "blocked": [
       {
-        "id": "playbook-repo",
-        "what": "The playbook's private repo cdomotor-g/SoRT-playbook doesn't exist yet; the GitHub integration may not create repositories",
+        "id": "shared-sessions",
+        "what": "Sessions shared between people with no setup on each computer: the private playbook repo exists (seeded with five stations) and v2 saves to it by itself, but only from a browser holding a GitHub token, which the owner ruled out for forum computers",
         "on": "human",
-        "kind": "access",
-        "since": "2026-10-31",
+        "kind": "decision",
+        "since": "2026-11-04",
         "holds": [
-          "Save to playbook, Continue and precedents in v2 (sessions stay in the browser meanwhile)",
-          "the five seeded stations from the Word reports"
+          "every forum computer seeing the same sessions",
+          "the existing-session warning and Sessions search seeing other computers' sessions",
+          "precedents from other people's sessions"
         ],
         "options": [
           {
-            "what": "github.com/new → owner cdomotor-g → name SoRT-playbook → Private → Add a README → Create; then edit the SoRT fine-grained token to include it. An agent then pushes the seed.",
-            "by": "human",
-            "effort": "5 min",
-            "recommended": true
+            "what": "Serve SoRT from Flood-Net's own address (floodwarning.net/sort/, Flood-Net's Worker passing through the GitHub Pages copy) and keep sessions in Flood-Net's database: anyone signed in to Flood-Net is signed in to SoRT, no tokens; the Bureau benchmarks become a direct read for editors",
+            "by": "agent",
+            "effort": "High",
+            "model": "Opus5",
+            "recommended": true,
+            "pros": "no setup per computer; one sign-in people already have",
+            "cons": "needs approved Flood-Net accounts; outside sign-ups wait on #237's email"
           },
           {
-            "what": "Keep sessions in the browser and download them as files until the repo exists.",
-            "by": "human",
-            "effort": "none",
-            "cons": "no precedents across people"
+            "what": "A second Supabase project just for SoRT, with its own sign-in",
+            "by": "agent",
+            "effort": "High",
+            "model": "Opus5",
+            "cons": "a second set of accounts to approve, and its own email sending"
+          },
+          {
+            "what": "No sign-in: a shared forum passphrase typed once per browser, sessions kept by Flood-Net's Worker",
+            "by": "agent",
+            "effort": "Med",
+            "model": "Opus5",
+            "cons": "still a step on each computer; anyone with the passphrase reads every session"
           }
         ]
       },

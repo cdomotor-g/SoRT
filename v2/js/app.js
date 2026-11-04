@@ -18,6 +18,7 @@
 
   const A = S.app = {
     defs: null, defsSource: '', defsNote: '', session: null, ctx: null, picture: null,
+    playbookChanged: () => { renderDupNote(); if (A.sessionsDraw) A.sessionsDraw(); },
     changed, hint, focusMapOn, drawOnMap, toast, newSession, openSession, refreshStation, useDefs, reloadDefs
   };
 
@@ -80,7 +81,7 @@
     rebuild();
     if (!(opts && opts.light)) { S.form.render($('#form')); S.form.renderPS($('#ps')); renderStation(); }
     renderProgress(); renderFollowUps(); previewSoon(); saveSoon();
-    if (S.playbook) S.playbook.renderActs(A);
+    if (S.playbook) { S.playbook.renderActs(A); S.playbook.autosaveSoon(A); }
     if (S.mapView) S.mapView.sync(A);
   }
   function hint(key) {
@@ -100,6 +101,7 @@
 
   function newSession(station) {
     if (A.session) S.store.save(A.session);
+    if (S.playbook) S.playbook.flush(A);
     A.session = S.store.newSession(A.defs);
     if (station) A.session.station = station;
     A.picture = null;
@@ -110,6 +112,7 @@
     const s = S.store.load(id);
     if (!s) { toast('That session is no longer saved in this browser.'); return; }
     if (A.session) S.store.save(A.session);
+    if (S.playbook) S.playbook.flush(A);
     A.session = s; A.picture = null;
     if (!S.schema.template(A.defs, s.template)) s.template = A.defs.templates[0].id;
     if (S.mapView) S.mapView.reset();
@@ -191,7 +194,7 @@
     root.appendChild(h('header', { class: 'sec-head' }, h('h2', null, 'Station'),
       st ? h('button', { type: 'button', class: 'link', onclick: () => { stationSearch(root, true); } }, 'Change station') : null));
     if (!st) stationSearch(root, false);
-    else root.appendChild(stationCard(st));
+    else { root.appendChild(stationCard(st)); renderDupNote(); }
     root.appendChild(templatePicker());
   }
   function stationSearch(root, replacing) {
@@ -507,6 +510,7 @@
     if (st.sls) add('Service level', [st.sls.gaugeType, st.sls.dataType, st.sls.priority && `priority ${st.sls.priority}`, st.sls.owner && `owner ${st.sls.owner}`].filter(Boolean).join(' · '));
     if (st.lastHeard) add('Last heard', U.fmtWhen(st.lastHeard), 'When Flood-Net’s own receivers last heard it — most stations report through the Bureau, so “never” here says nothing about whether it works');
     return h('div', { class: 'station-card' },
+      h('div', { id: 'dupNote', class: 'st-dup', role: 'note', hidden: true }),
       h('div', { class: 'st-title' }, h('span', { class: 'st-name' }, st.name), st.number ? h('span', { class: 'st-num' }, st.number) : null,
         (st.kinds || []).map(k => h('span', { class: 'tag' }, fn.KIND_LABEL[k] || k)),
         st.proposed ? h('span', { class: 'tag warn' }, 'proposed') : null,
@@ -642,30 +646,62 @@
   }
 
   /* ---------------- sessions dialog ---------------- */
-  function openSessions() {
+  /* Sessions: a search, this browser's sessions, then the shared playbook's. */
+  function openSessions(query) {
     const dlg = $('#sessionsDlg'), list = $('#sessionsList');
     list.innerHTML = '';
-    const idx = S.store.index();
-    if (!idx.length) list.appendChild(h('p', { class: 'muted' }, 'No sessions saved in this browser yet.'));
-    const outcomes = Object.fromEntries(((A.defs.session || {}).outcomes || []).map(o => [o.code, o.label]));
-    idx.forEach(x => {
-      const cur = A.session && x.id === A.session.id;
-      list.appendChild(h('div', { class: 'sess' + (cur ? ' current' : '') },
-        h('div', { class: 'sess-main' },
-          h('div', { class: 'sess-name' }, x.name || 'No station', x.number ? h('span', { class: 'res-num' }, x.number) : null, cur ? h('span', { class: 'tag' }, 'open') : null),
-          h('div', { class: 'res-meta' }, [(S.schema.template(A.defs, x.template) || {}).label, x.forumDate && `forum ${U.dmy(x.forumDate)}`, x.outcome && outcomes[x.outcome],
-            `changed ${U.fmtWhen(x.updatedAt)}`, x.playbookAt ? 'in the playbook' : 'only in this browser'].filter(Boolean).join(' · '))),
-        h('div', { class: 'sess-acts' },
-          cur ? null : h('button', { type: 'button', class: 'btn', onclick: () => { dlg.close(); openSession(x.id); } }, 'Open'),
-          h('button', { type: 'button', class: 'btn btn-quiet', title: 'Forget this session in this browser', onclick: () => {
-            if (!confirm(`Forget the session for ${x.name || 'this station'} in this browser?${x.playbookAt ? '' : ' It has not been saved to the playbook.'}`)) return;
-            S.store.remove(x.id);
-            if (cur) newSession();
-            openSessions();
-          } }, 'Forget'))));
-    });
-    if (S.playbook) list.appendChild(S.playbook.followUpsPanel(A));
+    const search = h('input', { type: 'search', id: 'sessionsSearch', class: 'sess-search', placeholder: 'Find a station — name or number', autocomplete: 'off', value: query || '' });
+    const results = h('div', { id: 'sessionsResults' });
+    list.appendChild(search); list.appendChild(results);
+    const close = () => { if (dlg.open) dlg.close(); };
+    const draw = () => {
+      const q = search.value.trim().toLowerCase();
+      results.innerHTML = '';
+      const idx = S.store.index().filter(x => !q || [x.name, x.number].some(v => String(v || '').toLowerCase().includes(q)));
+      results.appendChild(h('h3', null, 'In this browser'));
+      if (!idx.length) results.appendChild(h('p', { class: 'muted' }, q ? 'No session in this browser matches.' : 'No sessions saved in this browser yet.'));
+      const outcomes = Object.fromEntries(((A.defs.session || {}).outcomes || []).map(o => [o.code, o.label]));
+      idx.forEach(x => {
+        const cur = A.session && x.id === A.session.id;
+        results.appendChild(h('div', { class: 'sess' + (cur ? ' current' : '') },
+          h('div', { class: 'sess-main' },
+            h('div', { class: 'sess-name' }, x.name || 'No station', x.number ? h('span', { class: 'res-num' }, x.number) : null, cur ? h('span', { class: 'tag' }, 'open') : null),
+            h('div', { class: 'res-meta' }, [(S.schema.template(A.defs, x.template) || {}).label, x.forumDate && `forum ${U.dmy(x.forumDate)}`, x.outcome ? outcomes[x.outcome] : 'not finished',
+              `changed ${U.fmtWhen(x.updatedAt)}`, x.playbookAt ? 'in the shared playbook' : 'only in this browser'].filter(Boolean).join(' · '))),
+          h('div', { class: 'sess-acts' },
+            cur ? null : h('button', { type: 'button', class: 'btn', onclick: () => { close(); openSession(x.id); } }, 'Open'),
+            h('button', { type: 'button', class: 'btn btn-quiet', title: 'Forget this session in this browser', onclick: () => {
+              if (!confirm(`Forget the session for ${x.name || 'this station'} in this browser?${x.playbookAt ? ' It stays in the shared playbook.' : ' It is not in the shared playbook, so it will be gone.'}`)) return;
+              S.store.remove(x.id);
+              if (cur) newSession();
+              draw();
+            } }, 'Forget'))));
+      });
+      if (S.playbook) results.appendChild(S.playbook.panel(A, q, close));
+    };
+    search.addEventListener('input', draw);
+    draw();
+    A.sessionsDraw = () => { if (dlg.open) draw(); };
     if (!dlg.open) dlg.showModal();
+    search.focus(); search.select();
+  }
+  // The station already has sessions (here or in the playbook): say so at the top of its card.
+  function renderDupNote() {
+    const el = $('#dupNote'); if (!el) return;
+    el.innerHTML = '';
+    const s = A.session, st = s.station;
+    const x = S.playbook && st ? S.playbook.existing(A) : null;
+    if (!x || s.dupAck || (s.continuesFrom && S.playbook.stationKey(st) === s.continuesFrom.key)) { el.hidden = true; return; }
+    const outcomes = Object.fromEntries(((A.defs.session || {}).outcomes || []).map(o => [o.code, o.label]));
+    const parts = [];
+    if (x.local.length) parts.push(`${x.local.length} in this browser`);
+    if (x.shared) parts.push(`${x.shared} in the shared playbook`);
+    const last = x.entry && x.entry.lastForum ? ` — the last at the forum of ${U.dmy(x.entry.lastForum)}, ${x.entry.lastOutcome ? (outcomes[x.entry.lastOutcome] || x.entry.lastOutcome).toLowerCase() : 'not finished'}` : '';
+    el.hidden = false;
+    el.appendChild(h('div', null, h('b', null, `⚠ ${st.name} already has ${x.local.length + x.shared === 1 ? 'a session' : 'sessions'}`), ` (${parts.join(', ')})${last}. Open one to carry on with it, or keep going with this new one.`));
+    el.appendChild(h('div', { class: 'st-dup-acts' },
+      h('button', { type: 'button', class: 'btn btn-primary', onclick: () => openSessions(st.number || st.name) }, 'Show its sessions'),
+      h('button', { type: 'button', class: 'link', onclick: () => { s.dupAck = true; changed({ light: true }); renderDupNote(); } }, 'Keep this new one')));
   }
 
   /* ---------------- layout: map above, or beside, the questions ---------------- */
@@ -705,7 +741,8 @@
     S.form.render($('#form')); S.form.renderPS($('#ps'));
     renderOutputControls(); renderFollowUps(); renderProgress(); renderSavedChip();
     renderPreview();
-    if (S.playbook) S.playbook.renderActs(A);
+    if (S.playbook) { S.playbook.renderActs(A); S.playbook.renderSaveBar(A); }
+    renderDupNote();
     if (S.mapView) { S.mapView.station(A); S.mapView.sync(A); }
   }
   async function boot() {
@@ -720,7 +757,7 @@
     if (!S.schema.template(A.defs, A.session.template)) A.session.template = A.defs.templates[0].id;
     rebuild();
     U.$$('.copy-btn').forEach(b => b.addEventListener('click', copyForWord));
-    $('#sessionsBtn').addEventListener('click', openSessions);
+    $('#sessionsBtn').addEventListener('click', () => openSessions());
     $('#newSessionBtn').addEventListener('click', () => { $('#sessionsDlg').close(); newSession(); toast('New session started.'); });
     $('#downloadBtn').addEventListener('click', downloadSession);
     $('#importInput').addEventListener('change', ev => { if (ev.target.files[0]) importSession(ev.target.files[0]); ev.target.value = ''; });

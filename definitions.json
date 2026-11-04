@@ -1,7 +1,7 @@
 {
   "version": 1,
   "meta": {
-    "updated": "2026-11-03",
+    "updated": "2026-11-04",
     "appTitle": "SORT Forum Scope Builder"
   },
   "optionSets": {},
@@ -599,12 +599,12 @@
         {
           "id": "InfraOps",
           "item": "Infrastructure options",
-          "instruction": "",
-          "type": "single",
+          "instruction": "(Tick any that apply)",
+          "type": "multi",
           "icon": "⚙️",
           "options": [
-            "Standard enclosure, fixtures, and fittings.",
-            "Stainless steel enclosure, capillary conduit, fixtures, and fittings."
+            "Stainless steel enclosure with stainless steel fixtures and fittings",
+            "Stainless steel capillary conduit with stainless steel fixtures and fittings"
           ]
         },
         {

@@ -30,8 +30,11 @@
     return a;
   }
   // Accept everything a prefill or rule suggested for this question as the person's own.
+  // The check is remembered (a.checked), so the card turns from orange to green.
   function confirmQuestion(q) {
     const e = R().eff(app.ctx, q.code), a = ans(q.code);
+    const src = e.src && e.src !== 'user' ? e.src : Object.values(e.fieldSrc || {}).find(s => R().PREFILL_SRCS.includes(s));
+    if (src && src !== 'auto') a.checked = { src, from: (app.session.prefill[q.code] || {}).from || '', at: Date.now() };
     if (R().emptyVal(a.value) && !R().emptyVal(e.value)) a.value = U().clone(e.value);
     (q.fields || []).forEach(f => {
       if (a.fields[f.code] === undefined && R().PREFILL_SRCS.includes(e.fieldSrc[f.code])) a.fields[f.code] = e.fields[f.code];
@@ -87,7 +90,8 @@
   function questionCard(q) {
     const ctx = app.ctx, e = R().eff(ctx, q.code);
     const filled = R().hasContent(ctx, q), waiting = R().awaitingConfirm(ctx, q);
-    const card = h('div', { class: 'q' + (filled ? ' filled' : '') + (waiting ? ' waiting' : ''), dataset: { q: q.code }, id: `q-${q.code}` });
+    const chk = !waiting && filled && (app.session.answers[q.code] || {}).checked;
+    const card = h('div', { class: 'q' + (filled ? ' filled' : '') + (waiting ? ' waiting' : '') + (chk ? ' checked' : ''), dataset: { q: q.code }, id: `q-${q.code}` });
     const head = h('div', { class: 'q-head' },
       q.icon ? h('span', { class: 'q-icon', 'aria-hidden': 'true' }, q.icon) : null,
       h('div', { class: 'q-titles' },
@@ -96,6 +100,7 @@
       h('div', { class: 'q-tools' },
         waiting ? badge(e.src && e.src !== 'user' ? e.src : Object.values(e.fieldSrc).find(s => R().PREFILL_SRCS.includes(s)), () => { confirmQuestion(q); app.changed(); }, (app.session.prefill[q.code] || {}).from) : null,
         e.src === 'auto' ? badge('auto') : null,
+        chk ? h('span', { class: 'src src-checked', title: `Checked ${U().fmtWhen(chk.at)}${chk.from ? ` — it came from ${chk.from}` : ''}` }, `✓ checked${SRC_LABEL[chk.src] ? ' · ' + SRC_LABEL[chk.src] : ''}`) : null,
         h('button', { type: 'button', class: 'q-clear', title: 'Clear this answer', onclick: () => {
           delete app.session.answers[q.code]; delete app.session.prefill[q.code]; app.changed();
         } }, 'Clear')));

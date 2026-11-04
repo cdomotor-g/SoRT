@@ -21,16 +21,18 @@
     { id: 'session', title: 'Starting a new session', items: [
       'A **session** is one station at one forum sitting. To start one: **Sessions** (top right) → **New session**. The map goes back to the whole of Queensland until you choose the station.',
       'Choosing a different station on a session that already has answers starts a new session by itself; the earlier one stays under **Sessions**.',
-      'To go back to an earlier one: **Sessions** → **Open**. **Forget** removes one from this browser (it asks first, and warns if it was never saved to the playbook).',
+      'To go back to one: **Sessions** — type a station’s name or number in its search box — then **Open**. Under **In the shared playbook**, **Open** carries on with a station’s last session as it was saved (from any computer), **Start from it** begins today’s session from its answers, and **Use as a precedent** fills this session from it. **Forget** removes one from this browser only.',
+      'Choosing a station that already has a session (here or in the playbook) shows a **⚠ already has a session** note on its card: **Show its sessions** opens Sessions searched for it.',
       'To carry a session to another computer: **Download session** (bottom of the page), then on the other computer **Sessions** → **Open a session file…**.'
     ] },
     { id: 'saved', title: 'Where your work is kept', items: [
       'Every change is saved **in this browser** as you go — the footer shows the time of the last save. A reload or a crashed tab loses nothing.',
-      '**Only in this browser on this computer.** Another computer, another browser, a private (InPrivate) window or clearing the browser’s data won’t have it.',
-      'To keep it beyond this browser: **Save to playbook** (shared with the team; needs GitHub connected once per computer) or **Download session** (a file).'
+      'Once this computer is connected to the **shared playbook** (once per computer: **Connect to the shared playbook** on the warning bar, with the team’s GitHub token), each session also goes there by itself a few seconds after a change, so everyone can open it. Until then a **⚠ Saved only in this browser** bar says so: nobody else can open it, and clearing the browser loses it.',
+      '**Download a copy** (on that bar, or **Download session** at the foot of the page) saves the session as a file — the fallback if anything is ever wrong.',
+      'If a session’s text looks like it holds a phone number, email or gate code, it is **not** saved to the playbook by itself — the bar says what it found; remove it, or **save it anyway**.'
     ] },
     { id: 'badges', title: 'Answers filled in for you (the coloured badges)', items: [
-      '**Flood-Net**, **Map**, **Precedent** and **Earlier session** mark answers suggested from Flood-Net, the map, a similar station or this station’s last forum. They count as answered but **not confirmed**: press the badge’s **✓** to keep one, or change it. The header’s **“N to confirm”** jumps to the next one.',
+      '**Flood-Net**, **Map**, **Precedent** and **Earlier session** mark answers suggested from Flood-Net, the map, a similar station or this station’s last forum. They count as answered but **not checked**: the question has an **orange** bar until you press the badge’s **✓** (or change it), then a **green** bar and **✓ checked**. The header’s **“N to confirm”** jumps to the next one.',
       'They paste into Word exactly as they show, confirmed or not — so look them over before you copy.',
       '**Auto** answers come from a rule — e.g. the radio rows become **NA** for an IP logger, and **Comms Change** is worked out from Current Comms and the Comms Option. Choose another answer to override one.',
       '**Clear** empties a question, suggestions included. **+ Add note** adds a line under that answer in Word.'
@@ -79,7 +81,7 @@
     { id: 'playbook', title: 'Playbook and precedents', items: [
       'The playbook keeps every saved session under its station, privately. **Connect GitHub** once per computer to use it.',
       'A station that has been to SoRT before offers **Continue from it** — its last answers come back marked **Earlier session**.',
-      '**Similar stations** → **Use** copies the answers they share (never coordinates, licence numbers or notes), marked **Precedent** until you confirm them.',
+      '**A precedent**: when this station is best handled like one done before, **Sessions** → find that station → **Use as a precedent** (or **Similar stations** → **Use** on the card). Its answers fill the questions still empty here — never coordinates, licence numbers, the TBM or notes — each **orange** until you check it.',
       'Keep it clean: no landholder names, phone numbers or emails, and no gate, padlock or key codes. **Save to playbook** checks the text for them first.'
     ] },
     { id: 'questions', title: 'Changing the questions', items: [
