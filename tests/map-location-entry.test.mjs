@@ -66,7 +66,7 @@ try {
   page.setDefaultTimeout(5000);           // a missing panel entry should fail fast, not hang
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));
-  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://127.0.0.1:${port}/v1/index.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#rowsContainer [data-preview-for="coords"]', { timeout: 15000 });
 
   // A stand-in for the live map: records the pins drawn into it and every goTo,

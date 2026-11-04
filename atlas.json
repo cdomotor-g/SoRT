@@ -18,55 +18,18 @@
   },
   "status": {
     "phase": "live",
-    "updated": "2026-11-03",
-    "summary": "v1 is in use at forums; the v2 beta at /SoRT/v2/ runs beside it — Flood-Net station lookup (ACMA licences, and the radio path to base with the fade margin Flood-Net saved for each hop), the map on the page (or beside the questions) with survey marks and bridges, saved sessions, the playbook of past sessions, an in-page question editor, a Help guide, and follow-ups handed to Flood-Net's teams as tasks (live since 1 Nov 2026; a SoRT Forum member creates them there).",
+    "updated": "2026-11-04",
+    "summary": "v2 is the Scope Builder since 4 Nov 2026 (/SoRT/ opens /SoRT/v2/; v1 kept at /SoRT/v1/): Flood-Net station lookup with corrections of its particulars for the Word tables, ACMA licences, and the radio path to base with fresh fade margins; the map beside the questions (each pane scrolling on its own) with survey marks and bridges; saved sessions, the playbook, an in-page question editor, a Help guide, the local TBM as a desktop task, and follow-ups handed to Flood-Net's teams as tasks.",
     "now": [
-      "v2 beta: try it at real forums beside v1"
+      "v2 at real forums as the default; v1 kept at /SoRT/v1/ in case"
     ],
     "next": [
-      "v2 cutover: one commit makes /SoRT/ open v2 and keeps v1 at /SoRT/v1/",
       "Playbook: push the five seeded stations once the private repo exists; import more Word reports in batches"
     ],
     "later": [
       "A Dataverse import keyed on v2's permanent question and option codes (v2/playbook/export_tables.mjs writes the tables)"
     ],
     "blocked": [
-      {
-        "id": "v2-forums",
-        "what": "v2 cutover waits on the owner using it at some real forums",
-        "on": "human",
-        "kind": "time",
-        "since": "2026-10-31",
-        "holds": [
-          "v2 at the /SoRT/ address, v1 kept at /SoRT/v1/ (the cutover commit)",
-          "retiring ROADMAP §1–3, which v2 covers",
-          "deciding whether the station picker (ROADMAP §2) is still needed beside v2's Flood-Net lookup"
-        ],
-        "options": [
-          {
-            "what": "Run the next few forums on v2 at /SoRT/v2/ with v1 open in another tab, and note anything wrong as an issue. Then an agent makes the one cutover commit in v2/README.md's Cutover section (Sonnet5/Low, 20 min).",
-            "by": "human",
-            "effort": "the next 2–3 forums",
-            "pros": "the real test, with v1 a tab away",
-            "recommended": true
-          },
-          {
-            "what": "Rehearse a forum before the first real one: drive v2 in a browser through a real station end to end (Flood-Net lookup, map, Property Services, Copy for Word) with the repo's verify skill and v2/tests/e2e.cjs, and compare the Word tables with v1's for the same answers.",
-            "by": "agent",
-            "effort": "an hour",
-            "model": "Sonnet5/Med",
-            "pros": "catches what would break mid-forum",
-            "cons": "no substitute for real use"
-          },
-          {
-            "what": "Cut over now and lean on the rollback: the cutover is one commit, v1 stays at /SoRT/v1/, and reverting the commit puts v1 back.",
-            "by": "human",
-            "effort": "10 min to decide",
-            "pros": "no wait",
-            "cons": "the first real forum on v2 is the test"
-          }
-        ]
-      },
       {
         "id": "playbook-repo",
         "what": "The playbook's private repo cdomotor-g/SoRT-playbook doesn't exist yet; the GitHub integration may not create repositories",
@@ -91,26 +54,6 @@
             "cons": "no precedents across people"
           }
         ]
-      },
-      {
-        "id": "fade-figures",
-        "what": "v2 shows Flood-Net's radio path with each hop's fade margin, but every saved figure is stale (worked out with Flood-Net's older model, which reads far too low), so it is a rough guide and can't fill in Fade Margin >20 dB yet",
-        "on": "flood-net",
-        "kind": "upstream",
-        "since": "2026-11-01",
-        "holds": [
-          "Fade Margin >20 dB filled in from Flood-Net's figures (built: Yes once a fresh figure on the station's own hop is over 20 dB)",
-          "the radio path's figures read as margins rather than a rough guide"
-        ],
-        "options": [
-          {
-            "what": "On Flood-Net, signed in as an editor: Stations map → Layers → Link colour: By fade margin, let it work through every link, then Save to the datastore (Flood-Net's own fade-resweep blocker). v2 picks the fresh figures up by itself; Refresh from Flood-Net updates a station already open.",
-            "by": "human",
-            "effort": "one sitting; the sweep runs by itself",
-            "recommended": true
-          }
-        ],
-        "issue": "cdomotor-g/MegaNet#235"
       },
       {
         "id": "team-owners",
@@ -138,11 +81,11 @@
     {
       "id": "scope-builder",
       "name": "Scope Builder (v1)",
-      "what": "The live app: pick a station type, fill the rows, Copy table for Word; Manage Tables and Table Map edit the definitions in place.",
+      "what": "Version 1, kept as it was at /SoRT/v1/ since the cutover (4 Nov 2026): pick a station type, fill the rows, Copy table for Word; Manage Tables and Table Map edit the definitions in place.",
       "paths": [
-        "index.html"
+        "v1/index.html"
       ],
-      "url": "https://cdomotor-g.github.io/SoRT/",
+      "url": "https://cdomotor-g.github.io/SoRT/v1/",
       "status": "live"
     },
     {
@@ -159,7 +102,7 @@
       "name": "Property Services table",
       "what": "A second table copied into Word under the scope, pre-filled from the scope's coordinates and relocation answer, with its own editor tab.",
       "paths": [
-        "index.html",
+        "v1/index.html",
         "definitions.json"
       ],
       "status": "live"
@@ -169,7 +112,7 @@
       "name": "Site Map (v1)",
       "what": "A modal map of the table's pins over Queensland Government imagery, LiDAR contours, the road reserve and rail, with pin write-back and a picture captured for Word.",
       "paths": [
-        "index.html"
+        "v1/index.html"
       ],
       "status": "live"
     },
@@ -187,7 +130,7 @@
         "v2/js/word.js",
         "v2/js/util.js"
       ],
-      "url": "https://cdomotor-g.github.io/SoRT/v2/",
+      "url": "https://cdomotor-g.github.io/SoRT/",
       "status": "beta"
     },
     {
@@ -276,7 +219,7 @@
       "what": "Which Queensland Government ArcGIS services and sublayers draw imagery, LiDAR contours (resolved by name), the road reserve, rail and survey marks, and how they are styled. Flood-Net's contour and survey-mark layers were ported from it.",
       "component": "site-map",
       "paths": [
-        "index.html",
+        "v1/index.html",
         "v2/js/map.js"
       ]
     },

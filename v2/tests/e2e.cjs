@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, editor, tasks, manual, layout, help, map. They use the live Flood-Net
+   Scenarios: station, copy, playbook, editor, tasks, manual, particulars, layout, help, cutover, map. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
@@ -98,13 +98,14 @@ const scenarios = {
     ok(/151\.525 MHz/.test(await p.innerText('.station-card')), 'frequency inferred from the listening repeaters');
     ok((await p.$$eval('#q-frequency .opt.on', e => e.map(x => x.textContent))).join() === '151.525 MHz', 'frequency filled in');
     // The radio path: every saved figure is stale today, so it's shown, flagged, and not used as an answer.
-    ok(/Radio path\s*→ Toowoomba AL \(−?\d/.test(await p.innerText('.station-card')), 'radio path on the station card');
+    ok(/Radio path\s*→ Toowoomba AL \([+−]?\d/.test(await p.innerText('.station-card')), 'radio path on the station card');
     const fm = await p.innerText('#q-fadeMargin [data-hint="station.fadeMargin"]').catch(() => '');
     ok(/Fifteen Mile AL → Toowoomba AL \([+−]?[\d.]+ dB\) → /.test(fm), 'fade margin question shows the path to base, hop by hop');
     ok(/Stale/.test(fm) ? /not a pass or fail/.test(fm) : true, 'stale figures are flagged as a rough guide');
     ok(/Measured on site/.test(fm), 'the attenuator test measured on site is shown');
     ok(/stations&station=fifteen_mile_al/.test(await p.getAttribute('#q-fadeMargin .hint-link', 'href')), 'and links to the station on Flood-Net’s map');
     ok(/Stale/.test(fm) ? !(await p.$$eval('#q-fadeMargin .opt.on', e => e.length)) : true, 'stale figures don’t answer the question');
+    ok(/Stale/.test(fm) || (await p.$$eval('#q-fadeMargin .opt.on', e => e.map(x => x.textContent))).join() === 'Yes', 'fresh figures over 20 dB on its own hop fill in Yes, to confirm');
     await p.click('#q-acmaLicence .opt:has-text("transfer")');
     await p.fill('[data-fk="acmaLicence::f::licenceNo"]', '1441013/1'); await p.press('[data-fk="acmaLicence::f::licenceNo"]', 'Tab');
     await p.click('[data-ps="bridgeAttach"] .opt:has-text("Yes")');
@@ -245,6 +246,44 @@ const scenarios = {
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
+  async particulars(b) {
+    const p = await page(b);
+    let posted = null, ready = false;
+    await p.context().route(/floodwarning\.net\/api\/report/, r => {
+      if (r.request().method() === 'POST') { posted = JSON.parse(r.request().postData()); return r.fulfill({ status: 201, contentType: 'application/json', body: '{"to":["github"],"number":999,"url":"https://github.com/cdomotor-g/MegaNet/issues/999"}' }); }
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ready ? { ready: true, to: ['github'] } : { ready: false, to: [], reason: 'unconfigured' }) });
+    });
+    await p.context().route(/github\.com\/cdomotor-g\/MegaNet\/issues\/new/, r => r.fulfill({ status: 200, contentType: 'text/html', body: '<p>stand-in</p>' }));
+    await p.pick('540601');
+    await p.click('.st-links button:has-text("Edit details")');
+    ok((await p.inputValue('.manual-edit [name=name]')) === 'Fifteen Mile AL', 'Edit details opens with Flood-Net’s particulars');
+    await p.fill('.manual-edit [name=name]', 'Fifteen Mile Creek AL');
+    await p.fill('.manual-edit [name=lga]', 'Toowoomba Regional Council');
+    await p.click('.manual-edit button:has-text("Save the details")');
+    await p.waitForSelector('.station-card .st-edits', { timeout: 10000 });
+    const note = await p.innerText('.st-edits');
+    ok(/Fifteen Mile Creek AL/.test(await p.textContent('.st-name')) && /corrected/.test(await p.innerText('.station-card .st-title')), 'the card shows the corrected name, marked corrected');
+    ok(/Station name: “Fifteen Mile Creek AL” — Flood-Net has “Fifteen Mile AL”/.test(note) && /Council: “Toowoomba Regional Council”/.test(note), 'and says what Flood-Net still has');
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
+    const html = await p.clip();
+    ok(/Rainfall Table — Fifteen Mile Creek AL \(540601\)/.test(html) && !/Table — Fifteen Mile AL \(/.test(html), 'the Word tables use the corrected name');
+    const [gh] = await Promise.all([p.context().waitForEvent('page'), p.click('.st-edits button:has-text("Report to Flood-Net")')]);
+    const issue = new URL(gh.url()); await gh.close();
+    ok(issue.pathname === '/cdomotor-g/MegaNet/issues/new' && /Correct 540601 Fifteen Mile AL/.test(issue.searchParams.get('title')) && /\| Station name \| Fifteen Mile AL \| Fifteen Mile Creek AL \|/.test(issue.searchParams.get('body')), 'Report to Flood-Net: a ready-made issue in its tracker while its report route is off');
+    ok(/Reported to Flood-Net/.test(await p.innerText('.st-edits')), 'the card notes it was reported');
+    ready = true;
+    await p.click('.st-edits button:has-text("Report again")');
+    await p.waitForFunction(() => /#999/.test(document.querySelector('.st-edits').textContent), null, { timeout: 10000 });
+    ok(posted && posted.type === 'bug' && /Fifteen Mile Creek AL/.test(posted.body), 'with the route on, it files the report itself');
+    await p.click('.st-links button:has-text("Refresh from Flood-Net")');
+    await p.waitForFunction(() => /refreshed/i.test(document.querySelector('#toast').textContent), null, { timeout: 40000 });
+    ok(/Fifteen Mile Creek AL/.test(await p.textContent('.st-name')), 'Refresh from Flood-Net keeps the correction');
+    await p.click('.st-edits li:has-text("Station name") button:has-text("use Flood-Net")');
+    ok((await p.textContent('.st-name')) === 'Fifteen Mile AL' && /Council/.test(await p.innerText('.st-edits')) && !/Station name/.test(await p.innerText('.st-edits')), '“use Flood-Net’s” puts its value back');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
   async layout(b) {
     const p = await page(b);
     await p.pick('540601');
@@ -256,6 +295,18 @@ const scenarios = {
     await p.click('#layoutBtn');
     ok(await p.evaluate(() => getComputedStyle(document.querySelector('#map-card')).position === 'fixed'), 'and switches back');
     ok(/left out of the Word tables/.test(await p.innerText('#followups')) || !(await p.$('#followups .fu')), 'follow-ups say ticking takes them out of Word');
+    // Beside each other, each pane scrolls on its own and never hands on to the other.
+    const pos = () => p.evaluate(() => ({ left: document.querySelector('main.wrap').scrollTop, right: document.querySelector('#map-card').scrollTop, page: scrollY }));
+    const q = await (await p.$('#form')).boundingBox();
+    await p.mouse.move(q.x + 100, 400); await p.mouse.wheel(0, 600); await p.waitForTimeout(500);
+    let at = await pos();
+    ok(at.left > 0 && at.right === 0 && at.page === 0, `the questions scroll in their own pane (${JSON.stringify(at)})`);
+    const side = await (await p.$('.map-side')).boundingBox();
+    await p.mouse.move(side.x + side.width / 2, 700);
+    for (let i = 0; i < 12; i++) { await p.mouse.wheel(0, 800); await p.waitForTimeout(120); }
+    await p.waitForTimeout(400);
+    const end = await pos();
+    ok(end.right > 0 && end.left === at.left && end.page === 0, `the map pane scrolls to its end without moving the questions (${JSON.stringify(end)})`);
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
@@ -284,6 +335,29 @@ const scenarios = {
     const m = await page(b, { viewport: { width: 390, height: 800 } });
     ok(await m.evaluate(() => { const r = document.querySelector('#helpBtn').getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && document.documentElement.scrollWidth <= innerWidth; }), 'on a phone the Help button fits, with no sideways scroll');
     await m.context().close();
+  },
+  async cutover(b) {
+    // The old address opens v2, keeping what follows it; v1 is kept at /v1/.
+    const root = new URL('../', BASE).href;
+    const ctx = await b.newContext({ viewport: { width: 1360, height: 1000 } });
+    await ctx.route(/raw\.githubusercontent\.com|api\.github\.com|js\.arcgis\.com/, r => r.abort());
+    const p = await ctx.newPage();
+    const errs = []; p.on('pageerror', e => errs.push(e.message));
+    await p.goto(root + '?from=bookmark#top', { waitUntil: 'load' });
+    await p.waitForURL(/\/v2\/\?from=bookmark#top$/, { timeout: 10000 }).catch(() => {});
+    ok(new URL(p.url()).pathname.endsWith('/v2/') && /from=bookmark/.test(p.url()) && /#top$/.test(p.url()), `the old address opens v2 and keeps its query and hash (${p.url()})`);
+    await p.waitForSelector('#stationSearch', { timeout: 20000 });
+    ok(new URL(await p.$eval('#v1Link', a => a.href)).pathname.endsWith('/v1/') && await p.isVisible('#v1Link'), 'Version 1 is linked at the top of v2');
+    ok(!/beta/i.test(await p.title()), 'v2 is no longer marked beta');
+    await p.click('#v1Link');
+    await p.waitForSelector('#rowsContainer .row', { timeout: 20000 });
+    ok(/SoRT Forum Scope Builder/.test(await p.textContent('header.app-header h1')), 'v1 opens at /v1/');
+    ok(/version 2/.test(await p.textContent('header.app-header .sub')), 'and links back to v2');
+    const wl = await p.$('text=/^Water Level/');
+    if (wl) { await wl.click(); await p.waitForTimeout(600); }
+    ok(/Local TBM/.test(await p.evaluate(() => document.body.innerText)), 'v1 still loads the root definitions.json (Local TBM in its Water Level table)');
+    ok(!errs.length, `no page errors ${errs.join('; ')}`);
+    await ctx.close();
   },
   async map(b) {
     const p = await page(b, { map: true });

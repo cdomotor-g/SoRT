@@ -76,7 +76,7 @@ try {
   const page = await ctx.newPage();
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));
-  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://127.0.0.1:${port}/v1/index.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#rowsContainer .row', { timeout: 15000 });
 
   // Measure both copied tables the way Word sees them: parse the emitted HTML

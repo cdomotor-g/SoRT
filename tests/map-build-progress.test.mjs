@@ -80,7 +80,7 @@ function check(name, cond, extra){ results.push({ name, ok: !!cond, extra: extra
 
 const server = await serve(REPO_ROOT);
 const port = server.address().port;
-const base = `http://127.0.0.1:${port}/index.html`;
+const base = `http://127.0.0.1:${port}/v1/index.html`;
 
 const launchOpts = { headless: true };
 if(process.env.PW_CHROMIUM) launchOpts.executablePath = process.env.PW_CHROMIUM;

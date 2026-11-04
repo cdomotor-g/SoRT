@@ -5,7 +5,7 @@ description: Build/launch/drive recipe for verifying SoRT changes end-to-end in 
 
 # Verifying SoRT
 
-Zero-build static app: `index.html` + `definitions.json`. No deps, no bundler.
+Zero-build static app. Since the cutover the root `index.html` forwards to v2 (`v2/`, checked by `node v2/tests/e2e.cjs`); this recipe is for **v1**, now `v1/index.html` (open `http://127.0.0.1:8642/v1/`) + the root `definitions.json`. No deps, no bundler.
 
 ## Launch
 

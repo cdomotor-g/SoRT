@@ -109,7 +109,7 @@ async function answer(route, how){
 const chromium = await loadPlaywright();
 const server = await serve(REPO_ROOT);
 const port = server.address().port;
-const PAGE_URL = `http://127.0.0.1:${port}/index.html`;
+const PAGE_URL = `http://127.0.0.1:${port}/v1/index.html`;
 const launchOpts = { headless: true };
 if(process.env.PW_CHROMIUM) launchOpts.executablePath = process.env.PW_CHROMIUM;
 const browser = await chromium.launch(launchOpts);
@@ -443,7 +443,9 @@ try {
    can "deploy" a new version into. */
 {
   const site = fs.mkdtempSync(path.join(os.tmpdir(), 'sort-cache-'));
-  for(const f of ['index.html', 'definitions.json']) fs.copyFileSync(path.join(REPO_ROOT, f), path.join(site, f));
+  // As Pages serves it since the cutover: v1 under /v1/, the definitions at the root.
+  fs.mkdirSync(path.join(site, 'v1'));
+  for(const f of ['v1/index.html', 'definitions.json']) fs.copyFileSync(path.join(REPO_ROOT, f), path.join(site, f));
   const hits = [];
   const pages = http.createServer((req, res)=>{
     const urlPath = decodeURIComponent(req.url.split('?')[0]);
@@ -457,7 +459,7 @@ try {
     res.end(body);
   });
   await new Promise(r => pages.listen(0, '127.0.0.1', r));
-  const SITE_URL = `http://127.0.0.1:${pages.address().port}/index.html`;
+  const SITE_URL = `http://127.0.0.1:${pages.address().port}/v1/index.html`;
   const cachedBrowser = await chromium.launch(Object.assign({}, launchOpts, {
     args: ['--no-proxy-server', '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1']
   }));
@@ -469,8 +471,8 @@ try {
 
     check('(real cache) the first visit shows the current version', await visit() === 'SoRT Forum Scope Builder');
     // Deploy a new version of the page.
-    const html = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
-    fs.writeFileSync(path.join(site, 'index.html'),
+    const html = fs.readFileSync(path.join(site, 'v1/index.html'), 'utf8');
+    fs.writeFileSync(path.join(site, 'v1/index.html'),
       html.replace('<h1>SoRT Forum Scope Builder</h1>', '<h1>SoRT Forum Scope Builder (new)</h1>'));
     check('(real cache) an ordinary visit after a deploy is handed the stale page — the problem',
           await visit() === 'SoRT Forum Scope Builder');
@@ -480,8 +482,8 @@ try {
     await page.click('#clearCacheBtn');
     await reloaded;
     check('(real cache) Clear cache brings up the new version', await heading() === 'SoRT Forum Scope Builder (new)');
-    const refresh = hits.findIndex(h => h.path === '/index.html' && h.dest === 'empty');
-    const navigation = hits.findIndex(h => h.path === '/index.html' && h.dest === 'document');
+    const refresh = hits.findIndex(h => h.path === '/v1/index.html' && h.dest === 'empty');
+    const navigation = hits.findIndex(h => h.path === '/v1/index.html' && h.dest === 'document');
     check('(real cache) it re-fetched the page with no-cache, before reloading',
           refresh !== -1 && hits[refresh].cc === 'no-cache' && refresh < navigation);
     check('(real cache) ordinary visits after that get the new version too',

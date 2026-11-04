@@ -135,7 +135,7 @@ async function fakeGithub(route){
 
 const chromium = await loadPlaywright();
 const server = await serve(REPO_ROOT);
-const PAGE_URL = `http://127.0.0.1:${server.address().port}/index.html`;
+const PAGE_URL = `http://127.0.0.1:${server.address().port}/v1/index.html`;
 const launchOpts = { headless: true };
 if(process.env.PW_CHROMIUM) launchOpts.executablePath = process.env.PW_CHROMIUM;
 const browser = await chromium.launch(launchOpts);

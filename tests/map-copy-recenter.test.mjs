@@ -72,7 +72,7 @@ try {
   const page = await ctx.newPage();
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(String(e)));
-  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://127.0.0.1:${port}/v1/index.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#rowsContainer [data-preview-for="coords"]', { timeout: 15000 });
 
   // ---- Copy (A2): screenshot is captured at the view's NATIVE framebuffer size.

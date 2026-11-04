@@ -1,6 +1,6 @@
 # SoRT Roadmap
 
-> **Superseded by v2 (beta at [`/v2/`](https://cdomotor-g.github.io/SoRT/v2/)).**
+> **Superseded by v2 (the Scope Builder since 4 Nov 2026, at [`/SoRT/`](https://cdomotor-g.github.io/SoRT/)).**
 > v2 covers all three items below: the map is on the page with a relocation pin
 > you place or drag (item 1); stations are looked up in Flood-Net instead of a
 > `stations.json` (item 2); and the questions load from GitHub on every visit,

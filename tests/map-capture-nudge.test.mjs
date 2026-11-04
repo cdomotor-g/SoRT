@@ -57,7 +57,7 @@ const check = (name, cond) => results.push({ name, ok: !!cond });
 
 const chromium = await loadPlaywright();
 const server = await serve(REPO_ROOT);
-const base = `http://127.0.0.1:${server.address().port}/`;
+const base = `http://127.0.0.1:${server.address().port}/v1/index.html`;
 const launchOpts = { args: ['--no-sandbox'] };
 if(process.env.PW_CHROMIUM) launchOpts.executablePath = process.env.PW_CHROMIUM;
 const browser = await chromium.launch(launchOpts);

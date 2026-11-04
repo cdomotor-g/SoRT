@@ -52,13 +52,16 @@ input:disabled { opacity: .7; }
 .logo { width: 34px; height: 34px; border-radius: 8px; background: #0f6e6a; color: #fff; display: grid; place-items: center; font-weight: 700; }
 .brand h1 { font-size: 17px; margin: 0; line-height: 1.2; }
 .sub { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
-.beta { background: var(--warn-bg); color: var(--warn); border-radius: 999px; padding: 0 7px; font-weight: 600; font-size: 12px; margin-right: 6px; }
+.beta { background: var(--accent-weak); color: var(--accent); border-radius: 999px; padding: 0 7px; font-weight: 600; font-size: 12px; margin-right: 6px; }
 .top-progress { flex: 1 1 220px; min-width: 180px; }
 .bar { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
 #progressFill { height: 100%; width: 0; background: var(--accent); transition: width .25s; }
 #progressText { font-size: 13px; margin-top: 3px; }
 .top-acts { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 480px) { .top-acts .btn-word { display: none; } }   /* a phone: ❔ alone */
+.v1-link { font-size: 13px; color: var(--muted); white-space: nowrap; margin-right: 4px; }
+.v1-link:hover { color: var(--accent); }
+@media (max-width: 480px) { .v1-link { display: none; } }   /* a phone: Version 1 stays in the footer */
 .banner { max-width: 1180px; margin: 10px auto 0; padding: 8px 14px; background: var(--warn-bg); color: var(--warn); border-radius: 8px; }
 
 /* ---------- page ---------- */
@@ -109,6 +112,10 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .manual-acts { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .manual-edit { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .manual-edit h3 { margin: 0; font-size: 15px; }
+.st-edits { margin: 8px 0 4px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 14px; }
+.st-edits ul { margin: 4px 0; padding-left: 20px; }
+.st-edits .link { color: inherit; }
+.st-edits-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
 .station-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; }
 .st-title { font-size: 18px; font-weight: 700; }
 .st-num { font-weight: 400; color: var(--muted); margin-left: 8px; font-variant-numeric: tabular-nums; }
@@ -338,10 +345,16 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
 @media (max-width: 1199px) { .layout-btn { display: none; } }
 @media (min-width: 1200px) {
   body.layout-side .top-row, body.layout-side .banner { max-width: none; }
-  body.layout-side .wrap { max-width: none; display: block; padding-right: calc(min(46vw, 780px) + 32px); }
+  /* Two panes that scroll on their own: the page stays put, the questions
+     scroll in the left pane (its scroll bar beside the map) and the map pane
+     on the right; neither hands its scroll on to the other at its end. */
+  body.layout-side { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+  body.layout-side .top, body.layout-side .banner { flex: 0 0 auto; }
+  body.layout-side .wrap { max-width: none; display: block; flex: 1 1 auto; min-height: 0; width: auto;
+    margin: 0 calc(min(46vw, 780px) + 24px) 0 0; padding: 16px 16px 0; overflow-y: auto; overscroll-behavior: contain; }
   body.layout-side .wrap > * { margin-bottom: var(--gap); }
   body.layout-side #map-card { position: fixed; z-index: 30; right: 16px; top: calc(var(--top-h, 60px) + 10px); bottom: 12px;
-    width: min(46vw, 780px); overflow: auto; margin: 0; }
+    width: min(46vw, 780px); overflow: auto; overscroll-behavior: contain; margin: 0; }
   body.layout-side .map-grid { grid-template-columns: 1fr; }
   body.layout-side .map-frame { height: max(340px, calc(100vh - var(--top-h, 60px) - 330px)); }
   body.layout-side .map-side { max-height: none; }

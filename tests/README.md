@@ -1,7 +1,9 @@
 # Tests
 
-The app is a zero-build static page (`index.html` + `definitions.json`), so the
-tests drive the real page in a headless browser rather than importing modules.
+These are v1's tests. v1 is a zero-build static page — `v1/index.html` since the
+cutover (4 Nov 2026), reading the root `definitions.json` — so the tests drive the
+real page in a headless browser rather than importing modules. (v2's checks are
+`node v2/tests/e2e.cjs`.)
 
 ## `reopen-coords.test.mjs` — A3 regression
 

@@ -87,8 +87,9 @@
     { id: 'small', title: 'Small things worth knowing', items: [
       'Attendees: comma, space or Enter adds initials; Backspace in the empty box removes the last; **Same as last forum** brings back the last list.',
       '**Refresh from Flood-Net** (station card) fetches the station again; **Open in Flood-Net ↗** opens it there.',
+      'A name or number wrong in Flood-Net (some names are cut short)? **Edit details** on the station card corrects it for this scope: the Word tables use the correction, the card says what Flood-Net still has, and **Report to Flood-Net** asks for its record to be fixed. Flood-Net itself is not changed; **use Flood-Net’s** puts its value back.',
       'Not in Flood-Net? **Enter it by hand** under the station search (or from the search’s “no station” line): only the name is needed; what it measures picks the scope table, and its hub sends the hub’s tasks to the right team. **Edit details** on the station card corrects it later.',
-      '🌙 / ☀️ switches dark mode. **Version 1** (footer) opens the old page if you need it.'
+      '🌙 / ☀️ switches dark mode. **Version 1** (top right, and at the foot of the page) opens the old page, kept as it was, if you need it.'
     ] }
   ];
 
@@ -114,7 +115,7 @@
       h('div', { class: 'dlg-head' }, h('h2', { id: 'helpTitle' }, 'Help — using the SoRT Scope Builder'),
         h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close help', onclick: () => dlg.close() }, '✕')),
       body,
-      h('div', { class: 'dlg-foot' }, h('span', { class: 'hint' }, 'v2 beta — something unclear or wrong? Tell the SoRT forum chair, or ask Claude in chat.'),
+      h('div', { class: 'dlg-foot' }, h('span', { class: 'hint' }, 'Something unclear or wrong? Tell the SoRT forum chair, or ask Claude in chat.'),
         h('button', { type: 'button', class: 'btn btn-primary', onclick: () => dlg.close() }, 'Close')));
     document.body.appendChild(dlg);
   }

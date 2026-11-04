@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SoRT Scope Builder (v2 beta)</title>
-<meta name="description" content="Build SoRT Forum scope tables for the FWIN assessment reports — v2 beta.">
+<title>SoRT Scope Builder</title>
+<meta name="description" content="Build SoRT Forum scope tables for the FWIN assessment reports.">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='8'%20fill='%230f6e6a'/%3E%3Ctext%20x='50%25'%20y='50%25'%20font-size='36'%20font-weight='700'%20text-anchor='middle'%20dominant-baseline='central'%20fill='%23ffffff'%20font-family='Segoe%20UI,Arial,sans-serif'%3ES%3C/text%3E%3C/svg%3E">
 <script>
   /* Theme before first paint (the key is shared with v1, so a choice follows you). */
@@ -18,7 +18,7 @@
 </script>
 <!-- Every script and the stylesheet carry ?v=<stamp>; bump it (all of them at
      once) on any change, or browsers keep the old copy for up to 10 minutes. -->
-<link rel="stylesheet" href="app.css?v=20261103a">
+<link rel="stylesheet" href="app.css?v=20261104a">
 </head>
 <body>
 <header class="top">
@@ -27,7 +27,7 @@
       <span class="logo" aria-hidden="true">S</span>
       <div>
         <h1>SoRT Scope Builder</h1>
-        <div class="sub"><span class="beta" title="Version 2, in testing. Version 1 is unchanged at the usual address.">v2 beta</span><span id="stationChip">No station yet</span></div>
+        <div class="sub"><span class="beta" title="Version 2 — the Scope Builder since 3 Nov 2026. Version 1 is kept as it was (Version 1, top right).">v2</span><span id="stationChip">No station yet</span></div>
       </div>
     </div>
     <div class="top-progress" aria-live="polite">
@@ -35,6 +35,7 @@
       <div id="progressText" class="muted"></div>
     </div>
     <div class="top-acts">
+      <a class="v1-link" id="v1Link" href="../v1/" title="The old Scope Builder (version 1), kept as it was — anything saved there is still there">Version 1</a>
       <button type="button" class="btn btn-primary copy-btn" title="Copy the scope table, map and Property Services table, ready to paste into the report">Copy for Word</button>
       <button type="button" class="btn" id="sessionsBtn" title="Sessions saved in this browser — open, start new, forget">Sessions</button>
       <button type="button" class="btn" id="helpBtn" aria-haspopup="dialog" aria-label="Help" title="How to use this page: starting a new session, the basics, and the things that catch people out">❔<span class="btn-word"> Help</span></button>
@@ -68,7 +69,7 @@
     <h3>Preview — what will paste into Word <span class="hint">(the map picture is re-taken when the map settles; Copy for Word takes a fresh one)</span></h3>
     <div id="preview" class="paper" aria-label="Preview of the copy"></div>
   </section>
-  <footer class="foot"><span id="savedChip"></span> · <span id="defsChip"></span> · <a href="../">Version 1</a></footer>
+  <footer class="foot"><span id="savedChip"></span> · <span id="defsChip"></span> · <a href="../v1/">Version 1</a></footer>
 </main>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
@@ -82,19 +83,19 @@
   </div>
 </dialog>
 
-<script src="js/util.js?v=20261103a"></script>
-<script src="js/schema.js?v=20261103a"></script>
-<script src="js/rules.js?v=20261103a"></script>
-<script src="js/store.js?v=20261103a"></script>
-<script src="js/github.js?v=20261103a"></script>
-<script src="js/floodnet.js?v=20261103a"></script>
-<script src="js/word.js?v=20261103a"></script>
-<script src="js/form.js?v=20261103a"></script>
-<script src="js/map.js?v=20261103a"></script>
-<script src="js/playbook.js?v=20261103a"></script>
-<script src="js/tasks.js?v=20261103a"></script>
-<script src="js/editor.js?v=20261103a"></script>
-<script src="js/help.js?v=20261103a"></script>
-<script src="js/app.js?v=20261103a"></script>
+<script src="js/util.js?v=20261104a"></script>
+<script src="js/schema.js?v=20261104a"></script>
+<script src="js/rules.js?v=20261104a"></script>
+<script src="js/store.js?v=20261104a"></script>
+<script src="js/github.js?v=20261104a"></script>
+<script src="js/floodnet.js?v=20261104a"></script>
+<script src="js/word.js?v=20261104a"></script>
+<script src="js/form.js?v=20261104a"></script>
+<script src="js/map.js?v=20261104a"></script>
+<script src="js/playbook.js?v=20261104a"></script>
+<script src="js/tasks.js?v=20261104a"></script>
+<script src="js/editor.js?v=20261104a"></script>
+<script src="js/help.js?v=20261104a"></script>
+<script src="js/app.js?v=20261104a"></script>
 </body>
 </html>

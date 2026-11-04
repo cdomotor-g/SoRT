@@ -8,8 +8,8 @@ has been through some forums:
 | v1 (unchanged) | https://cdomotor-g.github.io/SoRT/ |
 | v2 beta | https://cdomotor-g.github.io/SoRT/v2/ |
 
-At cutover one small commit makes the v1 address open v2, and keeps v1 at
-`/SoRT/v1/`; reverting that commit is the rollback.
+Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
+`/SoRT/v1/`; reverting the cutover commit is the rollback.
 
 ## What is different from v1
 
@@ -28,6 +28,15 @@ At cutover one small commit makes the v1 address open v2, and keeps v1 at
   figures). Anything filled in for you is marked
   (Flood-Net / Map / Precedent / Earlier session / Auto) until you confirm or
   change it.
+- **Corrections to a station's particulars** (name, number, hub, council, owner —
+  e.g. a name Radio Mobile's export cut short): *Edit details* on the station
+  card. The Word tables use them and Flood-Net is not changed; the card lists what
+  Flood-Net still has, and *Report to Flood-Net* files an issue in its tracker
+  (through Flood-Net's `/api/report` when that is switched on, or GitHub's
+  ready-made *New issue* page until then). Refresh from Flood-Net keeps them,
+  and drops any Flood-Net has since been corrected in.
+- **Side by side, each pane scrolls on its own**: the questions on the left,
+  the map pane on the right, and neither starts the other at its end.
 - **The map is on the page**: v1's imagery, contours, road reserve and rail; the
   station's locations as pins you can type, place or drag; a *Position checked*
   step against Flood-Net's often-rounded position; a vegetation clearance
@@ -128,10 +137,12 @@ python3 -m http.server 8642 --bind 127.0.0.1 &            # from the repo root
 node v2/tests/e2e.cjs                                     # station, copy, playbook, editor, map
 ```
 
-## Cutover (when the beta has done enough forums)
+## Cutover (done 4 Nov 2026)
 
-One commit: copy v1's `index.html` to `v1/index.html` (fixing its bundled
-`definitions.json` fallback path) and replace the root `index.html` with a
-forward to `v2/` that keeps any `?query` and `#hash`. v1's GitHub definitions
-path (`definitions.json` at the root) does not move. Rolling back is reverting
-that commit.
+One commit moved v1's `index.html` to `v1/index.html` (its bundled
+`definitions.json` fallback now reads `../definitions.json`) and replaced the root
+`index.html` with a forward to `v2/` that keeps any `?query` and `#hash`. v1's
+GitHub definitions path (`definitions.json` at the root) did not move, and v1's
+saved work is still there (same origin, same `sort.*` keys). v2 links to v1 at
+the top right and in the footer; v1 links back. Rolling back is reverting that
+commit; `node v2/tests/e2e.cjs cutover` checks the forward and v1.

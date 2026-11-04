@@ -23,7 +23,7 @@
 - Short replies that are only an answer (no work done) don't need the marker and don't use up a run number.
 
 ## Working on v2 (`v2/`)
-- v1 (root `index.html`, `definitions.json`) stays untouched until the cutover; v2 lives in `v2/` and is served at `/SoRT/v2/`. Push straight to `main`, as always.
+- Since the cutover (4 Nov 2026) the root `index.html` only forwards to v2 (`v2/`, served at `/SoRT/v2/`); v1 is kept as it was in `v1/index.html` (`/SoRT/v1/`) and still reads the root `definitions.json`. Rolling back is reverting the cutover commit. Push straight to `main`, as always.
 - A question change asked for in chat: edit `v2/definitions.json` (codes are permanent — reword labels freely, never reuse or rename a code), run `node v2/tools/check-definitions.mjs`, push. While v1 is still in use, make the same change in v1's `definitions.json` too, unless told otherwise.
 - Any change to a file under `v2/` bumps the `?v=` stamp on every script and the stylesheet in `v2/index.html` (today's date + a letter, the next letter if today's is already there).
 - Before pushing a change to `v2/js/*`, run the end-to-end checks: `python3 -m http.server 8642 --bind 127.0.0.1 &` from the repo root, then `node v2/tests/e2e.cjs` (all scenarios, or name the ones you touched).

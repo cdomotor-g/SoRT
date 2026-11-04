@@ -352,8 +352,131 @@
   }
   async function refreshStation() {
     const st = A.session.station; if (!st || st.source !== 'floodnet') return;
-    try { const f = await S.floodnet.stationFacts(st.id); f.checked = st.checked; A.session.station = f; S.floodnet.applyPrefill(A.defs, A.session); changed(); toast('Station refreshed from Flood-Net.'); }
+    try {
+      const f = await S.floodnet.stationFacts(st.id); f.checked = st.checked;
+      const fixed = keepEdits(st, f);
+      A.session.station = f; S.floodnet.applyPrefill(A.defs, A.session); changed();
+      toast(fixed.length ? `Station refreshed — Flood-Net now has the ${fixed.join(' and ')} you corrected.` : 'Station refreshed from Flood-Net.');
+    }
     catch (e) { toast(`Flood-Net didn’t answer (${e.message}).`); }
+  }
+  /* The station's particulars, corrected here (e.g. a name Flood-Net has cut
+     short — Radio Mobile's exports truncate them). The correction goes into the
+     Word tables; Flood-Net is not changed. Each one is kept on the station as
+     edits[field] = { floodnet: what Flood-Net has, at }, shown on the card, and
+     can be reported to Flood-Net so its record gets fixed too. */
+  const PARTICULARS = [['name', 'Station name'], ['number', 'Bureau number'], ['hub', 'Hub'], ['lga', 'Council'], ['owner', 'Owner']];
+  const partValue = (st, k) => String(k === 'hub' ? (st.hubId || '') : (st[k] || '')).trim();
+  const partText = (k, v) => (k === 'hub' ? ((HUBS.find(x => x[0] === v) || [, v])[1] || '') : v) || '(none)';
+  // (A hub Flood-Net names that isn't in HUBS keeps its own name: setPart below.)
+  function setPart(st, k, v) {
+    if (k === 'hub') { const hb = HUBS.find(x => x[0] === v); if (hb || !v) { st.hubId = hb ? hb[0] : ''; st.hubName = hb ? hb[1] : ''; } else st.hubId = v; }
+    else st[k] = v;
+  }
+  // Carries the forum's corrections onto freshly fetched facts; returns the
+  // fields Flood-Net has since been corrected in (their edits are dropped).
+  function keepEdits(was, fresh) {
+    const fixed = [];
+    Object.entries(was.edits || {}).forEach(([k, e]) => {
+      const mine = partValue(was, k), theirs = partValue(fresh, k);
+      if (theirs === mine) { fixed.push(PARTICULARS.find(x => x[0] === k)[1].toLowerCase()); return; }
+      fresh.edits = fresh.edits || {};
+      fresh.edits[k] = Object.assign({}, e, { floodnet: theirs });
+      setPart(fresh, k, mine);
+    });
+    if (fresh.edits && was.reported) fresh.reported = was.reported;
+    return fixed;
+  }
+  function editParticulars() {
+    const st = A.session.station, root = $('#station'), card = root.querySelector('.station-card');
+    if (!st || !card || root.querySelector('.manual-edit')) return;
+    if (st.source === 'manual') { editManual(); return; }
+    const inputs = {};
+    const fld = (k, label, el, hint) => { inputs[k] = el; return h('label', { class: 'fld' }, h('span', { class: 'fld-label' }, label), el, hint ? h('span', { class: 'hint' }, hint) : null); };
+    const orig = k => (st.edits && st.edits[k] ? st.edits[k].floodnet : partValue(st, k));
+    const was = k => (st.edits && st.edits[k] ? `Flood-Net has “${partText(k, orig(k))}”` : null);
+    const box = h('div', { class: 'manual-edit' },
+      h('h3', null, 'Correct the station’s details'),
+      h('p', { class: 'hint' }, 'For this scope and its Word tables. Flood-Net is not changed — the card flags what differs, and you can report it to Flood-Net.'),
+      h('div', { class: 'manual-grid' },
+        fld('name', 'Station name *', h('input', { type: 'text', name: 'name', value: st.name || '' }), was('name')),
+        fld('number', 'Bureau number', h('input', { type: 'text', name: 'number', value: st.number || '' }), was('number')),
+        fld('hub', 'Hub', h('select', { name: 'hub' }, [['', 'Not sure']].concat(HUBS, st.hubId && !HUBS.some(x => x[0] === st.hubId) ? [[st.hubId, st.hubName || st.hubId]] : []).map(([v, t]) => h('option', { value: v, selected: v === (st.hubId || '') }, t))), was('hub')),
+        fld('lga', 'Council', h('input', { type: 'text', name: 'lga', value: st.lga || '' }), was('lga')),
+        fld('owner', 'Owner', h('input', { type: 'text', name: 'owner', value: st.owner || '' }), was('owner')),
+        h('div', { class: 'manual-acts' },
+          h('button', { type: 'button', class: 'btn btn-primary', onclick: () => {
+            const next = Object.fromEntries(PARTICULARS.map(([k]) => [k, inputs[k].value.trim()]));
+            if (!next.name) { toast('Give the station a name.'); inputs.name.focus(); return; }
+            PARTICULARS.forEach(([k]) => {
+              const o = orig(k);
+              if (next[k] === partValue(st, k)) return;
+              setPart(st, k, next[k]);
+              st.edits = st.edits || {};
+              if (next[k] === o) delete st.edits[k]; else st.edits[k] = { floodnet: o, at: Date.now() };
+            });
+            if (st.edits && !Object.keys(st.edits).length) delete st.edits;
+            delete st.reported;   // anything changed since a report is reported afresh
+            renderStation(); changed();
+            toast(st.edits ? 'Saved for this scope. The card shows what differs from Flood-Net.' : 'Saved — it matches Flood-Net again.');
+          } }, 'Save the details'),
+          h('button', { type: 'button', class: 'btn btn-quiet', onclick: () => renderStation() }, 'Cancel'))));
+    card.replaceWith(box);
+    inputs.name.focus();
+  }
+  // What the forum changed, and Flood-Net still has: a note on the card, and a
+  // report for Flood-Net (filed by Flood-Net's own report route when it's on,
+  // or GitHub's ready-made issue page in Flood-Net's tracker until then).
+  function editsNote(st) {
+    const list = Object.entries(st.edits || {});
+    if (!list.length) return null;
+    const undo = k => { setPart(st, k, st.edits[k].floodnet); delete st.edits[k]; if (!Object.keys(st.edits).length) delete st.edits; delete st.reported; renderStation(); changed(); };
+    return h('div', { class: 'st-edits', role: 'note' },
+      h('div', null, h('b', null, '✎ Corrected here — Flood-Net still has the old details. '),
+        'The Word tables use the corrections.'),
+      h('ul', null, list.map(([k, e]) => h('li', null,
+        `${PARTICULARS.find(x => x[0] === k)[1]}: “${partText(k, partValue(st, k))}” — Flood-Net has “${partText(k, e.floodnet)}” `,
+        h('button', { type: 'button', class: 'link', title: 'Put back what Flood-Net has', onclick: () => undo(k) }, 'use Flood-Net’s')))),
+      h('div', { class: 'st-edits-acts' },
+        st.reported ? h('span', { class: 'hint' }, `Reported to Flood-Net ${U.fmtWhen(st.reported.at)}${st.reported.url ? ' — ' : ''}`,
+          st.reported.url ? h('a', { href: st.reported.url, target: '_blank', rel: 'noopener' }, st.reported.number ? `#${st.reported.number} ↗` : 'the issue ↗') : null) : null,
+        h('button', { type: 'button', class: 'btn-mini', onclick: () => reportEdits(st), title: 'Tell Flood-Net so its record can be corrected too' }, st.reported ? 'Report again' : 'Report to Flood-Net')));
+  }
+  const FN_ISSUES = 'https://github.com/cdomotor-g/MegaNet/issues/new';
+  function editsReport(st) {
+    const rows = Object.entries(st.edits || {}).map(([k, e]) => `| ${PARTICULARS.find(x => x[0] === k)[1]} | ${partText(k, e.floodnet)} | ${partText(k, partValue(st, k))} |`);
+    const id = st.id || '';
+    return {
+      title: `[Standalone] [Sonnet5/Low] Correct ${st.number || id} ${(st.edits && st.edits.name ? st.edits.name.floodnet : st.name) || ''}: details from the SoRT forum`.replace(/\s+/g, ' ').trim(),
+      body: ['Recommended: Sonnet5 / Low — update the station record from the corrections below (check each first).', '',
+        `The SoRT scope builder's forum of ${U.dmy(A.session.forum.date)} corrected these details for Flood-Net station \`${id}\`${st.number ? ` (${st.number})` : ''}. SoRT's Word tables use the corrections; Flood-Net still has the old ones.`, '',
+        '| Field | Flood-Net has | The forum has |', '|---|---|---|', ...rows, '',
+        `Station: https://floodwarning.net/?station=${encodeURIComponent(id)}`, '',
+        'Names cut short are probably Radio Mobile export truncations.'].join('\n')
+    };
+  }
+  async function reportEdits(st) {
+    const r = editsReport(st);
+    let route = null;
+    try { const res = await fetch(`${S.floodnet.API.replace(/\/api\/v1\/?$/, '')}/api/report`); route = res.ok ? await res.json() : null; } catch (_) { route = null; }
+    if (route && route.ready) {
+      if (!G.confirm(`Send this to Flood-Net? It becomes a public issue in its tracker.\n\n${r.title}\n\n${r.body}`)) return;
+      try {
+        const res = await fetch(`${S.floodnet.API.replace(/\/api\/v1\/?$/, '')}/api/report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'bug', title: r.title, body: r.body }) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(out.error || `HTTP ${res.status}`);
+        st.reported = { at: Date.now(), url: out.url || '', number: out.number || null };
+        renderStation(); changed({ light: true });
+        toast(out.number ? `Reported to Flood-Net as #${out.number}.` : 'Reported to Flood-Net.');
+        return;
+      } catch (e) { toast(`Flood-Net didn’t take it (${e.message}) — opening GitHub’s page instead.`); }
+    }
+    // Until Flood-Net's report route is on: its tracker's ready-made New issue page.
+    const a = h('a', { href: `${FN_ISSUES}?title=${encodeURIComponent(r.title)}&body=${encodeURIComponent(r.body)}`, target: '_blank', rel: 'noopener' });
+    document.body.appendChild(a); a.click(); a.remove();
+    st.reported = { at: Date.now(), url: '', number: null, via: 'github' };
+    renderStation(); changed({ light: true });
+    toast('Opened a ready-made issue in Flood-Net’s tracker — press Submit there (it needs a GitHub account).');
   }
   function stationCard(st) {
     const fn = S.floodnet;
@@ -386,12 +509,14 @@
       h('div', { class: 'st-title' }, h('span', { class: 'st-name' }, st.name), st.number ? h('span', { class: 'st-num' }, st.number) : null,
         (st.kinds || []).map(k => h('span', { class: 'tag' }, fn.KIND_LABEL[k] || k)),
         st.proposed ? h('span', { class: 'tag warn' }, 'proposed') : null,
-        st.source === 'manual' ? h('span', { class: 'tag' }, 'entered by hand') : null),
+        st.source === 'manual' ? h('span', { class: 'tag' }, 'entered by hand') : null,
+        st.edits ? h('span', { class: 'tag warn', title: 'Corrected here; Flood-Net still has the old details' }, 'corrected') : null),
+      editsNote(st),
       facts.length ? h('dl', { class: 'st-facts' }, facts) : null,
       h('div', { class: 'st-links' },
         st.app ? h('a', { href: st.app, target: '_blank', rel: 'noopener' }, 'Open in Flood-Net ↗') : null,
         st.source === 'floodnet' ? h('button', { type: 'button', class: 'link', onclick: refreshStation }, 'Refresh from Flood-Net') : null,
-        st.source === 'manual' ? h('button', { type: 'button', class: 'link', onclick: editManual }, 'Edit details') : null),
+        h('button', { type: 'button', class: 'link', onclick: editParticulars, title: 'Correct the name, number, hub, council or owner for this scope' }, 'Edit details')),
       S.playbook ? S.playbook.stationStrip(A) : null);
   }
   function templatePicker() {
