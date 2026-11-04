@@ -415,6 +415,7 @@
     });
     if (!q && rows.length > 12) box.appendChild(h('p', { class: 'hint' }, `${rows.length - 12} more — search to find them.`));
     const unsaved = S.store.index().filter(x => !x.playbookAt && x.name).length;
+    box.appendChild(h('p', { class: 'hint' }, h('button', { type: 'button', class: 'link', id: 'changePass', onclick: () => S.shared.changeDialog({ onDone: () => A.toast('Forum passphrase changed — tell the forum; each computer asks for it next time.') }) }, 'Change the forum passphrase')));
     if (unsaved) box.appendChild(h('div', { class: 'out-acts' }, h('button', { type: 'button', class: 'btn', onclick: () => saveAllUnsaved(A) }, `Share the ${unsaved} session${unsaved > 1 ? 's' : ''} only in this browser`)));
     return box;
   }

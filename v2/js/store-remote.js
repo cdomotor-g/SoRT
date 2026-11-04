@@ -24,7 +24,9 @@
   }
   let mem = '';
   const has = () => !!(passphrase() || mem);
-  const tidy = p => String(p || '').trim().toUpperCase().replace(/\s+/g, '');
+  // Letters and digits, in capitals — as Flood-Net holds it — so a sentence works
+  // however it is typed, and the header carries only plain characters.
+  const tidy = p => String(p || '').normalize('NFKD').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
   async function call(method, path, opts) {
     const o = opts || {};
@@ -61,7 +63,7 @@
   // Asking for the passphrase, once per computer.
   function dialog(o) {
     o = o || {};
-    const input = h('input', { type: 'password', placeholder: 'e.g. ABCDE-12345-…', autocomplete: 'off', spellcheck: 'false', id: 'passInput' });
+    const input = h('input', { type: 'password', placeholder: 'The forum passphrase — capitals and spaces don’t matter', autocomplete: 'off', spellcheck: 'false', id: 'passInput' });
     const keep = h('input', { type: 'checkbox', checked: true });
     const msg = h('p', { class: 'hint', id: 'passMsg' });
     const go = async () => {
@@ -86,5 +88,41 @@
   }
   function forget() { remember('', false); mem = ''; }
 
-  S.shared = { BASE, has, check, getFile, putFile, dialog, forget, passphrase };
+  // A new forum passphrase, set by someone who has the current one. Only its
+  // fingerprint leaves the browser; Flood-Net keeps that privately.
+  async function sha256Hex(text) {
+    const d = await G.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  function changeDialog(o) {
+    o = o || {};
+    const a = h('input', { type: 'password', id: 'passNew', autocomplete: 'off', spellcheck: 'false', placeholder: 'A sentence, e.g. six or more words' });
+    const b = h('input', { type: 'password', id: 'passNew2', autocomplete: 'off', spellcheck: 'false', placeholder: 'The same again' });
+    const msg = h('p', { class: 'hint', id: 'passNewMsg' });
+    const go = async () => {
+      const p = tidy(a.value);
+      if (p.length < 20) { msg.textContent = 'Make it longer — a sentence of six or more words, ideally a little odd (harder to guess).'; return; }
+      if (p !== tidy(b.value)) { msg.textContent = 'The two don’t match.'; return; }
+      msg.textContent = 'Changing…';
+      let res;
+      try { res = await call('PUT', '/passphrase', { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sha256: await sha256Hex('sort-forum-v1:' + p) }) }); }
+      catch (e) { msg.textContent = `Couldn’t change it: ${e.message}.`; return; }
+      if (res.status === 409) { msg.textContent = 'It is set in Flood-Net’s Cloudflare settings, so it can’t be changed from here — ask an agent (Flood-Net’s docs/sort-store.md).'; return; }
+      if (!res.ok) { msg.textContent = `Couldn’t change it (Flood-Net answered ${res.status}).`; return; }
+      remember(p, true);
+      dlg.close(); dlg.remove();
+      if (o.onDone) o.onDone(true);
+    };
+    const dlg = h('dialog', { class: 'gh-dlg pass-dlg', 'aria-label': 'Change the forum passphrase' },
+      h('div', { class: 'dlg-head' }, h('h2', null, 'Change the forum passphrase'), h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close', onclick: () => { dlg.close(); dlg.remove(); } }, '✕')),
+      h('div', { class: 'dlg-body' },
+        h('p', null, 'Every forum computer will need the new one: each asks for it the next time it opens SoRT (within a minute or so). Capitals, spaces and punctuation don’t matter.'),
+        h('label', { class: 'fld' }, h('span', { class: 'fld-label' }, 'New passphrase'), a),
+        h('label', { class: 'fld' }, h('span', { class: 'fld-label' }, 'Again'), b), msg),
+      h('div', { class: 'dlg-foot' }, h('span', { class: 'hint' }, 'Tell the forum by Teams or in person.'), h('button', { type: 'button', class: 'btn btn-primary', onclick: go }, 'Change it')));
+    document.body.appendChild(dlg);
+    dlg.showModal(); a.focus();
+  }
+
+  S.shared = { BASE, has, check, getFile, putFile, dialog, changeDialog, forget, passphrase, tidy };
 })(typeof window !== 'undefined' ? window : globalThis);

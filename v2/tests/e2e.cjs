@@ -49,13 +49,17 @@ function fakeGithub(defsText) {
 // the forum passphrase is TEST-PASS; files carry ETags; If-Match / If-None-Match.
 function fakeStore() {
   const files = new Map(); let n = 0; let puts = 0;
+  const crypto = require('crypto');
+  const N = p => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  let hash = crypto.createHash('sha256').update('sort-forum-v1:' + N('TEST-PASS')).digest('hex');
   const reply = (route, status, body, headers) => route.fulfill({ status, contentType: 'application/json', headers: Object.assign({ 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'ETag' }, headers || {}), body: typeof body === 'string' ? body : JSON.stringify(body) });
   const handler = async route => {
     const req = route.request(), url = new URL(req.url()), H = req.headers();
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type, x-sort-passphrase, if-match, if-none-match', 'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS', 'Access-Control-Expose-Headers': 'ETag' } });
-    if (H['x-sort-passphrase'] !== 'TEST-PASS') return reply(route, 401, { error: 'passphrase' });
+    if (crypto.createHash('sha256').update('sort-forum-v1:' + N(H['x-sort-passphrase'])).digest('hex') !== hash) return reply(route, 401, { error: 'passphrase' });
     const path = url.pathname.replace(/^\/api\/sort\/v1\//, '');
     if (path === 'check') return reply(route, 200, { ok: true });
+    if (path === 'passphrase' && req.method() === 'PUT') { const b = JSON.parse(req.postData() || '{}'); if (!/^[0-9a-f]{64}$/.test(b.sha256 || '')) return reply(route, 400, { error: 'sha256' }); hash = b.sha256; return reply(route, 200, { ok: true }); }
     const m = path.match(/^files\/(index\.json|stations\/[a-z0-9][a-z0-9-]*\.json)$/);
     if (!m) return reply(route, 400, { error: 'path' });
     const cur = files.get(m[1]);
@@ -82,7 +86,7 @@ async function page(browser, opts) {
   await ctx.route(/api\.github\.com/, gh.handler);
   const store = fakeStore();
   await ctx.route(/floodwarning\.net\/api\/sort\//, store.handler);
-  if (o.pass) await ctx.addInitScript(() => { try { localStorage.setItem('sortv2.passphrase', 'TEST-PASS'); } catch (e) { /* */ } });
+  if (o.pass) await ctx.addInitScript(() => { try { localStorage.setItem('sortv2.passphrase', 'TESTPASS'); } catch (e) { /* */ } });
   await ctx.route(o.map ? /raw\.githubusercontent\.com/ : /raw\.githubusercontent\.com|js\.arcgis\.com/, r => r.abort());
   const p = await ctx.newPage();
   p.errors = [];
@@ -190,7 +194,17 @@ const scenarios = {
     ok(true, 'a wrong passphrase is refused');
     await n.fill('#passInput', ' test-pass '); await n.press('#passInput', 'Enter');
     await n.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 8000 }).catch(() => {});
-    ok(await n.evaluate(() => localStorage.getItem('sortv2.passphrase')) === 'TEST-PASS' && await n.$eval('#saveBar', e => e.hidden), 'the right one (typed loosely) is remembered and the warning goes');
+    ok(await n.evaluate(() => localStorage.getItem('sortv2.passphrase')) === 'TESTPASS' && await n.$eval('#saveBar', e => e.hidden), 'the right one (typed loosely) is remembered and the warning goes');
+    // Changing it: only its fingerprint leaves, and the old one stops working.
+    await n.click('#sessionsBtn'); await n.click('#changePass');
+    await n.fill('#passNew', 'short'); await n.fill('#passNew2', 'short'); await n.click('.pass-dlg .btn-primary');
+    ok(/longer/.test(await n.textContent('#passNewMsg')), 'a short new passphrase is refused');
+    await n.fill('#passNew', 'Wombats queue politely at the river ford'); await n.fill('#passNew2', 'wombats queue politely, at the river ford.');
+    await n.click('.pass-dlg .btn-primary');
+    await n.waitForFunction(() => /passphrase changed/.test(document.querySelector('#toast').textContent), null, { timeout: 8000 });
+    ok(await n.evaluate(() => localStorage.getItem('sortv2.passphrase')) === 'WOMBATSQUEUEPOLITELYATTHERIVERFORD', 'changed: this computer keeps the new one');
+    ok(await n.evaluate(async () => (await SoRT.shared.check('TESTPASS')) === 'wrong' && (await SoRT.shared.check('WOMBATSQUEUEPOLITELYATTHERIVERFORD')) === 'ok'), 'the old one is refused, the new one works');
+
     await n.context().close();
     // Connected: it saves to the shared playbook by itself.
     const p = await page(b, { pass: true, autosaveMs: 800 });

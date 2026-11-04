@@ -80,6 +80,7 @@
     ] },
     { id: 'playbook', title: 'Shared sessions and precedents', items: [
       'The shared sessions keep every forum’s session under its station, for whoever has the forum passphrase — typed once per computer.',
+      'The passphrase is a sentence: capitals, spaces and punctuation don’t matter. Anyone who has it can change it — **Sessions** → **Change the forum passphrase** — and every other computer then asks for the new one.',
       'A station that has been to SoRT before offers **Continue from it** — its last answers come back marked **Earlier session**.',
       '**A precedent**: when this station is best handled like one done before, **Sessions** → find that station → **Use as a precedent** (or **Similar stations** → **Use** on the card). Its answers fill the questions still empty here — never coordinates, licence numbers, the TBM or notes — each **orange** until you check it.',
       'Keep it clean: no landholder names, phone numbers or emails, and no gate, padlock or key codes. Sharing checks the text for them first, and holds the session back if it finds one.'
