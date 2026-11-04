@@ -74,6 +74,25 @@
           }
         ],
         "issue": "cdomotor-g/MegaNet#261"
+      },
+      {
+        "id": "report-route",
+        "what": "Report to Flood-Net opens GitHub's ready-made issue page (needs a GitHub account) until Flood-Net's /api/report has its token",
+        "on": "human",
+        "kind": "access",
+        "since": "2026-11-04",
+        "issue": "cdomotor-g/MegaNet#270",
+        "holds": [
+          "forum corrections to a station's particulars reaching Flood-Net without a GitHub account"
+        ],
+        "options": [
+          {
+            "what": "Flood-Net #270: a fine-grained GitHub token set as the meganet Worker's GITHUB_ISSUES_TOKEN; SoRT needs no change (cdomotor-g.github.io is already allowed)",
+            "by": "human",
+            "effort": "5 min",
+            "recommended": true
+          }
+        ]
       }
     ]
   },
