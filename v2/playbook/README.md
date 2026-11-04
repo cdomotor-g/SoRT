@@ -2,7 +2,7 @@
 
 The playbook is the record of how SoRT forums dealt with each station, so a
 station that comes back — or one like it — starts from what was decided before.
-**Its data lives in the private repo `cdomotor-g/SoRT-playbook`, never here**
+**Its data lives in Flood-Net's shared session store (since Nov 2026; the forum passphrase opens it — Flood-Net's `docs/sort-store.md`), and the private repo `cdomotor-g/SoRT-playbook` keeps the five stations it was seeded with — never here**
 (this repo is public; `.gitignore` refuses station files, the index and Word
 reports). This folder holds only the tools that read and write it.
 

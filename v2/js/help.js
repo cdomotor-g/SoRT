@@ -16,20 +16,20 @@
       '**Map**: check the station’s position against the imagery (Flood-Net’s can be rounded), then press **✓ Position checked**. Mark any other locations (relocation site, river line…).',
       '**Questions**: work down the sections. Anything filled in for you has a coloured badge — press its **✓** to keep it, or just choose something else.',
       '**Property Services**, then **Follow-ups and output**: choose the **Forum outcome** and what goes into Word. The **Preview** at the bottom shows exactly what will paste.',
-      '**Copy for Word** (top right), then paste into the report with Ctrl+V. If you’re connected to GitHub, **Save to playbook** as well.'
+      '**Copy for Word** (top right), then paste into the report with Ctrl+V. With the forum passphrase on this computer, the session is shared with the whole forum by itself.'
     ] },
     { id: 'session', title: 'Starting a new session', items: [
       'A **session** is one station at one forum sitting. To start one: **Sessions** (top right) → **New session**. The map goes back to the whole of Queensland until you choose the station.',
       'Choosing a different station on a session that already has answers starts a new session by itself; the earlier one stays under **Sessions**.',
-      'To go back to one: **Sessions** — type a station’s name or number in its search box — then **Open**. Under **In the shared playbook**, **Open** carries on with a station’s last session as it was saved (from any computer), **Start from it** begins today’s session from its answers, and **Use as a precedent** fills this session from it. **Forget** removes one from this browser only.',
-      'Choosing a station that already has a session (here or in the playbook) shows a **⚠ already has a session** note on its card: **Show its sessions** opens Sessions searched for it.',
+      'To go back to one: **Sessions** — type a station’s name or number in its search box — then **Open**. Under **Shared with the forum**, **Open** carries on with a station’s last session as it was saved (from any computer), **Start from it** begins today’s session from its answers, and **Use as a precedent** fills this session from it. **Forget** removes one from this browser only.',
+      'Choosing a station that already has a session (here or in the shared sessions) shows a **⚠ already has a session** note on its card: **Show its sessions** opens Sessions searched for it.',
       'To carry a session to another computer: **Download session** (bottom of the page), then on the other computer **Sessions** → **Open a session file…**.'
     ] },
     { id: 'saved', title: 'Where your work is kept', items: [
       'Every change is saved **in this browser** as you go — the footer shows the time of the last save. A reload or a crashed tab loses nothing.',
-      'Once this computer is connected to the **shared playbook** (once per computer: **Connect to the shared playbook** on the warning bar, with the team’s GitHub token), each session also goes there by itself a few seconds after a change, so everyone can open it. Until then a **⚠ Saved only in this browser** bar says so: nobody else can open it, and clearing the browser loses it.',
+      'Once this computer has the **forum passphrase** (typed once: **Enter the forum passphrase** on the warning bar — the forum chair has it), each session is also **shared with the forum** by itself a few seconds after a change, so every forum computer can open it. Until then a **⚠ Saved only in this browser** bar says so: nobody else can open it, and clearing the browser loses it.',
       '**Download a copy** (on that bar, or **Download session** at the foot of the page) saves the session as a file — the fallback if anything is ever wrong.',
-      'If a session’s text looks like it holds a phone number, email or gate code, it is **not** saved to the playbook by itself — the bar says what it found; remove it, or **save it anyway**.'
+      'If a session’s text looks like it holds a phone number, email or gate code, it is **not** shared by itself — the bar says what it found; remove it, or **save it anyway**.'
     ] },
     { id: 'badges', title: 'Answers filled in for you (the coloured badges)', items: [
       '**Flood-Net**, **Map**, **Precedent** and **Earlier session** mark answers suggested from Flood-Net, the map, a similar station or this station’s last forum. They count as answered but **not checked**: the question has an **orange** bar until you press the badge’s **✓** (or change it), then a **green** bar and **✓ checked**. The header’s **“N to confirm”** jumps to the next one.',
@@ -78,11 +78,11 @@
       'On a rainfall table the water-level rows read **NA** by themselves.',
       'Untick **Include in the Word copy** (on its heading) to copy the scope table without it.'
     ] },
-    { id: 'playbook', title: 'Playbook and precedents', items: [
-      'The playbook keeps every saved session under its station, privately. **Connect GitHub** once per computer to use it.',
+    { id: 'playbook', title: 'Shared sessions and precedents', items: [
+      'The shared sessions keep every forum’s session under its station, for whoever has the forum passphrase — typed once per computer.',
       'A station that has been to SoRT before offers **Continue from it** — its last answers come back marked **Earlier session**.',
       '**A precedent**: when this station is best handled like one done before, **Sessions** → find that station → **Use as a precedent** (or **Similar stations** → **Use** on the card). Its answers fill the questions still empty here — never coordinates, licence numbers, the TBM or notes — each **orange** until you check it.',
-      'Keep it clean: no landholder names, phone numbers or emails, and no gate, padlock or key codes. **Save to playbook** checks the text for them first.'
+      'Keep it clean: no landholder names, phone numbers or emails, and no gate, padlock or key codes. Sharing checks the text for them first, and holds the session back if it finds one.'
     ] },
     { id: 'questions', title: 'Changing the questions', items: [
       'For a quick change mid-forum: **Edit questions** (footer). It stays a draft **in your browser only** (a banner says so) until **Publish to GitHub** — then everyone gets it the next time they open the page.',

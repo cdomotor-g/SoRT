@@ -1,7 +1,10 @@
 /* SoRT v2 — playbook.js
-   The playbook: how earlier SoRT forums dealt with each station, kept in the
-   private GitHub repo cdomotor-g/SoRT-playbook so a station that comes back,
-   or one like it, starts from what was decided before.
+   The playbook — the shared sessions: how SoRT forums dealt with each station,
+   kept by Flood-Net's server for whoever has the forum passphrase
+   (store-remote.js), so every forum computer sees the same sessions and a
+   station that comes back, or one like it, starts from what was decided before.
+   (Until Nov 2026 it was the private GitHub repo cdomotor-g/SoRT-playbook,
+   which still holds the five stations it was seeded with.)
 
    The repo holds:
      index.json               one line per station — enough to search and rank
@@ -33,21 +36,18 @@
     return st.name ? `manual-${slug(st.name)}` : null;
   }
   async function loadIndex() {
-    if (!S.github.auth()) { P.status = 'off'; P.index = U().LS.json(LS_INDEX, null); return; }
+    if (!S.shared.has()) { P.status = 'off'; P.index = U().LS.json(LS_INDEX, null); refresh(); return; }
     P.status = 'loading'; refresh();
     try {
-      const f = await S.github.getFile(REPO, 'index.json');
-      if (!f) {
-        // Either the repo is empty (fine: the first save creates the index) or it isn't there at all.
-        try { await S.github.api(`https://api.github.com/repos/${REPO.owner}/${REPO.repo}`); P.index = []; P.status = 'ready'; }
-        catch (e) { P.status = e.status === 404 ? 'missing' : 'error'; P.error = e.message; }
-      } else { P.index = JSON.parse(f.text).stations || []; P.indexSha = f.sha; P.status = 'ready'; U().LS.set(LS_INDEX, JSON.stringify(P.index)); }
+      const f = await S.shared.getFile('index.json');
+      if (!f) { P.index = []; P.status = 'ready'; }   // nothing saved yet: the first save makes the index
+      else { P.index = JSON.parse(f.text).stations || []; P.indexSha = f.sha; P.status = 'ready'; U().LS.set(LS_INDEX, JSON.stringify(P.index)); }
     } catch (e) { P.status = e.status === 401 ? 'denied' : 'error'; P.error = e.message; P.index = U().LS.json(LS_INDEX, null); }
     refresh();
   }
   async function loadStation(key, fresh) {
     if (!fresh && P.files.has(key)) return P.files.get(key);
-    const f = await S.github.getFile(REPO, `stations/${key}.json`);
+    const f = await S.shared.getFile(`stations/${key}.json`);
     const v = f ? { data: JSON.parse(f.text), sha: f.sha } : null;
     if (v) P.files.set(key, v);
     return v;
@@ -78,10 +78,11 @@
       map: { checked: (session.station || {}).checked || null, features: session.map.features || [], marks: session.map.marks || [], bridges: session.map.bridges || [] } };
   }
   function record(defs, session) {
-    const a = S.github.auth() || {};
     const s = U().clone(session);
-    delete s.prefill.__ps; delete s.playbook;
-    return { id: session.id, source: 'sort-v2', savedAt: new Date().toISOString(), savedBy: a.login || '', forum: session.forum,
+    // The Bureau benchmarks list is Flood-Net's editors' only: the one a forum Used
+    // is in its Local TBM answer; the list itself stays in the browser that fetched it.
+    delete s.prefill.__ps; delete s.playbook; delete s.bureauBenchmarks;
+    return { id: session.id, source: 'sort-v2', savedAt: new Date().toISOString(), savedBy: ((session.forum || {}).attendees || []).join(', '), forum: session.forum,
       outcome: session.outcome || null, outcomeNote: session.outcomeNote || '', template: session.template, definitionsVersion: defs.version,
       continuesFrom: session.continuesFrom || null, summary: summary(defs, session), session: s };
   }
@@ -122,11 +123,11 @@
   }
 
   /* ---------------- save ---------------- */
-  async function putJson(path, obj, msg, sha) { return S.github.putFile(REPO, path, JSON.stringify(obj, null, 2) + '\n', msg, sha); }
+  async function putJson(path, obj, msg, sha) { return S.shared.putFile(path, JSON.stringify(obj, null, 2) + '\n', msg, sha); }
   async function save(A, session, quiet, auto) {
     session = session || A.session;
-    if (auto && (!S.github.auth() || P.status !== 'ready' || P.busy)) return false;
-    if (!S.github.auth()) { S.github.connectDialog({ why: 'Saving to the playbook needs a GitHub token that can reach the private SoRT-playbook repo.', onDone: login => { if (login) { loadIndex().then(() => save(A, session)); } } }); return false; }
+    if (auto && (!S.shared.has() || P.status !== 'ready' || P.busy)) return false;
+    if (!S.shared.has()) { S.shared.dialog({ why: 'Saving to the shared sessions needs the forum passphrase — once on this computer.', onDone: ok => { if (ok) { loadIndex().then(() => save(A, session)); } } }); return false; }
     const st = session.station, key = stationKey(st);
     if (!key) { A.toast('Choose (or enter) the station first — the playbook files sessions by station.'); return false; }
     const found = privacyScan(session);
@@ -152,19 +153,20 @@
           session.playbook = { savedAt: Date.now(), key, sha: r.sha };
           if (P.held && P.held.id === session.id) P.held = null;
           S.store.save(session);
-          if (!quiet) A.toast(`Saved to the playbook (${st.name}).`);
+          if (!quiet) A.toast(`Shared with the forum (${st.name}).`);
           return true;
         } catch (e) { if (!(e.status === 409 || e.status === 422) || attempt) throw e; }   // someone saved in between: re-read, retry once
       }
     } catch (e) {
-      A.toast(e.status === 404 ? 'The private SoRT-playbook repo isn’t there yet, or this token can’t reach it — the session is still saved in this browser.' : `Couldn’t save to the playbook: ${e.message}`);
+      if (e.status === 401) { P.status = 'denied'; P.error = e.message; }
+      if (!quiet) A.toast(`Couldn’t save to the shared sessions (${e.message}) — it is still saved in this browser.`);
       return false;
     } finally { P.busy = false; refresh(); }
     return false;
   }
   async function upsertIndex(file, msg) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const cur = await S.github.getFile(REPO, 'index.json');
+      const cur = await S.shared.getFile('index.json');
       const idx = cur ? JSON.parse(cur.text) : { schema: 'sort-playbook-index/1', stations: [] };
       const e = indexEntry(file);
       const i = idx.stations.findIndex(x => x.key === e.key);
@@ -177,10 +179,10 @@
   }
   async function saveAllUnsaved(A) {
     const todo = S.store.index().filter(x => !x.playbookAt && x.name);
-    if (!todo.length) { A.toast('Every session with a station is already in the playbook.'); return; }
+    if (!todo.length) { A.toast('Every session with a station is already shared.'); return; }
     let n = 0;
     for (const x of todo) { const s = S.store.load(x.id); if (s && await save(A, s, true)) n++; }
-    A.toast(`${n} of ${todo.length} session${todo.length > 1 ? 's' : ''} saved to the playbook.`);
+    A.toast(`${n} of ${todo.length} session${todo.length > 1 ? 's' : ''} shared with the forum.`);
   }
 
   /* ---------------- precedents ---------------- */
@@ -239,7 +241,7 @@
   async function usePrecedent(A, key) {
     try {
       const f = await loadStation(key);
-      if (!f) { A.toast('That station’s file isn’t in the playbook.'); return; }
+      if (!f) { A.toast('That station isn’t in the shared sessions.'); return; }
       const rec = (f.data.sessions || []).filter(s => s.summary && Object.keys(s.summary.answers || {}).length).slice(-1)[0];
       if (!rec) { A.toast('No answers recorded for that station yet.'); return; }
       const before = U().clone(A.session.prefill);
@@ -298,10 +300,10 @@
   function fillStrip() {
     const el = stripHost, A = P.A; if (!el || !A) return;
     el.innerHTML = '';
-    const head = h('span', { class: 'fld-label' }, 'Playbook');
-    if (P.status === 'off') { el.appendChild(h('div', null, head, ' — ', h('button', { type: 'button', class: 'link', onclick: () => S.github.connectDialog({ onDone: () => loadIndex() }) }, 'Connect GitHub'), ' to see this station’s earlier sessions and similar precedents.')); return; }
+    const head = h('span', { class: 'fld-label' }, 'Shared sessions');
+    if (P.status === 'off') { el.appendChild(h('div', null, head, ' — ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter the forum passphrase'), ' to see this station’s earlier sessions and similar precedents.')); return; }
     if (P.status === 'loading') { el.appendChild(h('div', null, head, ' — loading…')); return; }
-    if (P.status === 'missing') { el.appendChild(h('div', null, head, ' — the private SoRT-playbook repo isn’t there yet (or this GitHub token can’t see it). Sessions are kept in this browser until it is.')); return; }
+    if (P.status === 'denied') { el.appendChild(h('div', null, head, ' — the forum passphrase on this computer isn’t right any more. ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter it again'))); return; }
     if (P.status !== 'ready') { el.appendChild(h('div', null, head, ` — couldn’t be read (${P.error}). `, h('button', { type: 'button', class: 'link', onclick: () => loadIndex() }, 'Try again'))); return; }
     const key = stationKey(A.session.station);
     const mine = (P.index || []).find(e => e.key === key);
@@ -326,13 +328,13 @@
     el.innerHTML = '';
     const s = A.session, at = s.playbook && s.playbook.savedAt;
     const stale = at && s.updatedAt > at + 2000;
-    el.appendChild(h('button', { type: 'button', class: 'btn', disabled: P.busy, title: 'Keep this session in the private playbook, under its station', onclick: () => save(A) }, P.busy ? 'Saving…' : (at ? 'Save to playbook again' : 'Save to playbook')));
-    el.appendChild(h('span', { class: 'hint' }, at ? ` In the playbook since ${U().fmtClock(at)}${stale ? ' — changed since' : ''}.` : ' Not in the playbook yet.'));
+    el.appendChild(h('button', { type: 'button', class: 'btn', disabled: P.busy, title: 'Share it with the forum now (it is also shared by itself a few seconds after each change)', onclick: () => save(A) }, P.busy ? 'Saving…' : (at ? 'Share again now' : 'Share with the forum')));
+    el.appendChild(h('span', { class: 'hint' }, at ? ` Shared ${U().fmtClock(at)}${stale ? ' — changed since, sharing shortly' : ''}.` : ' Not shared yet.'));
   }
   /* ---------------- saving by itself, to the shared playbook ---------------- */
   // A few seconds after the last change (and before another session opens),
   // the open session goes to the playbook — once it has a station, while
-  // GitHub is connected and the playbook can be read.
+  // this computer has the forum passphrase and the shared sessions can be read.
   const AUTOSAVE_MS = () => (typeof G.SORT_AUTOSAVE_MS === 'number' ? G.SORT_AUTOSAVE_MS : 12000);
   let autoTimer = null, autoFor = null;
   // Something worth keeping: a station, and at least one answer (looking a station up files nothing).
@@ -340,7 +342,7 @@
     || Object.values((s.ps || {}).answers || {}).some(v => String(v || '').trim()) || !!s.outcome;
   const needsSave = s => !!(s && s.station && stationKey(s.station) && answered(s) && (!s.playbook || !s.playbook.savedAt || s.updatedAt > s.playbook.savedAt + 1000));
   function autosaveSoon(A) {
-    if (P.status !== 'ready' || !S.github.auth() || !A.session || !stationKey(A.session.station)) return;
+    if (P.status !== 'ready' || !S.shared.has() || !A.session || !stationKey(A.session.station)) return;
     clearTimeout(autoTimer); autoFor = A.session;
     autoTimer = setTimeout(() => { const s = autoFor; autoTimer = null; autoFor = null; if (needsSave(s)) save(A, s, true, true); }, AUTOSAVE_MS());
   }
@@ -374,16 +376,16 @@
     const bar = (cls, ...kids) => { el.className = 'save-bar ' + cls; el.hidden = false; kids.forEach(k => k && el.appendChild(k)); };
     const link = (label, run, title) => h('button', { type: 'button', class: 'link', onclick: run, title: title || null }, label);
     if (P.held && P.held.id === A.session.id) {
-      bar('warn', h('span', null, h('b', null, 'Not saved to the shared playbook: '), `it looks like it holds ${P.held.found[0]}${P.held.found.length > 1 ? ` (and ${P.held.found.length - 1} more)` : ''}. The playbook keeps no landholder contact details and no gate, padlock or key codes — remove it, or `),
+      bar('warn', h('span', null, h('b', null, 'Not saved to the shared sessions: '), `it looks like it holds ${P.held.found[0]}${P.held.found.length > 1 ? ` (and ${P.held.found.length - 1} more)` : ''}. Shared sessions keep no landholder contact details and no gate, padlock or key codes — remove it, or `),
         link('save it anyway', () => save(A)), document.createTextNode('.'));
       return;
     }
     if (P.status === 'ready') { el.hidden = true; return; }
-    if (P.status === 'loading') { bar('info', h('span', null, 'Connecting to the shared playbook…')); return; }
-    const why = P.status === 'off' ? null : P.status === 'missing' ? 'the shared playbook can’t be reached with this computer’s GitHub token' : `the shared playbook can’t be read just now (${P.error})`;
+    if (P.status === 'loading') { bar('info', h('span', null, 'Connecting to the shared sessions…')); return; }
+    const why = P.status === 'off' ? null : P.status === 'denied' ? 'the forum passphrase on this computer isn’t right any more' : `the shared sessions can’t be reached just now (${P.error})`;
     bar('warn', h('span', null, h('b', null, '⚠ Saved only in this browser'), why ? ` — ${why}. ` : '. ',
       'Nobody else can open this session, and clearing the browser loses it. '),
-      P.status === 'off' ? link('Connect to the shared playbook', () => S.github.connectDialog({ why: 'The shared playbook keeps every session where everyone can open it. Connect once per computer.', onDone: () => loadIndex() }))
+      P.status === 'off' || P.status === 'denied' ? link('Enter the forum passphrase', () => S.shared.dialog({ onDone: () => loadIndex() }), 'Once on this computer: then every session is saved where the whole forum can open it')
         : link('Try again', () => loadIndex()),
       document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
   }
@@ -392,13 +394,13 @@
   const matches = (q, ...xs) => !q || xs.some(x => String(x || '').toLowerCase().includes(q));
   function panel(A, query, close) {
     const q = String(query || '').trim().toLowerCase();
-    const box = h('div', { class: 'pb-panel' }, h('h3', null, 'In the shared playbook'));
-    if (P.status === 'off') { box.appendChild(h('p', { class: 'hint' }, 'Not connected — the sessions above are only in this browser. ', h('button', { type: 'button', class: 'link', onclick: () => S.github.connectDialog({ onDone: () => loadIndex() }) }, 'Connect to the shared playbook'))); return box; }
-    if (P.status !== 'ready') { box.appendChild(h('p', { class: 'hint' }, P.status === 'loading' ? 'Loading…' : `The shared playbook can’t be read just now${P.error ? ` (${P.error})` : ''}. `, P.status === 'loading' ? null : h('button', { type: 'button', class: 'link', onclick: () => loadIndex() }, 'Try again'))); return box; }
+    const box = h('div', { class: 'pb-panel' }, h('h3', null, 'Shared with the forum'));
+    if (P.status === 'off' || P.status === 'denied') { box.appendChild(h('p', { class: 'hint' }, P.status === 'off' ? 'Not connected — the sessions above are only in this browser. ' : 'The forum passphrase on this computer isn’t right any more. ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter the forum passphrase'))); return box; }
+    if (P.status !== 'ready') { box.appendChild(h('p', { class: 'hint' }, P.status === 'loading' ? 'Loading…' : `The shared sessions can’t be reached just now${P.error ? ` (${P.error})` : ''}. `, P.status === 'loading' ? null : h('button', { type: 'button', class: 'link', onclick: () => loadIndex() }, 'Try again'))); return box; }
     const o = OUTCOME(A), curKey = stationKey(A.session.station);
     const all = (P.index || []).slice().sort((a, b) => String(b.lastForum).localeCompare(String(a.lastForum)));
     const rows = all.filter(e => matches(q, e.name, e.number, e.lga, e.hub));
-    if (!rows.length) { box.appendChild(h('p', { class: 'hint' }, q ? 'No station in the playbook matches.' : 'Nothing in the playbook yet.')); }
+    if (!rows.length) { box.appendChild(h('p', { class: 'hint' }, q ? 'No shared session matches.' : 'Nothing shared yet.')); }
     (q ? rows : rows.slice(0, 12)).forEach(e => {
       const other = curKey && e.key !== curKey;
       box.appendChild(h('div', { class: 'sess' },
@@ -413,7 +415,7 @@
     });
     if (!q && rows.length > 12) box.appendChild(h('p', { class: 'hint' }, `${rows.length - 12} more — search to find them.`));
     const unsaved = S.store.index().filter(x => !x.playbookAt && x.name).length;
-    if (unsaved) box.appendChild(h('div', { class: 'out-acts' }, h('button', { type: 'button', class: 'btn', onclick: () => saveAllUnsaved(A) }, `Save the ${unsaved} session${unsaved > 1 ? 's' : ''} only in this browser to the playbook`)));
+    if (unsaved) box.appendChild(h('div', { class: 'out-acts' }, h('button', { type: 'button', class: 'btn', onclick: () => saveAllUnsaved(A) }, `Share the ${unsaved} session${unsaved > 1 ? 's' : ''} only in this browser`)));
     return box;
   }
   // The station's other sessions — in this browser and in the playbook — for the card's warning.

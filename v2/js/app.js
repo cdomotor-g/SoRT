@@ -667,11 +667,11 @@
           h('div', { class: 'sess-main' },
             h('div', { class: 'sess-name' }, x.name || 'No station', x.number ? h('span', { class: 'res-num' }, x.number) : null, cur ? h('span', { class: 'tag' }, 'open') : null),
             h('div', { class: 'res-meta' }, [(S.schema.template(A.defs, x.template) || {}).label, x.forumDate && `forum ${U.dmy(x.forumDate)}`, x.outcome ? outcomes[x.outcome] : 'not finished',
-              `changed ${U.fmtWhen(x.updatedAt)}`, x.playbookAt ? 'in the shared playbook' : 'only in this browser'].filter(Boolean).join(' · '))),
+              `changed ${U.fmtWhen(x.updatedAt)}`, x.playbookAt ? 'shared with the forum' : 'only in this browser'].filter(Boolean).join(' · '))),
           h('div', { class: 'sess-acts' },
             cur ? null : h('button', { type: 'button', class: 'btn', onclick: () => { close(); openSession(x.id); } }, 'Open'),
             h('button', { type: 'button', class: 'btn btn-quiet', title: 'Forget this session in this browser', onclick: () => {
-              if (!confirm(`Forget the session for ${x.name || 'this station'} in this browser?${x.playbookAt ? ' It stays in the shared playbook.' : ' It is not in the shared playbook, so it will be gone.'}`)) return;
+              if (!confirm(`Forget the session for ${x.name || 'this station'} in this browser?${x.playbookAt ? ' It stays in the shared sessions.' : ' It isn’t shared, so it will be gone.'}`)) return;
               S.store.remove(x.id);
               if (cur) newSession();
               draw();
@@ -695,7 +695,7 @@
     const outcomes = Object.fromEntries(((A.defs.session || {}).outcomes || []).map(o => [o.code, o.label]));
     const parts = [];
     if (x.local.length) parts.push(`${x.local.length} in this browser`);
-    if (x.shared) parts.push(`${x.shared} in the shared playbook`);
+    if (x.shared) parts.push(`${x.shared} shared with the forum`);
     const last = x.entry && x.entry.lastForum ? ` — the last at the forum of ${U.dmy(x.entry.lastForum)}, ${x.entry.lastOutcome ? (outcomes[x.entry.lastOutcome] || x.entry.lastOutcome).toLowerCase() : 'not finished'}` : '';
     el.hidden = false;
     el.appendChild(h('div', null, h('b', null, `⚠ ${st.name} already has ${x.local.length + x.shared === 1 ? 'a session' : 'sessions'}`), ` (${parts.join(', ')})${last}. Open one to carry on with it, or keep going with this new one.`));

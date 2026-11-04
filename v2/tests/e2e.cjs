@@ -45,6 +45,32 @@ function fakeGithub(defsText) {
   return { files, handler };
 }
 
+// Flood-Net's shared session store (floodwarning.net/api/sort/v1), in memory:
+// the forum passphrase is TEST-PASS; files carry ETags; If-Match / If-None-Match.
+function fakeStore() {
+  const files = new Map(); let n = 0; let puts = 0;
+  const reply = (route, status, body, headers) => route.fulfill({ status, contentType: 'application/json', headers: Object.assign({ 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'ETag' }, headers || {}), body: typeof body === 'string' ? body : JSON.stringify(body) });
+  const handler = async route => {
+    const req = route.request(), url = new URL(req.url()), H = req.headers();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type, x-sort-passphrase, if-match, if-none-match', 'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS', 'Access-Control-Expose-Headers': 'ETag' } });
+    if (H['x-sort-passphrase'] !== 'TEST-PASS') return reply(route, 401, { error: 'passphrase' });
+    const path = url.pathname.replace(/^\/api\/sort\/v1\//, '');
+    if (path === 'check') return reply(route, 200, { ok: true });
+    const m = path.match(/^files\/(index\.json|stations\/[a-z0-9][a-z0-9-]*\.json)$/);
+    if (!m) return reply(route, 400, { error: 'path' });
+    const cur = files.get(m[1]);
+    if (req.method() === 'GET') return cur ? reply(route, 200, cur.text, { ETag: cur.etag }) : reply(route, 404, { error: 'not found' });
+    if (req.method() === 'PUT') {
+      if (cur ? H['if-match'] !== cur.etag : H['if-none-match'] !== '*') return reply(route, 412, { error: 'changed' });
+      const etag = `"e${++n}"`; puts++;
+      files.set(m[1], { text: req.postData(), etag });
+      return reply(route, 200, { etag }, { ETag: etag });
+    }
+    return reply(route, 405, { error: 'method' });
+  };
+  return { files, handler, puts: () => puts };
+}
+
 async function page(browser, opts) {
   const o = opts || {};
   const ctx = await browser.newContext({ viewport: o.viewport || { width: 1360, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
@@ -54,6 +80,9 @@ async function page(browser, opts) {
   if (o.defsPatch) { const d = JSON.parse(defsText); o.defsPatch(d); defsText = JSON.stringify(d); }
   const gh = fakeGithub(defsText);
   await ctx.route(/api\.github\.com/, gh.handler);
+  const store = fakeStore();
+  await ctx.route(/floodwarning\.net\/api\/sort\//, store.handler);
+  if (o.pass) await ctx.addInitScript(() => { try { localStorage.setItem('sortv2.passphrase', 'TEST-PASS'); } catch (e) { /* */ } });
   await ctx.route(o.map ? /raw\.githubusercontent\.com/ : /raw\.githubusercontent\.com|js\.arcgis\.com/, r => r.abort());
   const p = await ctx.newPage();
   p.errors = [];
@@ -65,7 +94,7 @@ async function page(browser, opts) {
   await p.evaluate(fresh => { for (const k of Object.keys(localStorage)) if (k.startsWith('sortv2.')) localStorage.removeItem(k); if (!fresh) localStorage.setItem('sortv2.helpSeen', '1'); }, !!o.freshHelp);
   await p.reload({ waitUntil: 'load' });
   await p.waitForSelector('#stationSearch', { timeout: 20000 });
-  p.gh = gh;
+  p.gh = gh; p.store = store;
   p.pick = async q => {
     await p.fill('#stationSearch', q);
     await p.waitForSelector('#stationResults li', { timeout: 20000 });
@@ -125,7 +154,7 @@ const scenarios = {
     await p.context().close();
   },
   async playbook(b) {
-    const p = await page(b, { token: true });
+    const p = await page(b, { pass: true });
     await p.pick('540601');
     await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
     await p.click('#q-stockFence .opt:has-text("Yes (standard")');
@@ -134,9 +163,9 @@ const scenarios = {
     let warned = false; p.once('dialog', d => { warned = /phone number/.test(d.message()); });
     await p.waitForTimeout(400);
     await p.click('#playbookActs button');
-    await p.waitForFunction(() => /Saved to the playbook|Couldn/.test(document.querySelector('#toast').textContent), null, { timeout: 20000 });
+    await p.waitForFunction(() => /Shared with the forum|Couldn/.test(document.querySelector('#toast').textContent), null, { timeout: 20000 });
     ok(warned, 'the privacy check caught the phone number');
-    ok(p.gh.files.has('SoRT-playbook/stations/540601.json') && p.gh.files.has('SoRT-playbook/index.json'), 'station file and index written');
+    ok(p.store.files.has('stations/540601.json') && p.store.files.has('index.json'), 'station file and index written to the shared store');
     await p.newSession(); await p.pick('540335');
     await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
     await p.waitForTimeout(400);
@@ -154,33 +183,40 @@ const scenarios = {
     // Not connected: the page says the session is only in this browser.
     const n = await page(b);
     await n.pick('540601');
-    ok(/Saved only in this browser/.test(await n.innerText('#saveBar')) && await n.isVisible('#saveBar button:has-text("Connect to the shared playbook")'), 'not connected: a warning that it is only in this browser');
+    ok(/Saved only in this browser/.test(await n.innerText('#saveBar')) && await n.isVisible('#saveBar button:has-text("Enter the forum passphrase")'), 'no passphrase: a warning that it is only in this browser');
+    await n.click('#saveBar button:has-text("Enter the forum passphrase")');
+    await n.fill('#passInput', 'nope-nope'); await n.press('#passInput', 'Enter');
+    await n.waitForFunction(() => /isn’t the forum passphrase/.test(document.querySelector('#passMsg').textContent), null, { timeout: 8000 });
+    ok(true, 'a wrong passphrase is refused');
+    await n.fill('#passInput', ' test-pass '); await n.press('#passInput', 'Enter');
+    await n.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 8000 }).catch(() => {});
+    ok(await n.evaluate(() => localStorage.getItem('sortv2.passphrase')) === 'TEST-PASS' && await n.$eval('#saveBar', e => e.hidden), 'the right one (typed loosely) is remembered and the warning goes');
     await n.context().close();
     // Connected: it saves to the shared playbook by itself.
-    const p = await page(b, { token: true, autosaveMs: 800 });
+    const p = await page(b, { pass: true, autosaveMs: 800 });
     await p.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 10000 });
     ok(true, 'connected: no warning bar');
     await p.pick('540601');
     await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
     await p.click('#q-stockFence .opt:has-text("Yes (standard")');
     await p.waitForFunction(() => /playbook/.test(document.querySelector('#savedChip').textContent), null, { timeout: 15000 }).catch(() => {});
-    ok(p.gh.files.has('SoRT-playbook/stations/540601.json') && p.gh.files.has('SoRT-playbook/index.json'), 'saved to the shared playbook by itself, with no button');
-    const first = JSON.parse(p.gh.files.get('SoRT-playbook/stations/540601.json').text).sessions[0].id;
+    ok(p.store.files.has('stations/540601.json') && p.store.files.has('index.json'), 'shared with the forum by itself, with no button');
+    const first = JSON.parse(p.store.files.get('stations/540601.json').text).sessions[0].id;
     await p.fill('[data-fk="installNotes::f::notes"]', 'Ring 0459 123 456'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
-    await p.waitForFunction(() => /Not saved to the shared playbook/.test(document.querySelector('#saveBar').textContent), null, { timeout: 8000 }).catch(() => {});
-    ok(/Not saved to the shared playbook/.test(await p.innerText('#saveBar')) && /phone number/.test(await p.innerText('#saveBar')), 'a phone number holds it, and the bar says why');
-    ok(!/0459/.test(p.gh.files.get('SoRT-playbook/stations/540601.json').text), 'nothing private went to the playbook');
+    await p.waitForFunction(() => /Not saved to the shared sessions/.test(document.querySelector('#saveBar').textContent), null, { timeout: 8000 }).catch(() => {});
+    ok(/Not saved to the shared sessions/.test(await p.innerText('#saveBar')) && /phone number/.test(await p.innerText('#saveBar')), 'a phone number holds it, and the bar says why');
+    ok(!/0459/.test(p.store.files.get('stations/540601.json').text), 'nothing private was shared');
     await p.fill('[data-fk="installNotes::f::notes"]', 'Ring the hub before visiting'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
     await p.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 8000 }).catch(() => {});
-    ok(/Ring the hub/.test(p.gh.files.get('SoRT-playbook/stations/540601.json').text), 'once it is removed, it saves again');
+    ok(/Ring the hub/.test(p.store.files.get('stations/540601.json').text), 'once it is removed, it is shared again');
     // The same station again: the card says it already has a session, and Sessions finds it.
     await p.newSession(); await p.pick('540601');
     await p.waitForSelector('#dupNote:not([hidden])', { timeout: 8000 });
-    ok(/already has (a session|sessions)/.test(await p.innerText('#dupNote')) && /in the shared playbook/.test(await p.innerText('#dupNote')), 'picking it again warns that a session already exists');
+    ok(/already has (a session|sessions)/.test(await p.innerText('#dupNote')) && /shared with the forum/.test(await p.innerText('#dupNote')), 'picking it again warns that a session already exists');
     await p.click('#dupNote button:has-text("Show its sessions")');
     ok(await p.evaluate(() => document.querySelector('#sessionsDlg').open) && (await p.inputValue('#sessionsSearch')) === '540601', 'which opens Sessions, searched for the station');
     const res = await p.innerText('#sessionsResults');
-    ok(/In this browser[\s\S]*Fifteen Mile AL[\s\S]*In the shared playbook[\s\S]*Fifteen Mile AL/.test(res), 'its sessions are listed, here and in the shared playbook');
+    ok(/In this browser[\s\S]*Fifteen Mile AL[\s\S]*Shared with the forum[\s\S]*Fifteen Mile AL/.test(res), 'its sessions are listed, here and shared with the forum');
     await p.fill('#sessionsSearch', 'zzz');
     ok(!/Fifteen Mile AL/.test(await p.innerText('#sessionsResults')), 'the search narrows the list');
     await p.fill('#sessionsSearch', 'fifteen');

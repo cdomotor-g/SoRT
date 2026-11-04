@@ -57,10 +57,18 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   supply new ALERT IDs"; an ACMA licence transfer, vegetation management, an
   access track and a bridge attachment each raise their own follow-up, and the
   open ones go into the Word copy.
-- **The playbook** (private repo `cdomotor-g/SoRT-playbook`): every session can
-  be saved under its station; a station that comes back offers *Continue from
-  it*, and similar stations offer their answers as precedents. See
-  [`playbook/README.md`](playbook/README.md).
+- **Shared sessions (the playbook)**: kept by Flood-Net's server
+  (`floodwarning.net/api/sort/v1`, Flood-Net's `docs/sort-store.md`) for whoever
+  has the **forum passphrase**, typed once per computer — no accounts, no tokens.
+  With it, every session with a station and an answer is shared by itself a few
+  seconds after a change (`js/store-remote.js`, `js/playbook.js`); without it a
+  *⚠ Saved only in this browser* bar says so. Text that looks like a phone
+  number, an email or a gate code holds a session back until a person decides.
+  Sessions → search; *Open* carries on with a shared session as saved, *Start
+  from it* begins today's from its answers, *Use as a precedent* fills this one
+  — each answer orange until checked, then green. A station picked again says it
+  already has sessions. The private repo `cdomotor-g/SoRT-playbook` holds the
+  five stations it was seeded with; see [`playbook/README.md`](playbook/README.md).
 - **Edit questions** (footer): quick changes mid-forum, as a draft in your
   browser until *Publish to GitHub* commits `v2/definitions.json`.
 - **Tasks for Flood-Net**: any follow-up can go to Flood-Net as a task for a
@@ -84,8 +92,9 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
 | `js/form.js` | The question cards and the Property Services block. |
 | `js/word.js` | The tables copied into Word (v1's geometry). |
 | `js/map.js` | The map: layers, pins, location check, drawings, survey marks, bridges, the picture, the zoom lock (on when the page opens), and going back to all of Queensland on a new session. |
-| `js/github.js` | The GitHub token (shared with v1) and the contents API. |
-| `js/playbook.js` | Save to / continue from / precedents in the playbook. |
+| `js/github.js` | The GitHub token (shared with v1) for publishing question changes, and the contents API. |
+| `js/store-remote.js` | The shared sessions on Flood-Net's server, and the forum passphrase. |
+| `js/playbook.js` | Sharing sessions by themselves, Sessions' shared list, continue from / precedents. |
 | `js/editor.js` | Edit questions, and publishing them. |
 | `js/tasks.js` | Follow-ups, and the tasks handed to Flood-Net. |
 | `js/benchmarks.js` | The Bureau's benchmarks from Flood-Net (editors only, handed back to this tab), for the Local TBM and their own Word table. |
