@@ -57,7 +57,7 @@
   const M = {
     version: 0,
     app: null, root: null, els: {}, esri: null, esriP: null, view: null, map: null, layers: {}, gl: {},
-    contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true },
+    contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true, ghost: true },
     move: false, hover: null, drag: null, place: null, measure: null, sketch: null,
     pins: [], anchor: null, fetchedAt: null, marks: [], bridges: [], nearby: [], diag: {}, log: [],
     framedFor: null, ready: false, failed: null, contourIds: null, railIds: null,
@@ -172,6 +172,7 @@
       tog('marks', 'State survey marks', 'Queensland’s permanent survey marks and benchmarks (QSpatial) within 2 km, nearest 5 — not the Bureau’s own station benchmarks, which are on the Local TBM question'),
       tog('bridges', 'Bridges', 'Road bridges within 1 km, and who manages them'),
       tog('nearby', 'Flood-Net stations', 'Other Flood-Net stations within 3 km — shown for the forum, left out of the Word picture'),
+      tog('ghost', 'Flood-Net position', 'Where Flood-Net has the station, shown once its pin has been moved away from it — a working aid on this map only, never in the Word picture'),
       h('span', { class: 'map-tools-gap' }),
       M.els.moveBtn, M.els.measureBtn,
       h('button', { type: 'button', class: 'btn-mini', title: 'Frame every location on the map', onclick: () => frame(true) }, '⤢ Fit locations'));
@@ -423,6 +424,7 @@
   function applyToggles() {
     if (M.layers.road) M.layers.road.visible = M.on.road;
     if (M.layers.rail) M.layers.rail.visible = M.on.rail;
+    if (M.gl.ghost) M.gl.ghost.visible = M.on.ghost;
     storeNear();
     drawMarks(); drawBridges(); drawNearby(); renderSide(); renderLegend(); renderEdges();
     if (M.app) M.app.changed({ light: true });
@@ -602,7 +604,7 @@
     const cur = M.pins.find(p => p.anchor && p.shown && p.ok);
     if (st && st.lat != null && (!cur || near(cur, st) >= 10)) {
       M.gl.ghost.add(G_(pt(st.lon, st.lat), { type: 'simple-marker', style: 'circle', size: 20, color: [0, 0, 0, 0], outline: { color: [214, 40, 40, 1], width: 2, style: 'dash' } }, { kind: 'fn' }));
-      M.gl.ghost.add(G_(pt(st.lon, st.lat), text(`${st.source === 'manual' ? 'Position entered' : 'Flood-Net position'}${cur ? ' (' + U().fmtDist(near(cur, st)) + ' away)' : ''}`, [255, 220, 220], -20, 10)));
+      M.gl.ghost.add(G_(pt(st.lon, st.lat), text(`${st.source === 'manual' ? 'Position entered' : 'Flood-Net position'}${cur ? ' (' + U().fmtDist(near(cur, st)) + ' away)' : ''} — not in the Word picture`, [255, 220, 220], -20, 10)));
     }
     shownPins().forEach(p => {
       L.add(G_(pt(p.lon, p.lat), { type: 'simple-marker', style: 'circle', size: 15, color: rgb(p.colour).concat(1), outline: { color: [255, 255, 255, 1], width: 2 } }, { pin: p.key }));

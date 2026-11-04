@@ -526,6 +526,23 @@ const scenarios = {
     await p.waitForTimeout(1200);
     ok((await p.$$eval('#q-relocation .opt.on', e => e.map(x => x.textContent))).join() === 'Yes', 'placing the relocation site answers Relocation');
     ok(/^\d+$/.test(await p.$eval('[data-fk="relocation::f::distance"]', e => e.value)), 'relocation distance measured');
+    // Flood-Net's position, once the pin is moved: on the live map, never in the picture.
+    const moved = await p.evaluate(() => { const st = SoRT.app.session.station; return `${(st.lat + 0.0018).toFixed(6)}, ${st.lon.toFixed(6)}`; });
+    const posIn = p.locator('.map-side .loc input').first();
+    await posIn.fill(moved); await posIn.press('Enter');
+    await p.waitForTimeout(1500);
+    const ghost = await p.evaluate(() => { const g = SoRT.mapView._M.gl.ghost; return { n: g.graphics.length, label: (g.graphics.toArray().find(x => x.symbol && x.symbol.type === 'text') || {}).symbol ? g.graphics.toArray().find(x => x.symbol.type === 'text').symbol.text : '' }; });
+    ok(ghost.n === 2 && /Flood-Net position \(.* away\) — not in the Word picture/.test(ghost.label), `moving the pin shows Flood-Net's position, saying it isn't in the picture (${ghost.label})`);
+    const used = await p.evaluate(async () => {
+      const M = SoRT.mapView._M, real = M.view.takeScreenshot.bind(M.view); let layers = null;
+      M.view.takeScreenshot = o => { layers = (o && o.layers) || null; return real(o); };
+      try { await SoRT.mapView.picture(); } finally { M.view.takeScreenshot = real; }
+      return layers ? { has: !!layers.length, ghost: layers.includes(M.gl.ghost), nearby: layers.includes(M.gl.nearby), pins: layers.includes(M.gl.pins) } : null;
+    });
+    ok(used && used.has && !used.ghost && !used.nearby && used.pins, `the Word picture is taken without it (or the other stations), with the pins (${JSON.stringify(used)})`);
+    await p.click('#mapMount .map-tools label:has-text("Flood-Net position") input');
+    ok(await p.evaluate(() => SoRT.mapView._M.gl.ghost.visible === false), 'and unticking Flood-Net position hides it on the map too');
+    await p.click('#mapMount .map-tools label:has-text("Flood-Net position") input');
     await p.click('.top .copy-btn');
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 90000 });
     const html = await p.clip();
