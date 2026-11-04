@@ -57,7 +57,7 @@
   const M = {
     version: 0,
     app: null, root: null, els: {}, esri: null, esriP: null, view: null, map: null, layers: {}, gl: {},
-    contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true, ghost: true },
+    contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true, ghost: false },   // Flood-Net's position: hidden unless ticked
     move: false, hover: null, drag: null, place: null, measure: null, sketch: null,
     pins: [], anchor: null, fetchedAt: null, marks: [], bridges: [], nearby: [], diag: {}, log: [],
     framedFor: null, ready: false, failed: null, contourIds: null, railIds: null,
@@ -172,7 +172,7 @@
       tog('marks', 'State survey marks', 'Queensland’s permanent survey marks and benchmarks (QSpatial) within 2 km, nearest 5 — not the Bureau’s own station benchmarks, which are on the Local TBM question'),
       tog('bridges', 'Bridges', 'Road bridges within 1 km, and who manages them'),
       tog('nearby', 'Flood-Net stations', 'Other Flood-Net stations within 3 km — shown for the forum, left out of the Word picture'),
-      tog('ghost', 'Flood-Net position', 'Where Flood-Net has the station, shown once its pin has been moved away from it — a working aid on this map only, never in the Word picture'),
+      tog('ghost', 'Flood-Net position', 'Tick to see where Flood-Net has the station, once its pin has been moved away from it — a working aid on this map only, never in the Word picture'),
       h('span', { class: 'map-tools-gap' }),
       M.els.moveBtn, M.els.measureBtn,
       h('button', { type: 'button', class: 'btn-mini', title: 'Frame every location on the map', onclick: () => frame(true) }, '⤢ Fit locations'));
@@ -232,6 +232,7 @@
     const img = new E.ImageryTileLayer({ url: CFG.imagery });
     M.layers.imagery = img; addOrdered(img, 'imagery');
     ['nearby', 'bridges', 'marks', 'draw', 'ghost', 'pins'].forEach(k => { M.gl[k] = new E.GraphicsLayer({ title: k }); addOrdered(M.gl[k], k); });
+    M.gl.ghost.visible = M.on.ghost;
     resolvePins();
     const c = M.anchor || { lat: -22.5, lon: 146.5 };
     M.view = new E.MapView({ container: M.els.view, map: M.map, center: [c.lon, c.lat], zoom: M.anchor ? CFG.siteZoom : 5, spatialReference: { wkid: 3857 },
