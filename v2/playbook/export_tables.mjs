@@ -64,7 +64,14 @@ for (const [code, q] of Object.entries(defs.questions)) {
   for (const t of defs.templates) for (const e of t.questions) if (typeof e === 'object' && e.q === code && e.options) add(e.options);
   const seen = new Set();
   opts.forEach(o => { if (seen.has(o.code)) return; seen.add(o.code); dict.push({ kind: 'option', questionCode: code, code: o.code, label: o.label, type: '', section: '', templates: '' }); });
-  (q.fields || []).forEach(f => dict.push({ kind: 'field', questionCode: code, code: f.code, label: f.label, type: f.type + (f.unit ? ` (${f.unit})` : ''), section: '', templates: '' }));
+  // Fields, the bank's and any a table adds (e.g. Water Level's corrosion category); a choice field's codes too.
+  const fields = new Map();
+  [q.fields || []].concat(defs.templates.flatMap(t => t.questions.filter(e => typeof e === 'object' && e.q === code && e.fields).map(e => e.fields)))
+    .forEach(list => list.forEach(f => { if (!fields.has(f.code)) fields.set(f.code, f); }));
+  fields.forEach(f => {
+    dict.push({ kind: 'field', questionCode: code, code: f.code, label: f.label, type: f.type + (f.unit ? ` (${f.unit})` : ''), section: '', templates: '' });
+    if (f.type === 'choice') (f.options || []).forEach(o => dict.push({ kind: 'field option', questionCode: code, code: `${f.code}.${o.code}`, label: o.label, type: '', section: '', templates: '' }));
+  });
 }
 for (const r of (defs.propertyServices || {}).rows || []) dict.push({ kind: 'property-services row', questionCode: '', code: r.id, label: r.label, type: r.kind, section: 'propertyServices', templates: '' });
 csv('data_dictionary.csv', ['kind', 'questionCode', 'code', 'label', 'type', 'section', 'templates'], dict);

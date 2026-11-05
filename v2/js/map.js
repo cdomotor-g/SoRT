@@ -46,7 +46,7 @@
     dynamicMinScale: 20000,                           // contours and road reserve stop at ~1:20,000
     siteZoom: 17,
     qld: { xmin: 137.6, ymin: -29.4, xmax: 154.0, ymax: -9.0 },   // the map's home: all of Queensland, Torres Strait included
-    order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, pins: 10 },
+    order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, coast: 9, pins: 10 },
     timeouts: { esri: 20000, view: 20000, meta: 10000, layer: 10000, query: 12000 },
     attribution: '© State of Queensland (Department of Natural Resources and Mines; Department of Resources; Transport and Main Roads) — CC BY 4.0'
   };
@@ -231,7 +231,7 @@
     // one it never becomes ready. Its load is checked in loadImagery().
     const img = new E.ImageryTileLayer({ url: CFG.imagery });
     M.layers.imagery = img; addOrdered(img, 'imagery');
-    ['nearby', 'bridges', 'marks', 'draw', 'ghost', 'pins'].forEach(k => { M.gl[k] = new E.GraphicsLayer({ title: k }); addOrdered(M.gl[k], k); });
+    ['nearby', 'bridges', 'marks', 'draw', 'ghost', 'coast', 'pins'].forEach(k => { M.gl[k] = new E.GraphicsLayer({ title: k }); addOrdered(M.gl[k], k); });
     M.gl.ghost.visible = M.on.ghost;
     resolvePins();
     const c = M.anchor || { lat: -22.5, lon: 146.5 };
@@ -1083,7 +1083,7 @@
     // Working aids (Flood-Net's recorded position, its other stations) stay off
     // the report's picture: the picture is taken of the other layers only, so
     // the live map never blinks while the preview refreshes.
-    const aids = [M.gl.ghost, M.gl.nearby];
+    const aids = [M.gl.ghost, M.gl.nearby, M.gl.coast];
     let shot;
     await whenReady();
     try { shot = await M.view.takeScreenshot({ layers: M.map.layers.toArray().filter(l => !aids.includes(l)) }); }
@@ -1203,7 +1203,25 @@
     const k = key(M.anchor);
     if (k && M.framedFor !== k) { M.framedFor = k; M.homeNext = false; frame(false); }
   }
-  function reset() { M.marks = []; M.bridges = []; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); }
+  function reset() { M.marks = []; M.bridges = []; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); showCoast(null); }
+  /* The distances to the sea that the Infrastructure options card measured
+     (js/coast.js): a dashed line from the site to each nearest shore, labelled.
+     A working aid like Flood-Net's ring — never in the Word picture. null clears it. */
+  function showCoast(spec) {
+    M.coast = spec || null;
+    if (!M.ready || !M.gl.coast) return;
+    const L = M.gl.coast; L.removeAll();
+    if (!spec) return;
+    const pts = [pt(spec.lon, spec.lat)];
+    (spec.lines || []).forEach(l => {
+      const col = l.surf ? [230, 90, 20, 1] : [20, 120, 200, 1];
+      L.add(G_({ type: 'polyline', paths: [[[spec.lon, spec.lat], [l.lon, l.lat]]], spatialReference: { wkid: 4326 } }, { type: 'simple-line', color: col, width: 2.5, style: 'dash' }));
+      L.add(G_(pt(l.lon, l.lat), { type: 'simple-marker', style: 'circle', size: 9, color: col, outline: { color: [255, 255, 255, 1], width: 1.5 } }));
+      L.add(G_(pt(l.lon, l.lat), text(`${l.label} — not in the Word picture`, [255, 255, 255], 12, 10)));
+      pts.push(pt(l.lon, l.lat));
+    });
+    M.view.goTo(pts.map(p => G_(p)), { animate: true }).then(() => { M.view.zoom = Math.min(18, M.view.zoom - 0.5); }).catch(() => {});
+  }
   function focusPin(code, field) {
     resolvePins();
     const p = M.pins.find(x => x.code === code && x.field === field);
@@ -1221,6 +1239,6 @@
     return null;
   }
 
-  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, CFG, _M: M,
+  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, showCoast, CFG, _M: M,
     ready: () => M.ready && !M.failed, version: () => M.version };
 })(window);

@@ -53,6 +53,21 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   marks within 2 km (S1–S5, linked to their reports, tabled under the map in
   Word); bridges within 1 km and who manages them. The picture in Word is the
   map you are looking at.
+- **Infrastructure options and corrosion (Water Level table)**: a *Corrosion
+  category* — C3 and below (standard), C4 (stainless enclosure and orifice
+  run), C5 and CX (all stainless) or Custom — sets the three stainless-steel
+  tick boxes; changing a tick makes it Custom (or the category those ticks
+  are). The Bureau engineers' grouping of AS 4312:2019's grades, by distance
+  from the shore and the kind of shore (surf, semi-sheltered, quiet, tropical).
+  The card has a brief summary and *📖 More about corrosion*, a guide with the
+  distances table and this site's column. Once the site's position is known,
+  `js/coast.js` measures its distance to the sea on QSpatial's Queensland
+  coastline (live; river mouths are closed off by the layer's Coastline
+  Junction lines) and to the surf beaches in `data/surf-coast.json`, and fills
+  in the category as a Map suggestion — never over a person's answer; it
+  follows a relocation's new location; *📍 Show on map* draws the distances
+  (left out of the Word picture). Word gets the category and every part,
+  unticked ones as the standard part.
 - **Rules and follow-ups**: e.g. a comms change to ERRTS raises "Hub rep to
   supply new ALERT IDs"; an ACMA licence transfer, vegetation management, an
   access track and a bridge attachment each raise their own follow-up, and the
@@ -90,6 +105,8 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
 | `js/store.js` | Sessions saved in this browser (`sortv2.*` keys). |
 | `js/floodnet.js` | Flood-Net's read-only API: search, station facts, prefill, hints. |
 | `js/form.js` | The question cards and the Property Services block. |
+| `js/coast.js` | The Infrastructure options' distance to the sea, the corrosion category it suggests, and the corrosion guide (the pop-up). |
+| `data/surf-coast.json` | Queensland's ocean-facing surf beaches (Point Danger to Agnes Water), made from QSpatial's coastline by `tools/build-surf-coast.mjs`. |
 | `js/word.js` | The tables copied into Word (v1's geometry). |
 | `js/map.js` | The map: layers, pins, location check, drawings, survey marks, bridges, the picture, the zoom lock (on when the page opens), and going back to all of Queensland on a new session. |
 | `js/github.js` | The GitHub token (shared with v1) for publishing question changes, and the contents API. |
@@ -105,6 +122,7 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
 | `definitions.json` | The questions. See below. |
 | `tools/check-definitions.mjs` | `node v2/tools/check-definitions.mjs` — the same check the page runs. |
 | `tools/convert-v1.mjs` | One-off that seeded `definitions.json` from v1's. Not to be re-run. |
+| `tools/build-surf-coast.mjs` | `node v2/tools/build-surf-coast.mjs` — remakes `data/surf-coast.json` (seven rays out to sea from each piece of coast; most reaching open water = surf). Only if QSpatial's coastline changes a lot. |
 
 ## The definitions (`definitions.json`)
 
@@ -128,6 +146,18 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   bridge question added.
 - `"precedent": false` on a question or field keeps it from being copied from
   one station to another (coordinates are never copied anyway).
+- A field of type `"choice"` is a row of radios (`options: [{code, label}]`),
+  stored as the code. `"presets": "<choice field>"` on a tick-box question
+  makes its tick boxes follow that field: each choice's `ticks` (a list of the
+  question's option codes, `[]` for none), and one choice with `"custom": true`
+  for anything else. An option's `offText` is what Word says when it is not
+  ticked (the standard part).
+- `guides` — the pop-ups behind a card's brief summary, named by a question's
+  `"guide"`. `guides.corrosion` holds the words and the distances:
+  `shores[]` (the kinds of shore), `bands[]` (most severe first: a category and
+  the distance `within` which each kind of shore reaches it, in metres) and
+  `otherwise` (the category beyond them all). `"suggest": "coast"` on the
+  question has `js/coast.js` measure the site and suggest from them.
 
 The page loads the definitions from GitHub (the API, then the CDN copy), then
 the copy deployed with the page; a file that fails the check is skipped with a

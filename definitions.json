@@ -1,7 +1,7 @@
 {
   "version": 1,
   "meta": {
-    "updated": "2026-11-04",
+    "updated": "2026-11-05",
     "appTitle": "SORT Forum Scope Builder"
   },
   "optionSets": {},
@@ -599,12 +599,13 @@
         {
           "id": "InfraOps",
           "item": "Infrastructure options",
-          "instruction": "(Tick any that apply)",
+          "instruction": "(Tick any that apply. C3 and below: none; C4: the enclosure and the orifice run; C5 and CX: all three)",
           "type": "multi",
           "icon": "⚙️",
           "options": [
+            "Stainless steel tower with stainless steel fixtures and fittings",
             "Stainless steel enclosure with stainless steel fixtures and fittings",
-            "Stainless steel capillary conduit with stainless steel fixtures and fittings"
+            "Stainless steel orifice run (capillary conduit) with stainless steel fixtures and fittings"
           ]
         },
         {

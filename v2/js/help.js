@@ -73,6 +73,12 @@
       'If not, choose **Not on hand** (or leave it): the Word table gets a **DESKTOP TASK** for technical staff to look it up. It leaves the table once the value and its location are filled in.',
       'It is the site’s own benchmark, not a State survey mark — those are the S1–S5 marks on the map.'
     ] },
+    { id: 'corrosion', title: 'Infrastructure options and corrosion (water level tables)', items: [
+      'Salt from the sea corrodes steel and aluminium, so the materials go by how far the site is from the shore. Choose a **Corrosion category**: **C3 and below** (standard galvanised tower, aluminium enclosure, galvanised orifice run), **C4** (a stainless steel enclosure and orifice run) or **C5 and CX** (all stainless). The tick boxes follow the category.',
+      'Change a tick and the category becomes **Custom** (or the category those ticks are exactly), e.g. a stainless orifice run in a polluted river. **Custom** keeps the ticks as they are.',
+      'Once the site’s position is known, the card measures its distance to the sea (QSpatial’s Queensland coastline; river mouths are closed off, so a river bank upstream isn’t “the shore”) and fills in the category it suggests, marked **Map** until you press **✓**. It follows a relocation’s new location; **📍 Show on map** draws the distances (not in the Word picture).',
+      '**📖 More about corrosion** opens the guide: the categories, the distances for each kind of shore (surf, semi-sheltered, quiet, tropical) with this site’s, and AS 4312’s grades. The forum knows the site best — strong onshore winds or industry nearby can push it up a category.'
+    ] },
     { id: 'ps', title: 'Property Services', items: [
       'It copies the coordinates and the relocation answer from the scope questions **until you change one there** — then it says **Overridden**, with a link back to the scope answer.',
       'On a rainfall table the water-level rows read **NA** by themselves.',

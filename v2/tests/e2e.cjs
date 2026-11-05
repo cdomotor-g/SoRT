@@ -4,9 +4,11 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, shared, editor, tasks, manual, particulars, bureau, layout, help, cutover, map. They use the live Flood-Net
+   Scenarios: station, copy, playbook, shared, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
+   "coast" gives QSpatial's coastline a stand-in too: one straight shore, so the
+   distances (and the corrosion category they suggest) are known.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
    or have it resolvable. PW_CHROMIUM pins a browser binary. BASE overrides
    the page address (default http://127.0.0.1:8642/v2/). */
@@ -87,6 +89,7 @@ async function page(browser, opts) {
   const store = fakeStore();
   await ctx.route(/floodwarning\.net\/api\/sort\//, store.handler);
   if (o.pass) await ctx.addInitScript(() => { try { localStorage.setItem('sortv2.passphrase', 'TESTPASS'); } catch (e) { /* */ } });
+  if (o.coast) await ctx.route(/CoastalWaters\/MapServer\/17\/query/, o.coast);
   await ctx.route(o.map ? /raw\.githubusercontent\.com/ : /raw\.githubusercontent\.com|js\.arcgis\.com/, r => r.abort());
   const p = await ctx.newPage();
   p.errors = [];
@@ -246,15 +249,17 @@ const scenarios = {
     ok(await p.$eval('#q-stockFence', e => getComputedStyle(e, '::before').backgroundColor) === 'rgb(224, 122, 16)', 'orange until checked');
     await p.click('#q-stockFence .src-ok');
     ok(await p.$eval('#q-stockFence', e => e.classList.contains('checked') && getComputedStyle(e, '::before').backgroundColor !== 'rgb(224, 122, 16)') && /✓ checked · Precedent/.test(await p.innerText('#q-stockFence')), 'then green, marked checked');
-    // Water level: the two stainless-steel tick boxes.
+    // Water level: the corrosion categories (radios) and the three stainless-steel tick boxes they set.
     await p.newSession(); await p.pick('41506');
-    const opts = await p.$$eval('#q-infraOptions .opt', e => e.map(x => x.textContent.trim()));
-    ok(opts.join('|') === 'Stainless steel enclosure with stainless steel fixtures and fittings|Stainless steel capillary conduit with stainless steel fixtures and fittings' && await p.$$eval('#q-infraOptions input', e => e.every(x => x.type === 'checkbox')), 'water level infrastructure options: two tick boxes');
-    await p.click('#q-infraOptions .opt:has-text("enclosure")'); await p.click('#q-infraOptions .opt:has-text("capillary")');
+    const opts = await p.$$eval('#q-infraOptions .opts:not(.choice) .opt', e => e.map(x => x.textContent.trim()));
+    ok(opts.join('|') === 'Stainless steel tower with stainless steel fixtures and fittings|Stainless steel enclosure with stainless steel fixtures and fittings|Stainless steel orifice run (capillary conduit) with stainless steel fixtures and fittings' && await p.$$eval('#q-infraOptions .opts:not(.choice) input', e => e.every(x => x.type === 'checkbox')), 'water level infrastructure options: three tick boxes');
+    ok((await p.$$eval('#q-infraOptions .choice .opt', e => e.map(x => x.textContent.trim()))).join('|') === 'C3 and below — standard|C4 — stainless enclosure and orifice run|C5 and CX — all stainless|Custom' && await p.$$eval('#q-infraOptions .choice input', e => e.every(x => x.type === 'radio')), 'and the corrosion categories as radios, with Custom');
+    await p.click('#q-infraOptions .choice .opt:has-text("C4")');
+    ok((await p.$$eval('#q-infraOptions .opts:not(.choice) .opt.on', e => e.map(x => x.textContent))).join('|') === 'Stainless steel enclosure with stainless steel fixtures and fittings|Stainless steel orifice run (capillary conduit) with stainless steel fixtures and fittings', 'C4 ticks the enclosure and the orifice run');
     await p.click('.top .copy-btn');
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
     const html = await p.clip();
-    ok(/Stainless steel enclosure with stainless steel fixtures and fittings/.test(html) && /Stainless steel capillary conduit with stainless steel fixtures and fittings/.test(html), 'both go into Word');
+    ok(/Corrosion category: C4 — stainless enclosure and orifice run/.test(html) && /Standard galvanised tower/.test(html) && /Stainless steel enclosure with stainless steel fixtures and fittings/.test(html) && /Stainless steel orifice run \(capillary conduit\) with stainless steel fixtures and fittings/.test(html), 'the category and every part go into Word');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
@@ -508,6 +513,85 @@ const scenarios = {
     ok(/Local TBM/.test(await p.evaluate(() => document.body.innerText)), 'v1 still loads the root definitions.json (Local TBM in its Water Level table)');
     ok(!errs.length, `no page errors ${errs.join('; ')}`);
     await ctx.close();
+  },
+  async coast(b) {
+    // One straight north–south shore, 600 m east of the station (south of the Tropic, far from surf: semi-sheltered).
+    const SHORE_LON = 152.95168;
+    const shore = { features: [{ attributes: { objectid: 1 }, geometry: { paths: [[[SHORE_LON, -27.8], [SHORE_LON, -27.2]]] } }] };
+    let fail = false;
+    const p = await page(b, { coast: r => (fail ? r.abort() : r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(shore) })) });
+    await p.fill('#stationSearch', 'Zzyzx Qqq Creek');
+    await p.waitForFunction(() => /No station by that name/.test(document.querySelector('.station-find .hint').textContent), null, { timeout: 20000 });
+    await p.click('.station-find .hint button:has-text("Enter it by hand")');
+    await p.fill('.manual-grid [name=name]', 'Zzyzx Creek AL');
+    await p.fill('.manual-grid [name=pos]', '-27.5123, 152.9456');
+    await p.selectOption('.manual-grid [name=measures]', 'river');
+    await p.click('.manual-grid button:has-text("Use this station")');
+    await p.waitForSelector('.station-card', { timeout: 10000 });
+    const sum = await p.innerText('#q-infraOptions .guide-sum');
+    ok(/C5 and CX: within 1 km of a tropical shore or a surf beach, or 100 m of a semi-sheltered bay/.test(sum) && /C4: within 10 km of a surf beach, 1 km of a semi-sheltered bay, or 100 m of a quiet bay/.test(sum) && /C3 and below: further away/.test(sum), 'a brief summary of the categories on the card');
+    await p.waitForFunction(() => /Suggests/.test((document.querySelector('#coast-infraOptions') || {}).textContent || ''), null, { timeout: 20000 });
+    let note = await p.innerText('#coast-infraOptions');
+    ok(/Temperate semi-sheltered shore: 600 m/.test(note) && /Surf beach: more than 50 km/.test(note), 'the distances to the sea are measured');
+    ok(/Suggests C4 — stainless enclosure and orifice run/.test(note) && /check it, then press ✓/.test(note), 'and suggest C4, filled in to check');
+    const onTicks = () => p.$$eval('#q-infraOptions .opts:not(.choice) .opt.on', e => e.map(x => x.textContent.split(' with ')[0]).join('|'));
+    const onCat = () => p.$$eval('#q-infraOptions .choice .opt.on', e => e.map(x => x.textContent.split(' — ')[0]).join('|'));
+    ok(await onCat() === 'C4' && await onTicks() === 'Stainless steel enclosure|Stainless steel orifice run (capillary conduit)', 'the C4 radio and its two ticks are on');
+    ok(await p.$eval('#q-infraOptions', e => e.classList.contains('waiting')) && /Map/.test(await p.innerText('#q-infraOptions .q-tools')), 'orange, marked Map, until checked');
+    await p.click('#q-infraOptions .src-ok');
+    ok(await p.$eval('#q-infraOptions', e => e.classList.contains('checked')) && /The answer below matches/.test(await p.innerText('#coast-infraOptions')), 'then checked, and the suggestion agrees');
+    // Ticks and radios follow each other.
+    await p.click('#q-infraOptions .opts:not(.choice) .opt:has-text("tower")');
+    ok(await onCat() === 'C5 and CX', 'ticking the tower too is exactly C5 and CX');
+    await p.click('#q-infraOptions .opts:not(.choice) .opt:has-text("enclosure")');
+    ok(await onCat() === 'Custom' && await onTicks() === 'Stainless steel tower|Stainless steel orifice run (capillary conduit)', 'any other change of ticks goes to Custom');
+    await p.click('#q-infraOptions .choice .opt:has-text("C3 and below")');
+    ok(await onCat() === 'C3 and below' && await onTicks() === '' && /Unticked parts go into Word as: standard galvanised tower, aluminium enclosure, galvanised orifice run \(capillary conduit\)/.test(await p.innerText('#q-infraOptions')), 'C3 and below unticks them all: the standard parts');
+    await p.click('#q-infraOptions .choice .opt:has-text("Custom")');
+    ok(await onCat() === 'Custom' && await onTicks() === '', 'Custom keeps the ticks as they are');
+    note = await p.innerText('#coast-infraOptions');
+    ok(/The answer below is Custom: keep it if the forum knows better/.test(note), 'the card says the answer differs from the suggestion');
+    await p.click('#coast-infraOptions button:has-text("Use C4")');
+    ok(await onCat() === 'C4' && await onTicks() === 'Stainless steel enclosure|Stainless steel orifice run (capillary conduit)', '“Use C4” puts the suggestion back');
+    // The guide: the categories, the distances table with this site's column, the grades.
+    await p.click('#q-infraOptions .guide-btn');
+    await p.waitForSelector('#guideDlg[open]', { timeout: 5000 });
+    const guide = await p.innerText('#guideDlg');
+    ok(/Corrosion and the infrastructure options/.test(guide) && /AS 4312/.test(guide) && /Stainless steel tower, enclosure and orifice run/.test(guide), 'the guide opens, with the categories and their materials');
+    ok(/Temperate semi-sheltered\tAdelaide, Brisbane, Perth\tunder 100 m\t100 m – 1 km\tover 1 km\t600 m/.test(guide) && /Surf\tSydney, Wollongong, Newcastle, Gold Coast\tunder 1 km\t1 km – 10 km\tover 10 km/.test(guide), 'the distances by kind of shore, with this site’s');
+    ok(await p.$$eval('#guideDlg .guide-matrix td.hit', e => e.map(x => x.textContent).join()) === '100 m – 1 km,over 10 km' && await p.$$eval('#guideDlg .guide-matrix td.decides', e => e.map(x => x.textContent).join()) === '100 m – 1 km', 'where this site sits for each shore is marked, and the one that decides it stands out');
+    ok(/CX — Extreme/.test(guide) && /This site \(-27\.5123, 152\.9456\): C4/.test(guide), 'AS 4312’s grades, and what this site comes to');
+    await p.click('#guideDlg .dlg-foot button:has-text("Close")');
+    ok(!(await p.$('#guideDlg')), 'and closes');
+    // Word: the category, then every part (standard where it isn't ticked).
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
+    const html = await p.clip();
+    ok(/Corrosion category: C4 — stainless enclosure and orifice run/.test(html) && /Standard galvanised tower/.test(html) && !/Aluminium enclosure/.test(html), 'Word has the category and each part');
+    // Relocating: the new location is measured; a person's answer stands.
+    await p.click('#q-relocation .opt:has-text("Yes")');
+    await p.fill('#q-relocation input[aria-label="Relocation — New Location (coordinates)"]', '-27.5123, 152.9355');
+    await p.press('#q-relocation input[aria-label="Relocation — New Location (coordinates)"]', 'Tab');
+    await p.waitForFunction(() => /new location/.test((document.querySelector('#coast-infraOptions') || {}).textContent || '') && /Suggests C3/.test(document.querySelector('#coast-infraOptions').textContent), null, { timeout: 20000 });
+    note = await p.innerText('#coast-infraOptions');
+    ok(/Temperate semi-sheltered shore: 1\.6 km/.test(note) && /The answer below is C4/.test(note) && await onCat() === 'C4', 'the new location is measured (1.6 km: C3) and the answer chosen stands');
+    // No coastline service: no suggestion, and it says so.
+    fail = true;
+    await p.newSession();
+    await p.fill('#stationSearch', 'Zzyzx Qqq Creek');
+    await p.waitForFunction(() => /No station by that name/.test(document.querySelector('.station-find .hint').textContent), null, { timeout: 20000 });
+    await p.click('.station-find .hint button:has-text("Enter it by hand")');
+    await p.fill('.manual-grid [name=name]', 'Zzyzx Creek AL');
+    await p.fill('.manual-grid [name=pos]', '-27.6123, 152.9456');
+    await p.selectOption('.manual-grid [name=measures]', 'river');
+    await p.click('.manual-grid button:has-text("Use this station")');
+    await p.waitForFunction(() => /Couldn’t reach/.test((document.querySelector('#coast-infraOptions') || {}).textContent || ''), null, { timeout: 20000 });
+    ok(await onCat() === '' && /no suggestion/.test(await p.innerText('#coast-infraOptions')), 'without the coastline there is no suggestion, and the card says why');
+    // The Rainfall table keeps its own (footing) options and no corrosion guide.
+    await p.click('.tpl-pick .seg:has-text("Rainfall")');
+    ok(!(await p.$('#q-infraOptions .guide-sum')) && /Full footing/.test(await p.innerText('#q-infraOptions')), 'Rainfall’s infrastructure options are unchanged');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
   },
   async map(b) {
     const p = await page(b, { map: true });

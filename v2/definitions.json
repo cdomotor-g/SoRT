@@ -1,9 +1,9 @@
 {
   "schema": "sort-definitions/2",
-  "version": 8,
+  "version": 9,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
-    "updated": "2026-11-01",
+    "updated": "2026-11-05",
     "note": "Seeded from v1 definitions.json by v2/tools/convert-v1.mjs; edited directly since. Codes are permanent: reword a label freely, never reuse a code."
   },
   "links": {
@@ -1624,17 +1624,64 @@
         {
           "q": "infraOptions",
           "type": "multi",
-          "hint": "(Tick any that apply)",
+          "hint": "(Choose the corrosion category and the tick boxes follow it, or tick the parts yourself)",
           "options": [
             {
+              "code": "ss_tower",
+              "label": "Stainless steel tower with stainless steel fixtures and fittings",
+              "offText": "Standard galvanised tower"
+            },
+            {
               "code": "ss_enclosure",
-              "label": "Stainless steel enclosure with stainless steel fixtures and fittings"
+              "label": "Stainless steel enclosure with stainless steel fixtures and fittings",
+              "offText": "Aluminium enclosure"
             },
             {
               "code": "ss_capillary_conduit",
-              "label": "Stainless steel capillary conduit with stainless steel fixtures and fittings"
+              "label": "Stainless steel orifice run (capillary conduit) with stainless steel fixtures and fittings",
+              "offText": "Galvanised orifice run (capillary conduit)"
             }
-          ]
+          ],
+          "fields": [
+            {
+              "code": "category",
+              "label": "Corrosion category",
+              "type": "choice",
+              "options": [
+                {
+                  "code": "c3_and_below",
+                  "label": "C3 and below — standard",
+                  "ticks": []
+                },
+                {
+                  "code": "c4",
+                  "label": "C4 — stainless enclosure and orifice run",
+                  "ticks": [
+                    "ss_enclosure",
+                    "ss_capillary_conduit"
+                  ]
+                },
+                {
+                  "code": "c5_cx",
+                  "label": "C5 and CX — all stainless",
+                  "ticks": [
+                    "ss_tower",
+                    "ss_enclosure",
+                    "ss_capillary_conduit"
+                  ]
+                },
+                {
+                  "code": "custom",
+                  "label": "Custom",
+                  "custom": true
+                }
+              ]
+            }
+          ],
+          "presets": "category",
+          "guide": "corrosion",
+          "suggest": "coast",
+          "precedent": false
         },
         "coords",
         "relocation",
@@ -2371,5 +2418,111 @@
     ],
     "note": "Tasks go to Flood-Net's Tasks tab for review; Flood-Net decides who may create them. 'enabled' switches the task controls on (on since 1 Nov 2026, when Flood-Net's receiving screen went live). 'team' on a follow-up: {hub:true} = the station's hub team, or {name}. A follow-up with \"floodnet\": false is a desktop task: it stays in the Word tables and is never sent.",
     "enabled": true
+  },
+  "guides": {
+    "corrosion": {
+      "title": "Corrosion and the infrastructure options",
+      "summary": "Salt from the sea corrodes steel and aluminium, so the materials go by how far the site is from the shore (AS 4312).",
+      "intro": "Salt carried inland from the sea corrodes galvanised steel and aluminium far faster than inland air does. AS 4312:2019, Atmospheric corrosivity zones in Australia, grades a site’s air from C1 (very low) to CX (extreme), mostly by how far it is from the sea and how rough that sea is. The Bureau’s engineers group those grades into three categories, each with its own materials.",
+      "source": "Bureau engineering advice (November 2026), based on AS 4312:2019 Atmospheric corrosivity zones in Australia.",
+      "shores": [
+        {
+          "code": "temperate_quiet",
+          "label": "Temperate quiet",
+          "short": "a quiet bay",
+          "examples": "Melbourne, Hobart",
+          "about": "Enclosed bays and estuaries with almost no waves, such as Port Phillip Bay and the Derwent. The suggestion counts none of Queensland’s coast as this: its sheltered water is taken as semi-sheltered, the safer side."
+        },
+        {
+          "code": "temperate_semi",
+          "label": "Temperate semi-sheltered",
+          "short": "a semi-sheltered bay",
+          "examples": "Adelaide, Brisbane, Perth",
+          "about": "Bays and gulfs with small waves. In Queensland, south of the Tropic of Capricorn, every shore that isn’t a surf beach: Moreton Bay, the Broadwater, Pumicestone Passage, the Great Sandy Strait, Hervey Bay and the river mouths."
+        },
+        {
+          "code": "tropical_quiet",
+          "label": "Tropical quiet",
+          "short": "a tropical shore",
+          "examples": "Cairns, Townsville, Mackay",
+          "about": "Tropical coasts sheltered from ocean swell. In Queensland, the whole coast north of the Tropic of Capricorn (it reaches the coast near Rockhampton): behind the Great Barrier Reef, Torres Strait and the Gulf of Carpentaria."
+        },
+        {
+          "code": "surf",
+          "label": "Surf",
+          "short": "a surf beach",
+          "examples": "Sydney, Wollongong, Newcastle, Gold Coast",
+          "about": "Open ocean beaches with breaking surf. In Queensland: the Gold Coast, the ocean side of South and North Stradbroke, Moreton and Bribie Islands, the Sunshine Coast, Cooloola, K’gari’s ocean beach, and Bundaberg to Agnes Water."
+        }
+      ],
+      "bands": [
+        {
+          "category": "c5_cx",
+          "name": "C5 and CX",
+          "grade": "very high and extreme",
+          "materials": "Stainless steel tower, enclosure and orifice run.",
+          "within": {
+            "temperate_semi": 100,
+            "tropical_quiet": 1000,
+            "surf": 1000
+          }
+        },
+        {
+          "category": "c4",
+          "name": "C4",
+          "grade": "high",
+          "materials": "Standard galvanised tower, with a stainless steel enclosure and orifice run.",
+          "within": {
+            "temperate_quiet": 100,
+            "temperate_semi": 1000,
+            "surf": 10000
+          }
+        }
+      ],
+      "otherwise": {
+        "category": "c3_and_below",
+        "name": "C3 and below",
+        "grade": "medium, low and very low",
+        "materials": "Standard galvanised tower, aluminium enclosure and galvanised orifice run. In a polluted river, a stainless steel orifice run: tick it, and the choice becomes Custom."
+      },
+      "grades": [
+        {
+          "code": "C1",
+          "name": "Very low",
+          "text": "Inside heated or air-conditioned buildings with clean air; some semi-sheltered places far from the sea or industry."
+        },
+        {
+          "code": "C2",
+          "name": "Low",
+          "text": "Dry, rural areas and other areas remote from the coast or pollution. Most of Australia at least 50 km from the coast."
+        },
+        {
+          "code": "C3",
+          "name": "Medium",
+          "text": "Mainly coastal areas with low salinity."
+        },
+        {
+          "code": "C4",
+          "name": "High",
+          "text": "Mainly on the coast."
+        },
+        {
+          "code": "C5",
+          "name": "Very high",
+          "text": "Normally 50 m to 500 m inland from coasts exposed to surf or very rough seas."
+        },
+        {
+          "code": "CX",
+          "name": "Extreme",
+          "text": "Offshore structures, and within 50 m inland of coasts exposed to surf or very rough seas."
+        }
+      ],
+      "notes": [
+        "Measure to the shoreline at high tide. A river bank upstream of the mouth is not the shoreline: the distance is to the sea.",
+        "Local conditions can push a site up a category: strong onshore winds over flat ground, spray from a nearby headland, industry nearby, or a polluted river. If in doubt, take the higher category.",
+        "These distances are rounded to 100 m, 1 km and 10 km, on the safe side of the standard’s own table (AS 4312 Table 4.1), which is more finely graded."
+      ],
+      "how": "When the site’s position is known (its Instrumentation Coordinates, or the new location when the station is being relocated), the page measures the distance to the sea on QSpatial’s Queensland coastline: to the nearest surf beach, and to the nearest other shore, which counts as tropical quiet north of the Tropic of Capricorn and temperate semi-sheltered south of it. The highest category any of them reaches is filled in as a Map suggestion, orange until you check it. Outside Queensland, choose it yourself from the table."
+    }
   }
 }

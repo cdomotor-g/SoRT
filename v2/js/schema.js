@@ -10,17 +10,24 @@
      propertyServices: { title, note, rows[] },
      followUps: [ { id, owner, table, when, text, link?, doneWhen?, team?, floodnet? } ]
    QUESTION = { label, section, type:"single"|"multi"|"none", hint?, icon?,
-     options?: [ {code,label,tags?,other?} | {group, options:[...]} ],
-     fields?: [ {code,label,type,unit?,placeholder?,default?,emptyText?,showIf?} ],
+     options?: [ {code,label,tags?,other?,offText?} | {group, options:[...]} ],
+     fields?: [ {code,label,type,unit?,placeholder?,default?,emptyText?,showIf?,
+                 options? (type "choice": [{code,label,ticks?,custom?}])} ],
      notes?: [ {text, when?, level?} ], showIf?, defaultWhen?: [{when,value}],
-     derive?, prefill?, pin?, mapDraw?, hintFrom?, word?:false }
+     derive?, prefill?, pin?, mapDraw?, hintFrom?, word?:false,
+     presets?: <a choice field's code>  — a multi question whose tick boxes
+               follow that field: each choice's `ticks`, and `custom` for the rest,
+     guide?: <a key of guides>, suggest?: "coast" (js/coast.js) }
+   guides: { <key>: { title, summary, shores[], bands[], otherwise, … } } — the
+   pop-up behind a card's brief summary; a "coast" one also holds the distances.
    Codes are permanent: answers are stored under them. */
 (function (G) {
   'use strict';
   const S = G.SoRT = G.SoRT || {};
 
   const QTYPES = ['single', 'multi', 'none'];
-  const FTYPES = ['text', 'textarea', 'number', 'coord', 'licence', 'date'];
+  const FTYPES = ['text', 'textarea', 'number', 'coord', 'licence', 'date', 'choice'];
+  const SUGGESTS = ['coast'];
   const PSKINDS = ['coordGroup', 'question', 'text', 'sectionHeader', 'date'];
   const CODE_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
   const OPT_RE = /^[a-z0-9][a-z0-9_]*$/;
@@ -49,6 +56,16 @@
     }).filter(Boolean);
   }
   function template(defs, id) { return (defs.templates || []).find(t => t.id === id) || null; }
+
+  // A preset question (q.presets): its choice field, and the choice its ticks match.
+  function presetField(q) { return q && q.presets ? (q.fields || []).find(f => f.code === q.presets && f.type === 'choice') || null : null; }
+  function presetFor(q, ticks) {
+    const f = presetField(q); if (!f) return null;
+    const set = [...new Set([].concat(ticks || []))].sort().join();
+    const hit = (f.options || []).find(o => Array.isArray(o.ticks) && [...o.ticks].sort().join() === set);
+    const custom = (f.options || []).find(o => o.custom);
+    return hit ? hit.code : custom ? custom.code : null;
+  }
 
   // Every question code a condition mentions (for the check), and every ps id.
   function condRefs(c, acc) {
@@ -107,9 +124,49 @@
         seen.add(f.code);
         if (!FTYPES.includes(f.type)) E(`${where}: field "${f.code}" has unknown type "${f.type}"`);
         if (f.type === 'text' && /\n/.test(f.default || '')) W(`${where}: field "${f.code}" has a multi-line default but is a one-line text field`);
+        if (f.type === 'choice') {
+          if (!flatOptions(f.options).length) E(`${where}: choice field "${f.code}" needs options`);
+          checkOptions(`${where} field ${f.code}`, f.options);
+        }
         checkCond(`${where} field ${f.code}`, f.showIf);
       });
       return seen;
+    };
+    const guides = defs.guides || {};
+    if (defs.guides != null && (typeof defs.guides !== 'object' || Array.isArray(defs.guides))) E('guides must be an object');
+    // A preset question's tick boxes follow its choice field; a coast suggestion needs a guide with distances.
+    const checkPresets = (where, q) => {
+      if (q.presets == null) return;
+      const f = presetField(q);
+      if (!f) { E(`${where}: presets "${q.presets}" is not one of its choice fields`); return; }
+      if (q.type !== 'multi') E(`${where}: presets needs a multi (tick box) question`);
+      const codes = new Set(flatOptions(q.options).map(o => o.code));
+      (f.options || []).forEach(o => {
+        if (o.custom) { if (o.ticks) E(`${where}: the custom choice "${o.code}" can't have ticks`); return; }
+        if (!Array.isArray(o.ticks)) E(`${where}: choice "${o.code}" needs "ticks" (a list of its options, or [] for none) or "custom": true`);
+        else o.ticks.forEach(t => { if (!codes.has(t)) E(`${where}: choice "${o.code}" ticks unknown option "${t}"`); });
+      });
+      if (!(f.options || []).some(o => o.custom)) E(`${where}: presets needs a choice with "custom": true`);
+      const sets = (f.options || []).filter(o => Array.isArray(o.ticks)).map(o => [...o.ticks].sort().join());
+      if (new Set(sets).size !== sets.length) E(`${where}: two choices tick the same boxes`);
+    };
+    const checkGuide = (where, q) => {
+      if (q.guide != null && !guides[q.guide]) E(`${where}: guide "${q.guide}" is not in guides`);
+      if (q.suggest == null) return;
+      if (!SUGGESTS.includes(q.suggest)) { E(`${where}: unknown suggest "${q.suggest}"`); return; }
+      const g = guides[q.guide], f = presetField(q);
+      if (!g || !f) { E(`${where}: suggest "${q.suggest}" needs a guide and presets`); return; }
+      const cats = new Set((f.options || []).map(o => o.code)), shores = new Set((g.shores || []).map(s => s.code));
+      if (!shores.size) E(`${where}: guide "${q.guide}" has no shores`);
+      if (!Array.isArray(g.bands) || !g.bands.length) E(`${where}: guide "${q.guide}" has no bands`);
+      (g.bands || []).forEach(b => {
+        if (!cats.has(b.category)) E(`${where}: guide band "${b.category}" is not one of the ${f.code} choices`);
+        Object.entries(b.within || {}).forEach(([s, m]) => {
+          if (!shores.has(s)) E(`${where}: guide band "${b.category}" names unknown shore "${s}"`);
+          if (!(typeof m === 'number' && m > 0)) E(`${where}: guide band "${b.category}" needs a distance in metres for "${s}"`);
+        });
+      });
+      if (!g.otherwise || !cats.has(g.otherwise.category)) E(`${where}: guide "${q.guide}" needs "otherwise" with one of the ${f.code} choices`);
     };
     const checkQuestion = (where, q) => {
       if (!q.label) E(`${where}: no label`);
@@ -123,6 +180,7 @@
       if (q.pin && !fields.has(q.pin.field)) E(`${where}: pin.field "${q.pin.field}" is not one of its fields`);
       if (q.mapDraw && q.mapDraw.field && !fields.has(q.mapDraw.field)) E(`${where}: mapDraw.field "${q.mapDraw.field}" is not one of its fields`);
       if (q.prefill && q.prefill.field && !fields.has(q.prefill.field)) E(`${where}: prefill.field "${q.prefill.field}" is not one of its fields`);
+      checkPresets(where, q); checkGuide(where, q);
       checkCond(`${where} showIf`, q.showIf);
       (q.notes || []).forEach((n, i) => { if (!n.text) E(`${where}: note ${i + 1} has no text`); checkCond(`${where} note`, n.when); });
       (q.defaultWhen || []).forEach(d => {
@@ -194,5 +252,5 @@
     return { errors, warnings };
   }
 
-  S.schema = { flatOptions, option, optionLabel, templateQuestions, template, check, condRefs };
+  S.schema = { flatOptions, option, optionLabel, templateQuestions, template, check, condRefs, presetField, presetFor };
 })(typeof window !== 'undefined' ? window : globalThis);

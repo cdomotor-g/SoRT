@@ -66,9 +66,25 @@
       else if (f.default != null) { out.fields[f.code] = f.type === 'textarea' ? f.default : String(f.default).replace(/\s*\n+\s*/g, ' '); out.fieldSrc[f.code] = 'default'; }
       else { out.fields[f.code] = ''; out.fieldSrc[f.code] = null; }
     });
+    if (q.presets) presetSync(q, a, out);
     delete ctx._busy[code];
     ctx._eff[code] = out;
     return out;
+  }
+
+  /* A preset question (q.presets, e.g. the Water Level Infrastructure options):
+     a choice field (the corrosion category) and the tick boxes it sets. They
+     are kept in step here, so every reader sees one consistent answer:
+     - a category the person chose stands with the ticks they left, even none
+       (C3 ticks nothing — an empty list would otherwise fall back to a suggestion);
+     - ticks of their own without a category (an answer from before categories)
+       read as the category they match, or Custom;
+     - a suggestion with ticks but no category gets the matching one. */
+  function presetSync(q, a, out) {
+    const pf = q.presets, af = a.fields || {};
+    if (af[pf] !== undefined && af[pf] !== '' && out.src !== 'user') { out.value = [].concat(a.value || []); out.src = 'user'; }
+    if (out.src === 'user' && out.fieldSrc[pf] !== 'user') { out.fields[pf] = sch().presetFor(q, out.value) || ''; out.fieldSrc[pf] = 'user'; }
+    else if (!out.fields[pf] && !emptyVal(out.value)) { out.fields[pf] = sch().presetFor(q, out.value) || ''; out.fieldSrc[pf] = out.src; }
   }
 
   // What a rule says the answer is when nobody has chosen one.
@@ -192,14 +208,24 @@
   // The answer cell's lines, as copied into Word.
   function outputLines(ctx, q) {
     const e = eff(ctx, q.code), lines = [];
-    if (e.value != null) [].concat(e.value).forEach(v => {
+    const pf = sch().presetField(q);
+    if (pf) {
+      // The category first, then every part: ticked in its own words, unticked as the standard one.
+      const ticks = [].concat(e.value || []), cat = String(e.fields[pf.code] || '');
+      if (cat || ticks.length) {
+        const co = sch().flatOptions(pf.options).find(o => o.code === cat);
+        if (co) lines.push(`${pf.label}: ${co.label}`);
+        sch().flatOptions(q.options).forEach(o => { if (ticks.includes(o.code)) lines.push(o.label); else if (o.offText) lines.push(o.offText); });
+      }
+    } else if (e.value != null) [].concat(e.value).forEach(v => {
       const o = sch().option(q, v);
       if (!o) { lines.push(String(v)); return; }
       lines.push(o.other && e.other.trim() ? `${o.label.replace(/[:\s]+$/, '')}: ${e.other.trim()}` : o.label);
     });
     (q.fields || []).forEach(f => {
-      if (!fieldVisible(ctx, f)) return;
-      const t = fieldText(f, e.fields[f.code]);
+      if (!fieldVisible(ctx, f) || f === pf) return;
+      let t = fieldText(f, e.fields[f.code]);
+      if (t && f.type === 'choice') t = sch().optionLabel(f, t);
       if (t) lines.push(`${f.label}: ${t}`);
       else if (f.emptyText) lines.push(`${f.label}: ${fill(ctx, f.emptyText)}`);
     });

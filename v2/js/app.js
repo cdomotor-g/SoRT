@@ -83,6 +83,7 @@
     renderProgress(); renderFollowUps(); previewSoon(); saveSoon();
     if (S.playbook) { S.playbook.renderActs(A); S.playbook.autosaveSoon(A); }
     if (S.mapView) S.mapView.sync(A);
+    if (S.coast) S.coast.sync(A);
   }
   function hint(key) {
     if (key.startsWith('station.')) return S.floodnet.hint(A.session.station, key);
@@ -744,6 +745,7 @@
     if (S.playbook) { S.playbook.renderActs(A); S.playbook.renderSaveBar(A); }
     renderDupNote();
     if (S.mapView) { S.mapView.station(A); S.mapView.sync(A); }
+    if (S.coast) S.coast.sync(A);
   }
   async function boot() {
     initTheme(); initLayout();

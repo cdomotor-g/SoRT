@@ -106,6 +106,8 @@
         } }, 'Clear')));
     const side = h('div', { class: 'q-side' }, head);
     R().notesFor(ctx, q).forEach(n => side.appendChild(h('div', { class: 'q-note' + (n.level === 'info' ? ' info' : '') }, n.text)));
+    // A guide (q.guide): its brief summary here, the whole of it a click away.
+    if (q.guide && S.coast) { const g = S.coast.summary(app, q); if (g) side.appendChild(g); }
     card.appendChild(side);
     // What Flood-Net or the map knows (q.hintFrom): beside the answer, where there's room.
     let hintEl = null;
@@ -119,7 +121,18 @@
     }
 
     const body = h('div', { class: 'q-body' });
+    // A preset question: the category first (its radios set the tick boxes), then the boxes.
+    const pf = sch().presetField(q);
+    if (q.suggest === 'coast' && S.coast) body.appendChild(S.coast.node(app, q));
+    if (pf && R().fieldVisible(ctx, pf)) body.appendChild(choiceEl(q, pf, e));
     if (q.type !== 'none') body.appendChild(optionsEl(q, e));
+    if (pf) {
+      const ticks = [].concat(e.value || []);
+      const std = sch().flatOptions(q.options).filter(o => o.offText && !ticks.includes(o.code)).map(o => o.offText.charAt(0).toLowerCase() + o.offText.slice(1));
+      if (String(e.fields[pf.code] || '') || ticks.length) {
+        body.appendChild(h('div', { class: 'preset-std hint' }, std.length ? `Unticked parts go into Word as: ${std.join(', ')}.` : 'Every part stainless steel.'));
+      }
+    }
     // An "Other" option asks for its words.
     if (q.type !== 'none') {
       const chosen = [].concat(e.value || []).map(v => sch().option(q, v)).filter(o => o && o.other);
@@ -132,7 +145,7 @@
       }
     }
     if (hintEl) body.appendChild(hintEl);
-    (q.fields || []).forEach(f => { if (R().fieldVisible(ctx, f)) body.appendChild(fieldEl(q, f, e)); });
+    (q.fields || []).forEach(f => { if (f !== pf && R().fieldVisible(ctx, f)) body.appendChild(f.type === 'choice' ? choiceEl(q, f, e) : fieldEl(q, f, e)); });
     body.appendChild(noteEl(q, e));
     card.appendChild(body);
     return card;
@@ -157,6 +170,9 @@
         } else {
           const cur = e.src === 'user' || e.src == null ? [].concat(a.value || []) : vals.slice();
           a.value = cur.includes(o.code) ? cur.filter(x => x !== o.code) : cur.concat(o.code);
+          // A preset question: changed ticks are Custom, unless they are exactly another category's.
+          const pf = sch().presetField(q);
+          if (pf) a.fields[pf.code] = sch().presetFor(q, a.value) || '';
         }
         app.changed();
       });
@@ -167,6 +183,29 @@
       else wrap.appendChild(one(o));
     });
     return wrap;
+  }
+
+  /* A choice field (radios, stored as the choice's code). When it is a preset
+     question's category, choosing one sets the tick boxes to its `ticks`;
+     Custom keeps the boxes as they are, as the person's own. */
+  function choiceEl(q, f, e) {
+    const preset = sch().presetField(q) === f;
+    const cur = String(e.fields[f.code] || ''), src = e.fieldSrc[f.code];
+    const opts = sch().flatOptions(f.options);
+    const long = opts.length > 5 || opts.some(o => o.label.length > 28);
+    const wrap = h('div', { class: 'opts choice' + (long ? ' opts-list' : ' opts-pills'), role: 'radiogroup', 'aria-label': `${q.label} — ${f.label}` });
+    opts.forEach(o => {
+      const checked = cur === o.code;
+      const input = h('input', { type: 'radio', name: `ch-${q.code}-${f.code}`, value: o.code, checked, 'data-fk': `${q.code}::ch::${f.code}::${o.code}` });
+      input.addEventListener('click', () => {
+        const a = ans(q.code);
+        a.fields[f.code] = o.code;
+        if (preset) a.value = Array.isArray(o.ticks) ? o.ticks.slice() : [].concat(e.value || []);
+        app.changed();
+      });
+      wrap.appendChild(h('label', { class: 'opt' + (checked ? ' on' : '') + (checked && src && src !== 'user' ? ` from-${src}` : '') }, input, h('span', null, o.label)));
+    });
+    return h('div', { class: 'fld fld-wide' }, h('span', { class: 'fld-label' }, f.label), wrap);
   }
 
   function fieldEl(q, f, e) {
