@@ -379,7 +379,9 @@
     gen.value = p.general;
     gen.addEventListener('input', ev => { p.general = ev.target.value; app.changed({ light: true }); });
     card.appendChild(h('label', { class: 'fld fld-wide' }, h('span', { class: 'fld-label' }, 'Additional comments'), gen));
-    card.appendChild(h('div', { class: 'ps-note' }, ps.note));
+    if (ps.note) card.appendChild(h('div', { class: 'ps-note', role: 'note' },
+      h('div', { class: 'ps-note-head' }, 'Important note'),
+      h('div', { html: U().linkEmails(U().escEmph(ps.note)) })));
     root.appendChild(card);
     restoreFocus(focus);
   }

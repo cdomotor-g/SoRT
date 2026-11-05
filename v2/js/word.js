@@ -20,6 +20,7 @@
   const wStyle = i => `width:${w(i).cm}cm;`;
   const wAttr = i => ` width="${w(i).px}"`;
   const B = 'border:1px solid #999;';
+  const NOTE_B = 'border:2.25pt solid #c55a11;';   // after B, so it wins
   const FONT = 'font-family:Calibri,Arial,sans-serif;font-size:11pt;';
   const TABLE = `border-collapse:collapse;table-layout:fixed;width:${FULL.cm}cm;${FONT}`;
   const tableOpen = (cols) => {
@@ -182,7 +183,12 @@
       rows += `<tr><td ${label.replace('font-weight:bold;', 'font-weight:bold;background:#fff2cc;')}>ACTION – ${esc(f.owner)}</td><td ${cell.replace('vertical-align:top;', 'vertical-align:top;background:#fff2cc;')}>${esc(f.text)}</td></tr>`;
     });
     if (p.general.trim()) rows += `<tr><td ${label}>Additional comments</td><td ${cell}>${escL(p.general.trim())}</td></tr>`;
-    if (ps.note) { rows += span('Note', 'font-weight:bold;'); rows += span(escL(ps.note)); }
+    // The note is an instruction people must not miss: an
+    // orange heading and a tinted, heavy-bordered box, its key sentence bold.
+    if (ps.note) {
+      rows += span('IMPORTANT NOTE', `background:#c55a11;color:#fff;font-weight:bold;${NOTE_B}`);
+      rows += span(U().linkEmails(U().escEmph(ps.note)), `background:#fbe4d5;${NOTE_B}`);
+    }
     return `${tableOpen()}${rows}</table>`;
   }
   function psText(ctx) {
@@ -205,7 +211,7 @@
     });
     if (ctx.session.include.followUps) openFollowUps(ctx, 'ps').forEach(f => { out += `ACTION – ${f.owner}\t${f.text}\n`; });
     if (p.general.trim()) out += `Additional comments\t${U().flat(p.general)}\n`;
-    if (ps.note) out += `Note\n${ps.note}\n`;
+    if (ps.note) out += `IMPORTANT NOTE\n${U().unEmph(ps.note)}\n`;
     return out;
   }
 

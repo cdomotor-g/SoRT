@@ -215,7 +215,8 @@ input.pre-map, textarea.pre-map { background: var(--src-map); }
 .ps-row > .q-label { grid-column: 1; }
 .ps-row > :not(.q-label) { grid-column: 2; }
 .ps-sub { font-weight: 700; font-style: italic; color: var(--muted); padding: 10px 0 2px; border-top: 1px solid var(--line); }
-.ps-note { font-size: 13px; color: var(--muted); margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.ps-note { font-size: 14px; margin-top: 14px; padding: 10px 14px; background: var(--warn-bg); color: var(--ink); border: 1px solid var(--warn); border-left-width: 5px; border-radius: 8px; }
+.ps-note-head { font-weight: 700; color: var(--warn); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
 .ps-over { font-size: 13px; color: var(--warn); }
 
 /* follow-ups + output */

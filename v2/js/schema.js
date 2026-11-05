@@ -7,7 +7,7 @@
      questions: { <code>: QUESTION },          // the question bank, each once
      templates: [ { id, label, title, suggest?, waterLevel?,
                     questions: [ <code> | { q:<code>, ...overrides } ] } ],
-     propertyServices: { title, note, rows[] },
+     propertyServices: { title, note ("**…**" marks bold), rows[] },
      followUps: [ { id, owner, table, when, text, link?, doneWhen?, team?, floodnet? } ]
    QUESTION = { label, section, type:"single"|"multi"|"none", hint?, icon?,
      options?: [ {code,label,tags?,other?,offText?} | {group, options:[...]} ],

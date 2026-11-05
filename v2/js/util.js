@@ -14,6 +14,12 @@
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   // Escape, keeping the user's line breaks as <br> (Word keeps them too).
   const escLines = s => esc(String(s == null ? '' : s).replace(/\r\n?/g, '\n')).replace(/\n/g, '<br>');
+  // "**…**" in a definitions text marks words that must stand out: bold in
+  // Word and on screen (escEmph), the marks dropped for plain text (unEmph).
+  const escEmph = s => escLines(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  const unEmph = s => String(s == null ? '' : s).replace(/\*\*/g, '');
+  // An e-mail address in escaped text, made a link Word keeps.
+  const linkEmails = html => html.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, m => `<a href="mailto:${m}">${m}</a>`);
   // One line for the plain-text copy: breaks become "; ".
   const flat = s => String(s == null ? '' : s).replace(/\s*(?:\r\n|\r|\n)+\s*/g, '; ').trim();
 
@@ -193,6 +199,6 @@
     keys() { try { return Object.keys(G.localStorage); } catch (_) { return []; } }
   };
 
-  S.util = { esc, escLines, flat, h, $, $$, uuid, debounce, clone, todayIso, dmy, fmtClock, fmtWhen,
+  S.util = { esc, escLines, escEmph, unEmph, linkEmails, flat, h, $, $$, uuid, debounce, clone, todayIso, dmy, fmtClock, fmtWhen,
     parseCoord, formatCoord, coordPrecision, haversineM, bearingDeg, compass, fmtDist, fetchJson, LS, inQld };
 })(typeof window !== 'undefined' ? window : globalThis);

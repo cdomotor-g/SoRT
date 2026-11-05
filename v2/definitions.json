@@ -2100,7 +2100,7 @@
   ],
   "propertyServices": {
     "title": "Property Services Instruction",
-    "note": "Property Services conducts its due diligence and secures tenure agreements based on the information provided in this Site Assessment. If there have been any changes to the coordinates since the completion date of this site assessment, you must inform Property Services (FWINLeasing@bom.gov.au) to ensure that the due diligence performed remains valid.",
+    "note": "Property Services conducts its due diligence and secures tenure agreements based on the information provided in this Site Assessment. **If there have been any changes to the coordinates since the completion date of this site assessment, you must inform Property Services (FWINLeasing@bom.gov.au) to ensure that the due diligence performed remains valid.**",
     "rows": [
       {
         "id": "currentCoords",

@@ -155,6 +155,8 @@ const scenarios = {
     ok(/ACTION – Property Services/.test(html), 'bridge action in the Property Services table');
     ok(/Rainfall Table — Fifteen Mile AL \(540601\)/.test(html), 'station name and number on the scope table heading');
     ok(/Property Services Instruction — Fifteen Mile AL \(540601\)/.test(html), 'and on the Property Services heading');
+    ok(/background:#c55a11[^>]*>IMPORTANT NOTE</.test(html) && /<b>If there have been any changes to the coordinates[^<]*<a href="mailto:FWINLeasing@bom\.gov\.au">/.test(html) && !/\*\*/.test(html), 'the Property Services note is highlighted, its instruction bold, the address a link');
+    ok(/IMPORTANT NOTE/.test(await p.innerText('#sec-ps .ps-note')) && (await p.$$eval('#sec-ps .ps-note b', e => e.length)) === 1, 'and stands out on screen too');
     await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.station-card', { timeout: 40000 });
     ok((await p.$eval('[data-fk="acmaLicence::f::licenceNo"]', e => e.value)) === '1441013/1', 'session survives a reload');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
