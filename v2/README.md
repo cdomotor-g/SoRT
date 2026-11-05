@@ -72,6 +72,17 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   position is warned about only when it could change the category. Word gets
   the category as a bold line and every part as a bullet under it (unticked
   ones as the standard part), each a sentence.
+- **Acid sulfate soil (Water Level and Rainfall tables)**: a *Risk* — Not
+  expected, Possible (test before digging), Likely or present (test, and
+  manage it) — that ticks the steps, the way the corrosion category does.
+  `js/soil.js` reads Queensland's acid sulfate soil maps at the site (the
+  finest of the 1:25 000, 1:50 000 and 1:100 000 maps that says something, in
+  its own words; else the national atlas; else the station's ground height
+  against 5 m AHD) and the nearest tested soil core, the same layers
+  Flood-Net's Site exposure reads, and fills in the Risk as a Map suggestion
+  with *What the maps say* for Word. A soil test ticked raises a **Contractor**
+  task in the Word Follow-up Actions — not sent to Flood-Net (OTE's advice:
+  flag it, ask for testing, leave the remediation to the contractor).
 - **Rules and follow-ups**: e.g. a comms change to ERRTS raises "Hub rep to
   supply new ALERT IDs"; an ACMA licence transfer, vegetation management, an
   access track and a bridge attachment each raise their own follow-up, and the
@@ -109,6 +120,7 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
 | `js/store.js` | Sessions saved in this browser (`sortv2.*` keys). |
 | `js/floodnet.js` | Flood-Net's read-only API: search, station facts, prefill, hints. |
 | `js/form.js` | The question cards and the Property Services block. |
+| `js/soil.js` | The Acid sulfate soil question's reading of Queensland's soil maps at the site, the risk it suggests, and its guide (the pop-up). |
 | `js/coast.js` | The Infrastructure options' distance to the sea, the corrosion category it suggests, and the corrosion guide (the pop-up). |
 | `data/surf-coast.json` | Queensland's ocean-facing surf beaches (Point Danger to Agnes Water), made from QSpatial's coastline by `tools/build-surf-coast.mjs`. |
 | `js/word.js` | The tables copied into Word (v1's geometry). |
@@ -162,6 +174,13 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   the distance `within` which each kind of shore reaches it, in metres) and
   `otherwise` (the category beyond them all). `"suggest": "coast"` on the
   question has `js/coast.js` measure the site and suggest from them.
+  `guides.ass` holds the acid sulfate soil guide's words (`summary`, `points`,
+  `sections`, `links`) and `suggests`, the Risk choice each reading of the soil
+  maps suggests; `"suggest": "soil"` on the question has `js/soil.js` read the
+  maps at the site, into its text field `mapped`.
+- A follow-up with `"floodnet": false` may carry `"wordNote"`: what its line in
+  the follow-ups panel says instead of "Desktop task" (the acid sulfate soil
+  one is a contractor task).
 
 The page loads the definitions from GitHub (the API, then the CDN copy), then
 the copy deployed with the page; a file that fails the check is skipped with a

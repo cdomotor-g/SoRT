@@ -4,11 +4,12 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, shared, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast. They use the live Flood-Net
+   Scenarios: station, copy, playbook, shared, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    "coast" gives QSpatial's coastline a stand-in too: one straight shore, so the
    distances (and the corrosion category they suggest) are known.
+   "soil" does the same for Queensland's acid sulfate soil maps.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
    or have it resolvable. PW_CHROMIUM pins a browser binary. BASE overrides
    the page address (default http://127.0.0.1:8642/v2/). */
@@ -90,6 +91,7 @@ async function page(browser, opts) {
   await ctx.route(/floodwarning\.net\/api\/sort\//, store.handler);
   if (o.pass) await ctx.addInitScript(() => { try { localStorage.setItem('sortv2.passphrase', 'TESTPASS'); } catch (e) { /* */ } });
   if (o.coast) await ctx.route(/CoastalWaters\/MapServer\/17\/query/, o.coast);
+  if (o.soil) await ctx.route(/SoilsAndLandResource\/MapServer\/\d+\/query/, o.soil);
   await ctx.route(o.map ? /raw\.githubusercontent\.com/ : /raw\.githubusercontent\.com|js\.arcgis\.com/, r => r.abort());
   const p = await ctx.newPage();
   p.errors = [];
@@ -616,6 +618,92 @@ const scenarios = {
     // The Rainfall table keeps its own (footing) options and no corrosion guide.
     await p.click('.tpl-pick .seg:has-text("Rainfall")');
     ok(!(await p.$('#q-infraOptions .guide-sum')) && /Full footing/.test(await p.innerText('#q-infraOptions')), 'Rainfall’s infrastructure options are unchanged');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
+  async soil(b) {
+    // Queensland's acid sulfate soil maps, answered here: `mode` says what they hold at the site.
+    let mode = 'potential';
+    const REPORT = 'https://resources.information.qld.gov.au/soils/reports/sites?project=SEA&site=600';
+    const answer = (layer, lon, lat) => {
+      if (mode === 'down') return null;
+      const f = [];
+      if (layer === 1902 && mode === 'potential') f.push({ attributes: { map_code: 'S2', map_code_meaning: 'Potential ASS starting at 1 to 2m', project_code: 'SEAM' } });
+      if (layer === 2052 && mode === 'atlasLow') f.push({ attributes: { probclass: 'C', probclass_def: 'Extremely low probability of occurrence (1-5%)', mapscale: '1:2M' } });
+      if (layer === 1850 && mode === 'potential') f.push({ attributes: { project_code: 'SEA', site_id: 600, core_depth_m: 3, laboratory_data_available: 'Yes', site_report_url: REPORT }, geometry: { x: lon + 0.002, y: lat } });
+      return { features: f };
+    };
+    const p = await page(b, { soil: r => {
+      const u = new URL(r.request().url()), layer = Number(u.pathname.match(/MapServer\/(\d+)\/query/)[1]);
+      const [lon, lat] = u.searchParams.get('geometry').split(',').map(Number);
+      const a = answer(layer, lon, lat);
+      return a ? r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(a) }) : r.abort();
+    } });
+    const byHand = async (pos, measures) => {
+      await p.fill('#stationSearch', 'Zzyzx Qqq Creek');
+      await p.waitForFunction(() => /No station by that name/.test(document.querySelector('.station-find .hint').textContent), null, { timeout: 20000 });
+      await p.click('.station-find .hint button:has-text("Enter it by hand")');
+      await p.fill('.manual-grid [name=name]', 'Zzyzx Creek AL');
+      await p.fill('.manual-grid [name=pos]', pos);
+      await p.selectOption('.manual-grid [name=measures]', measures || 'river');
+      await p.click('.manual-grid button:has-text("Use this station")');
+      await p.waitForSelector('.station-card', { timeout: 10000 });
+    };
+    const risk = () => p.$$eval('#q-assSoil .choice .opt.on', e => e.map(x => x.textContent.split(' — ')[0]).join('|'));
+    const ticks = () => p.$$eval('#q-assSoil .opts:not(.choice) .opt.on input', e => e.map(x => x.value).join('|'));
+    const contractor = () => p.$$eval('#followups .fu', e => e.filter(x => /Contractor/.test(x.textContent)).map(x => x.textContent));
+    await byHand('-27.5123, 152.9456');
+    await p.waitForFunction(() => /Suggests/.test((document.querySelector('#soil-assSoil') || {}).textContent || ''), null, { timeout: 20000 });
+    const box = await p.innerText('#soil-assSoil');
+    ok(/Queensland 1:25 000 map: Potential ASS starting at 1 to 2m/.test(box) && /Nearest tested core: 200 m — cored to 3 m, lab results/.test(box) && /site report ↗/.test(box),
+      'the card says what the finest soil map says, and the nearest tested core with its report');
+    ok(/Suggests Likely or present — test, and manage it/.test(box) && await risk() === 'Likely or present' && await ticks() === 'soil_test|manage_disturbed|materials_to_suit'
+      && await p.$eval('#q-assSoil', e => e.classList.contains('waiting')), 'and suggests Likely or present, all three steps ticked, orange until checked');
+    ok((await p.inputValue('#q-assSoil input[aria-label="Acid sulfate soil — What the maps say"]')) === 'Potential ASS starting at 1 to 2m (Queensland 1:25 000 map); nearest tested core 200 m away, with lab results.',
+      'what the maps say is filled in for Word');
+    const fu = await contractor();
+    ok(fu.length === 1 && /Test the soil for acid sulfate soil/.test(fu[0]) && /Contractor task — goes to the contractor in the Word scope table, not sent to Flood-Net/.test(fu[0]) && !/Send as a task/.test(fu[0]),
+      'it raises a contractor task, kept to the Word scope and never offered to Flood-Net');
+    ok(/Harmless while wet and undisturbed/.test(await p.innerText('#q-assSoil .guide-sum')) && !(await p.$('#q-assSoil .preset-std')),
+      'a brief summary on the card, and none of the corrosion question’s wording');
+    // The risk and the steps follow each other, as the corrosion category's do.
+    await p.click('#q-assSoil .choice .opt:has-text("Possible")');
+    ok(await risk() === 'Possible' && await ticks() === 'soil_test' && (await contractor()).length === 1, 'Possible ticks the soil test alone; the contractor task stays');
+    await p.click('#q-assSoil .choice .opt:has-text("Not expected")');
+    ok(await risk() === 'Not expected' && await ticks() === '' && (await contractor()).length === 0, 'Not expected ticks nothing, and the contractor task goes');
+    await p.click('#q-assSoil .opts:not(.choice) .opt:has-text("Soil testing")');
+    ok(await risk() === 'Possible', 'ticking the soil test alone is exactly Possible');
+    await p.click('#soil-assSoil button:has-text("Use Likely or present")');
+    ok(await risk() === 'Likely or present' && /The answer below matches/.test(await p.innerText('#soil-assSoil')), '“Use” puts the suggestion back');
+    // The guide.
+    await p.click('#q-assSoil .guide-btn');
+    await p.waitForSelector('#guideDlg[open]', { timeout: 5000 });
+    const guide = await p.innerText('#guideDlg');
+    ok(/Who does what/.test(guide) && /The contractor tests the soil/.test(guide) && /Not mapped is not the same as absent/.test(guide) && /Potential ASS starting at 1 to 2m/.test(guide),
+      'the guide: this site, who does what, how it is worked out, its limits');
+    await p.click('#guideDlg .dlg-foot button:has-text("Close")');
+    // Word.
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
+    const html = await p.clip();
+    ok(/<b>Risk: Likely or present — test, and manage it\.<\/b><br>• Soil testing for acid sulfate soil \(pH and sulfur\) where the footing and trenches go, before works — by the contractor\./.test(html)
+      && /What the maps say: Potential ASS starting at 1 to 2m \(Queensland 1:25 000 map\); nearest tested core 200 m away, with lab results\./.test(html),
+      'Word: the risk in bold, each step a bullet, and what the maps say');
+    ok(/<b>Contractor:<\/b> Test the soil for acid sulfate soil/.test(html), '…and the contractor task in Follow-up Actions');
+    // Only the national atlas, extremely low: Not expected.
+    mode = 'atlasLow';
+    await p.newSession(); await byHand('-27.6123, 152.9456');
+    await p.waitForFunction(() => /Suggests/.test((document.querySelector('#soil-assSoil') || {}).textContent || ''), null, { timeout: 20000 });
+    ok(/National atlas \(1:2M, inferred, not checked on the ground\): Extremely low probability/.test(await p.innerText('#soil-assSoil')) && await risk() === 'Not expected',
+      'with no Queensland map there, the national atlas decides — extremely low is Not expected');
+    // The maps don't answer: no suggestion, and the card says why.
+    mode = 'down';
+    await p.newSession(); await byHand('-27.7123, 152.9456');
+    await p.waitForFunction(() => /Couldn’t reach/.test((document.querySelector('#soil-assSoil') || {}).textContent || ''), null, { timeout: 20000 });
+    ok(await risk() === '' && /no suggestion/.test(await p.innerText('#soil-assSoil')), 'without the soil maps there is no suggestion, and the card says why');
+    // The Rainfall table asks it too.
+    await p.click('.tpl-pick .seg:has-text("Rainfall")');
+    ok(!!(await p.$('#q-assSoil')), 'the Rainfall table asks it too');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },

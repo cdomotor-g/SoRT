@@ -79,6 +79,12 @@
       'Once the site’s position is known, the card measures its distance to the sea (QSpatial’s Queensland coastline; river mouths are closed off, so a river bank upstream isn’t “the shore”) and fills in the category it suggests, marked **Map** until you press **✓**. It follows a relocation’s new location. **🗺 Map of these distances** opens the guide with a map of its own: the site, and a line to the nearest surf beach and other shore. A rounded position only gets a warning when it could change the category; move the pin onto the equipment and press **✓ Position checked**.',
       '**📖 More about corrosion** opens the guide: the categories, OTE’s distances for each kind of shore (surf, semi-sheltered, quiet, tropical) with this site’s, the standard’s own table beside them (OTE is stricter in places, never less strict), and AS 4312’s grades. In Word the category is a bold line, with each part as a bullet under it. The forum knows the site best — strong onshore winds or industry nearby can push it up a category.'
     ] },
+    { id: 'ass', title: 'Acid sulfate soil (water level and rainfall tables)', items: [
+      'Acid sulfate soil is harmless while wet and undisturbed; dug up or drained it makes sulfuric acid, which attacks concrete and steel. The **Acid sulfate soil** question flags a site where it is possible or likely, so the scope asks for testing — the contractor tests the soil, and decides how to manage it.',
+      'Once the site’s position is known, the card reads Queensland’s acid sulfate soil maps there (the finest that covers it, else the national atlas, else the station’s ground height against 5 m above sea level) and the nearest tested soil core, and fills in the **Risk** it suggests, marked **Map** until you press **✓**.',
+      '**Likely or present** ticks soil testing, managing what is disturbed, and materials to suit; **Possible** ticks the soil test. Either adds a **Contractor** task to the Word table’s Follow-up Actions — it is not sent to Flood-Net. **Not expected** adds nothing.',
+      '**📖 More about acid sulfate soil** explains how it is worked out and its limits, and links the Queensland Government’s own pages. Not mapped is not the same as absent.'
+    ] },
     { id: 'ps', title: 'Property Services', items: [
       'It copies the coordinates and the relocation answer from the scope questions **until you change one there** — then it says **Overridden**, with a link back to the scope answer.',
       'On a rainfall table the water-level rows read **NA** by themselves.',

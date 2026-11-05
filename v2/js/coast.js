@@ -435,4 +435,5 @@
   }
 
   S.coast = { sync, summary, node, openGuide, site, measure, suggest, withinText, compare, CFG, _C: C };
+  S.suggesters = Object.assign(S.suggesters || {}, { coast: S.coast });
 })(typeof window !== 'undefined' ? window : globalThis);

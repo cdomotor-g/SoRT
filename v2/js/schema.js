@@ -27,7 +27,7 @@
 
   const QTYPES = ['single', 'multi', 'none'];
   const FTYPES = ['text', 'textarea', 'number', 'coord', 'licence', 'date', 'choice'];
-  const SUGGESTS = ['coast'];
+  const SUGGESTS = ['coast', 'soil'];   // js/coast.js, js/soil.js
   const PSKINDS = ['coordGroup', 'question', 'text', 'sectionHeader', 'date'];
   const CODE_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
   const OPT_RE = /^[a-z0-9][a-z0-9_]*$/;
@@ -157,6 +157,13 @@
       const g = guides[q.guide], f = presetField(q);
       if (!g || !f) { E(`${where}: suggest "${q.suggest}" needs a guide and presets`); return; }
       const cats = new Set((f.options || []).map(o => o.code)), shores = new Set((g.shores || []).map(s => s.code));
+      if (q.suggest === 'soil') {
+        // What each reading of the soil maps suggests, as one of the choices.
+        const want = ['likely', 'possible', 'unlikely'];
+        want.forEach(k => { if (!cats.has((g.suggests || {})[k])) E(`${where}: guide "${q.guide}" suggests.${k} must be one of the ${f.code} choices`); });
+        if (!(q.fields || []).some(x => x.code === 'mapped' && x.type === 'text')) E(`${where}: suggest "soil" needs a text field "mapped" for what the maps say`);
+        return;
+      }
       if (!shores.size) E(`${where}: guide "${q.guide}" has no shores`);
       if (!Array.isArray(g.bands) || !g.bands.length) E(`${where}: guide "${q.guide}" has no bands`);
       (g.bands || []).forEach(b => {
@@ -261,6 +268,7 @@
       if (f.team && !(f.team.hub === true || (typeof f.team.name === 'string' && f.team.name.trim()))) E(`${where}: team must be {"hub": true} or {"name": "<team>"}`);
       if (f.floodnet != null && typeof f.floodnet !== 'boolean') E(`${where}: floodnet must be true or false`);
       if (f.floodnet === false && f.team) W(`${where}: a desktop task (floodnet: false) is never sent, so its team is unused`);
+      if (f.wordNote != null && (typeof f.wordNote !== 'string' || f.floodnet !== false)) E(`${where}: wordNote is the words for a follow-up that stays in Word (floodnet: false)`);
     });
     return { errors, warnings };
   }

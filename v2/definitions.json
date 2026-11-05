@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 10,
+  "version": 11,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-11-05",
@@ -1426,6 +1426,72 @@
       ],
       "precedent": false,
       "hintFrom": "bureau.benchmarks"
+    },
+    "assSoil": {
+      "label": "Acid sulfate soil",
+      "section": "station",
+      "icon": "🧪",
+      "type": "multi",
+      "hint": "(Flag a site where the soil maps say acid sulfate soil is possible or likely: the contractor tests, and manages it)",
+      "options": [
+        {
+          "code": "soil_test",
+          "label": "Soil testing for acid sulfate soil (pH and sulfur) where the footing and trenches go, before works — by the contractor"
+        },
+        {
+          "code": "manage_disturbed",
+          "label": "Any acid sulfate soil dug up or drained to be managed by the contractor (e.g. treated with agricultural lime), to Queensland’s guidelines"
+        },
+        {
+          "code": "materials_to_suit",
+          "label": "Footing concrete and buried steel to suit the test results — for the contractor to propose"
+        }
+      ],
+      "fields": [
+        {
+          "code": "level",
+          "label": "Risk",
+          "type": "choice",
+          "options": [
+            {
+              "code": "not_expected",
+              "label": "Not expected — not mapped, or mapped as unlikely",
+              "ticks": []
+            },
+            {
+              "code": "possible",
+              "label": "Possible — test before digging",
+              "ticks": [
+                "soil_test"
+              ]
+            },
+            {
+              "code": "likely",
+              "label": "Likely or present — test, and manage it",
+              "ticks": [
+                "soil_test",
+                "manage_disturbed",
+                "materials_to_suit"
+              ]
+            },
+            {
+              "code": "custom",
+              "label": "Custom — the forum’s own choice of the steps below",
+              "custom": true
+            }
+          ]
+        },
+        {
+          "code": "mapped",
+          "label": "What the maps say",
+          "type": "text",
+          "placeholder": "filled in from Queensland’s acid sulfate soil maps"
+        }
+      ],
+      "presets": "level",
+      "guide": "ass",
+      "suggest": "soil",
+      "precedent": false
     }
   },
   "templates": [
@@ -1437,6 +1503,7 @@
         "stationType",
         "complexity",
         "infraOptions",
+        "assSoil",
         "coords",
         "relocation",
         "currentComms",
@@ -1683,6 +1750,7 @@
           "suggest": "coast",
           "precedent": false
         },
+        "assSoil",
         "coords",
         "relocation",
         "riverCoords",
@@ -2405,6 +2473,18 @@
       },
       "text": "DESKTOP TASK — get the site's local TBM from HDB or the hardcopy station file: its value (AHD or LGH) and a description of where the TBM is, then add them to this scope.",
       "floodnet": false
+    },
+    {
+      "id": "assContractor",
+      "owner": "Contractor",
+      "table": "scope",
+      "when": {
+        "q": "assSoil",
+        "has": "soil_test"
+      },
+      "text": "Test the soil for acid sulfate soil (pH and sulfur) where the footing and trenches go, before works; if it is there, manage what is dug up or drained and propose a footing and buried materials to suit — the method is the contractor’s.",
+      "floodnet": false,
+      "wordNote": "Contractor task — goes to the contractor in the Word scope table, not sent to Flood-Net"
     }
   ],
   "tasks": {
@@ -2617,6 +2697,76 @@
         "Local conditions can push a site up a category: strong onshore winds over flat ground, spray from a nearby headland, industry nearby, or a polluted river. If in doubt, take the higher category."
       ],
       "how": "When the site’s position is known (its Instrumentation Coordinates, or the new location when the station is being relocated), the page measures the distance to the sea on QSpatial’s Queensland coastline: to the nearest surf beach, and to the nearest other shore, which counts as tropical quiet north of the Tropic of Capricorn and temperate semi-sheltered south of it. The highest category any of them reaches is filled in as a Map suggestion, orange until you check it. Outside Queensland, choose it yourself from the table."
+    },
+    "ass": {
+      "title": "Acid sulfate soil",
+      "summary": "Harmless while wet and undisturbed. Dug up, drained or dewatered, it makes sulfuric acid, which attacks concrete and steel — galvanising included — and the soft muds it sits in can settle under a footing.",
+      "points": [
+        [
+          "Likely or present",
+          "the contractor tests, manages what is disturbed, and proposes a footing and buried materials to suit."
+        ],
+        [
+          "Possible",
+          "the contractor tests before digging."
+        ],
+        [
+          "Not expected",
+          "nothing more."
+        ]
+      ],
+      "button": "📖 More about acid sulfate soil",
+      "suggests": {
+        "likely": "likely",
+        "possible": "possible",
+        "unlikely": "not_expected"
+      },
+      "sections": [
+        {
+          "title": "What it is",
+          "text": "Soil and sediment laid down under the sea or in estuaries, full of iron sulfides. Left wet and undisturbed it is harmless. Dug up, drained or dewatered, the sulfides meet the air and turn into sulfuric acid, which attacks concrete and steel — galvanising included — and releases iron and aluminium into the water. Actual acid sulfate soil is already making acid; potential acid sulfate soil makes it once disturbed. In Queensland it lies under coastal lowland, mostly below 5 m above sea level."
+        },
+        {
+          "title": "Who does what",
+          "items": [
+            "The forum flags a site where the maps say acid sulfate soil is possible or likely, so the scope asks for testing.",
+            "The contractor tests the soil where the footing and trenches go before works, and — if it is there — decides how to manage what is dug up or drained and which footing and buried materials suit the results.",
+            "The follow-up goes in the Word scope table as a contractor task. It is not sent to Flood-Net."
+          ]
+        },
+        {
+          "title": "How the suggestion is worked out",
+          "items": [
+            "Queensland’s acid sulfate soil maps are read at the site, the finest that covers it first (1:25 000, then 1:50 000, then 1:100 000), and quoted in their own words: “Potential ASS starting at 1 to 2m” is Likely or present; “possibly at risk” is Possible; “low probability” is Not expected.",
+            "Where no Queensland map covers the site, the national atlas’s class is used (high probability: Likely; low: Possible; extremely low: Not expected) — inferred at 1:2 000 000, not checked on the ground.",
+            "Where nothing is mapped at all, the station’s recorded ground height decides: at or below 5 m above sea level (AHD), Possible — councils assume acid sulfate soil may be there unless tested; above it, Not expected.",
+            "The nearest tested soil core within 2 km is shown with a link to its report: what was actually found nearby."
+          ]
+        },
+        {
+          "title": "Limits",
+          "items": [
+            "Not mapped is not the same as absent. Queensland maps acid sulfate soil on coastal land; a gauge standing in the water can fall outside the map.",
+            "The maps are drawn at 1:25 000 to 1:2 000 000 — a line on a map, not on the ground — and read at one point: the site’s coordinates.",
+            "Queensland’s planning trigger (digging out 100 m³ or more, or filling 500 m³ or more, below 5 m AHD) is far larger than a station’s works, but councils may still ask a small job to treat what it digs up."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "title": "Acid sulfate soils explained — Queensland Government",
+          "url": "https://www.qld.gov.au/environment/land/management/soil/acid-sulfate/explained"
+        },
+        {
+          "title": "Impacts of acid sulfate soils — Queensland Government",
+          "url": "https://www.qld.gov.au/environment/land/management/soil/acid-sulfate/impacts"
+        },
+        {
+          "title": "Guidance materials for acid sulfate soils (the Soil Management Guidelines) — Queensland Government",
+          "url": "https://www.qld.gov.au/environment/land/management/soil/acid-sulfate/national-guidance"
+        }
+      ],
+      "source": "OTE’s advice (November 2026): flag a susceptible site, ask for testing, and leave how to remediate it to the contractor. Maps: Acid sulfate soils series (Queensland, CC BY 3.0 AU), the Atlas of Australian Acid Sulfate Soils (CSIRO, CC BY 4.0) and the acid sulfate soil sample sites (Queensland, CC BY 4.0) — the same maps Flood-Net’s Site exposure reads."
     }
   }
 }

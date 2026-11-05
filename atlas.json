@@ -19,7 +19,7 @@
   "status": {
     "phase": "live",
     "updated": "2026-11-05",
-    "summary": "v2 is the Scope Builder since 4 Nov 2026 (/SoRT/ opens /SoRT/v2/; v1 kept at /SoRT/v1/): Flood-Net station lookup with corrections of its particulars for the Word tables, ACMA licences, and the radio path to base with fresh fade margins; the map beside the questions (each pane scrolling on its own) with survey marks and bridges; sessions shared with the whole forum through Flood-Net's server (a forum passphrase, no accounts or tokens), an in-page question editor, a Help guide, the local TBM as a desktop task, and follow-ups handed to Flood-Net's teams as tasks, and on the Water Level table a corrosion category for the infrastructure options (OTE’s three AS 4312 groupings, with the standard’s own table shown beside them), suggested from the site’s distance to the sea on QSpatial’s coastline.",
+    "summary": "v2 is the Scope Builder since 4 Nov 2026 (/SoRT/ opens /SoRT/v2/; v1 kept at /SoRT/v1/): Flood-Net station lookup with corrections of its particulars for the Word tables, ACMA licences, and the radio path to base with fresh fade margins; the map beside the questions (each pane scrolling on its own) with survey marks and bridges; sessions shared with the whole forum through Flood-Net's server (a forum passphrase, no accounts or tokens), an in-page question editor, a Help guide, the local TBM as a desktop task, and follow-ups handed to Flood-Net's teams as tasks, and on the Water Level table a corrosion category for the infrastructure options (OTE’s three AS 4312 groupings, with the standard’s own table shown beside them), suggested from the site’s distance to the sea on QSpatial’s coastline, and an acid sulfate soil flag (Queensland’s soil maps at the site) that asks the contractor for testing.",
     "now": [
       "v2 at real forums as the default; v1 kept at /SoRT/v1/ in case"
     ],
@@ -298,6 +298,21 @@
         "date": "2026-11-04"
       },
       "on_change": "Read Flood-Net's docs/sort-store.md; if a route, status, header or the passphrase check changed, update v2/js/store-remote.js and the e2e fakeStore, bump v2's ?v= stamp."
+    },
+    {
+      "id": "floodnet-site-exposure",
+      "from": "flood-net",
+      "provider": "stations-map",
+      "into": "v2-app",
+      "what": "How Flood-Net's Site exposure reads Queensland's acid sulfate soil maps — the layers (1:25 000, 1:50 000 and 1:100 000 maps, the national atlas, the sample sites), the finest that says something first, and its reading of the map codes' words (assLevel) — ported into v2/js/soil.js for the Acid sulfate soil question.",
+      "how": "ported",
+      "watch": [
+        "site-exposure.js"
+      ],
+      "since": {
+        "date": "2026-11-05"
+      },
+      "on_change": "If site-exposure.js changed how it reads the acid sulfate soil maps (its layers, ASS_ORDER or assLevel), bring v2/js/soil.js into step and run node v2/tests/e2e.cjs soil; then move this pin."
     }
   ]
 }

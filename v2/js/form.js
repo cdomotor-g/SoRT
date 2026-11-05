@@ -107,7 +107,9 @@
     const side = h('div', { class: 'q-side' }, head);
     R().notesFor(ctx, q).forEach(n => side.appendChild(h('div', { class: 'q-note' + (n.level === 'info' ? ' info' : '') }, n.text)));
     // A guide (q.guide): its brief summary here, the whole of it a click away.
-    if (q.guide && S.coast) { const g = S.coast.summary(app, q); if (g) side.appendChild(g); }
+    // (q.suggest names the module that measures the site and holds the guide: js/coast.js, js/soil.js.)
+    const sg = q.suggest && S.suggesters ? S.suggesters[q.suggest] : null;
+    if (q.guide && sg) { const g = sg.summary(app, q); if (g) side.appendChild(g); }
     card.appendChild(side);
     // What Flood-Net or the map knows (q.hintFrom): beside the answer, where there's room.
     let hintEl = null;
@@ -123,10 +125,11 @@
     const body = h('div', { class: 'q-body' });
     // A preset question: the category first (its radios set the tick boxes), then the boxes.
     const pf = sch().presetField(q);
-    if (q.suggest === 'coast' && S.coast) body.appendChild(S.coast.node(app, q));
+    if (sg) body.appendChild(sg.node(app, q));
     if (pf && R().fieldVisible(ctx, pf)) body.appendChild(choiceEl(q, pf, e));
     if (q.type !== 'none') body.appendChild(optionsEl(q, e));
-    if (pf) {
+    // Only where an unticked box has a standard part to go into Word instead (the corrosion one).
+    if (pf && sch().flatOptions(q.options).some(o => o.offText)) {
       const ticks = [].concat(e.value || []);
       const std = sch().flatOptions(q.options).filter(o => o.offText && !ticks.includes(o.code)).map(o => o.offText.charAt(0).toLowerCase() + o.offText.slice(1));
       if (String(e.fields[pf.code] || '') || ticks.length) {

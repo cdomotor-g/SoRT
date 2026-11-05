@@ -494,6 +494,18 @@
           ]
         },
         {
+          "id": "AssSoil",
+          "item": "Acid sulfate soil",
+          "instruction": "(Check Queensland’s acid sulfate soil map, or Flood-Net’s Site exposure. Possible or likely: the contractor tests the soil before works, and manages it)",
+          "type": "single",
+          "icon": "🧪",
+          "options": [
+            "Not expected — not mapped, or mapped as unlikely",
+            "Possible — soil testing before works, by the contractor",
+            "Likely or present — soil testing before works, and the contractor to manage any acid sulfate soil disturbed and propose footing and buried materials to suit"
+          ]
+        },
+        {
           "shared": "coords"
         },
         {
@@ -606,6 +618,18 @@
             "Stainless steel tower with stainless steel fixtures and fittings",
             "Stainless steel enclosure with stainless steel fixtures and fittings",
             "Stainless steel orifice run (capillary conduit) with stainless steel fixtures and fittings"
+          ]
+        },
+        {
+          "id": "AssSoil",
+          "item": "Acid sulfate soil",
+          "instruction": "(Check Queensland’s acid sulfate soil map, or Flood-Net’s Site exposure. Possible or likely: the contractor tests the soil before works, and manages it)",
+          "type": "single",
+          "icon": "🧪",
+          "options": [
+            "Not expected — not mapped, or mapped as unlikely",
+            "Possible — soil testing before works, by the contractor",
+            "Likely or present — soil testing before works, and the contractor to manage any acid sulfate soil disturbed and propose footing and buried materials to suit"
           ]
         },
         {
