@@ -232,6 +232,18 @@
         "v2/js/tasks.js"
       ],
       "url": "https://cdomotor-g.github.io/SoRT/v2/"
+    },
+    {
+      "id": "corrosion-guide",
+      "name": "Corrosion categories (AS 4312 and OTE's instruction)",
+      "what": "AS 4312:2019 Table 4.1 by distance and kind of shore, OTE's three categories for a station's tower, enclosure and orifice run with their distances (guides.corrosion in v2/definitions.json), and Queensland's ocean-facing surf beaches (v2/data/surf-coast.json, made from QSpatial's coastline by v2/tools/build-surf-coast.mjs). Flood-Net's Site exposure carries a copy.",
+      "component": "v2-app",
+      "paths": [
+        "v2/definitions.json",
+        "v2/data/surf-coast.json",
+        "v2/tools/build-surf-coast.mjs",
+        "v2/js/coast.js"
+      ]
     }
   ],
   "consumes": [

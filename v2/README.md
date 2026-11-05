@@ -126,7 +126,7 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
 | `definitions.json` | The questions. See below. |
 | `tools/check-definitions.mjs` | `node v2/tools/check-definitions.mjs` — the same check the page runs. |
 | `tools/convert-v1.mjs` | One-off that seeded `definitions.json` from v1's. Not to be re-run. |
-| `tools/build-surf-coast.mjs` | `node v2/tools/build-surf-coast.mjs` — remakes `data/surf-coast.json` (seven rays out to sea from each piece of coast; most reaching open water = surf). Only if QSpatial's coastline changes a lot. |
+| `tools/build-surf-coast.mjs` | `node v2/tools/build-surf-coast.mjs` — remakes `data/surf-coast.json` (thirteen rays out to sea, north round to south, from each piece of coast: four reaching open water, one of them east-north-east to south-east where the swell comes from, = surf — so Coolangatta's and Noosa's north-facing bays are surf, Hervey Bay and Moreton Bay are not). Only if QSpatial's coastline changes a lot. |
 
 ## The definitions (`definitions.json`)
 

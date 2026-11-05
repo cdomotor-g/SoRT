@@ -8,12 +8,16 @@
      node v2/tools/build-surf-coast.mjs            # fetch, classify, write
      node v2/tools/build-surf-coast.mjs --debug    # also writes the classified segments for checking
 
-   How a stretch is judged "surf": from each piece of coastline, seven rays go
-   out to sea between north-east and south-east (where the swell comes from),
-   80 km each. If most of them reach open water without crossing land, the
-   piece faces the open ocean. A bay shore (Moreton Bay, the Broadwater,
-   Pumicestone Passage, the Great Sandy Strait, Hervey Bay) looks across water
-   at an island or the far shore, so its rays are blocked. North of Agnes Water
+   How a stretch is judged "surf": from each piece of coastline, thirteen rays
+   go out every 15° from north round through east to south, 80 km each. If four
+   or more reach open water without crossing land, and at least one of those
+   is between east-north-east and south-east (where the swell comes from), the
+   piece faces the open ocean. That takes in the beaches tucked behind a
+   headland and facing north — Coolangatta, Greenmount and Rainbow Bay behind
+   Point Danger, Noosa's Laguna Bay — which the swell wraps into. A bay shore
+   (Moreton Bay, the Broadwater, Pumicestone Passage, the Great Sandy Strait,
+   Hervey Bay) looks across water at an island or the far shore: what open
+   water it sees is to the north, through the bay's mouth, not the swell's. North of Agnes Water
    the Great Barrier Reef shelters the coast, so the search stops at 24°S.
 
    Source: QSpatial "Coastline" (Oceans/CoastalWaters, layer 17), © State of
@@ -27,7 +31,8 @@ const OUT = join(HERE, '..', 'data', 'surf-coast.json');
 const LAYER = 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Oceans/CoastalWaters/MapServer/17';
 const BOX = { xmin: 151.6, ymin: -28.3, xmax: 153.75, ymax: -24.0 };   // Point Danger to Agnes Water, and the islands
 const TILE = 0.25;                  // degrees per query
-const RAY_M = 80000, RAY_START_M = 25, BEARINGS = [45, 60, 75, 90, 105, 120, 135], OPEN_NEEDED = 4;
+const RAY_M = 80000, RAY_START_M = 25, BEARINGS = Array.from({ length: 13 }, (_, i) => i * 15), OPEN_NEEDED = 4;   // north round to south, every 15°
+const SWELL = [60, 135];            // and at least one of them between east-north-east and south-east, where the swell comes from
 const MIN_RUN_M = 400;              // a surf stretch shorter than this is dropped (a rock, a groyne)
 const FLIP_M = 250;                 // a gap or blip shorter than this takes its neighbours' class
 const SIMPLIFY_M = 8;
@@ -164,9 +169,12 @@ async function main() {
   let n = 0;
   segs.forEach(s => {
     const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
-    let open = 0;
-    for (const b of BEARINGS) { if (rayOpen(mx, my, b, s, segs, grid)) open++; if (open >= OPEN_NEEDED) break; }
-    s.surf = open >= OPEN_NEEDED && !s.junction;
+    let open = 0, swell = false;
+    for (const b of BEARINGS) {
+      if (rayOpen(mx, my, b, s, segs, grid)) { open++; if (b >= SWELL[0] && b <= SWELL[1]) swell = true; }
+      if (open >= OPEN_NEEDED && swell) break;
+    }
+    s.surf = open >= OPEN_NEEDED && swell && !s.junction;
     if (++n % 20000 === 0) process.stdout.write(`${n} `);
   });
   process.stdout.write('\n');
