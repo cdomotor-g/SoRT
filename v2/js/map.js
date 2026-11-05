@@ -46,7 +46,7 @@
     dynamicMinScale: 20000,                           // contours and road reserve stop at ~1:20,000
     siteZoom: 17,
     qld: { xmin: 137.6, ymin: -29.4, xmax: 154.0, ymax: -9.0 },   // the map's home: all of Queensland, Torres Strait included
-    order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, coast: 9, pins: 10 },
+    order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, pins: 10 },
     timeouts: { esri: 20000, view: 20000, meta: 10000, layer: 10000, query: 12000 },
     attribution: '© State of Queensland (Department of Natural Resources and Mines; Department of Resources; Transport and Main Roads) — CC BY 4.0'
   };
@@ -231,7 +231,7 @@
     // one it never becomes ready. Its load is checked in loadImagery().
     const img = new E.ImageryTileLayer({ url: CFG.imagery });
     M.layers.imagery = img; addOrdered(img, 'imagery');
-    ['nearby', 'bridges', 'marks', 'draw', 'ghost', 'coast', 'pins'].forEach(k => { M.gl[k] = new E.GraphicsLayer({ title: k }); addOrdered(M.gl[k], k); });
+    ['nearby', 'bridges', 'marks', 'draw', 'ghost', 'pins'].forEach(k => { M.gl[k] = new E.GraphicsLayer({ title: k }); addOrdered(M.gl[k], k); });
     M.gl.ghost.visible = M.on.ghost;
     resolvePins();
     const c = M.anchor || { lat: -22.5, lon: 146.5 };
@@ -1083,7 +1083,7 @@
     // Working aids (Flood-Net's recorded position, its other stations) stay off
     // the report's picture: the picture is taken of the other layers only, so
     // the live map never blinks while the preview refreshes.
-    const aids = [M.gl.ghost, M.gl.nearby, M.gl.coast];
+    const aids = [M.gl.ghost, M.gl.nearby];
     let shot;
     await whenReady();
     try { shot = await M.view.takeScreenshot({ layers: M.map.layers.toArray().filter(l => !aids.includes(l)) }); }
@@ -1203,24 +1203,45 @@
     const k = key(M.anchor);
     if (k && M.framedFor !== k) { M.framedFor = k; M.homeNext = false; frame(false); }
   }
-  function reset() { M.marks = []; M.bridges = []; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); showCoast(null); }
-  /* The distances to the sea that the Infrastructure options card measured
-     (js/coast.js): a dashed line from the site to each nearest shore, labelled.
-     A working aid like Flood-Net's ring — never in the Word picture. null clears it. */
-  function showCoast(spec) {
-    M.coast = spec || null;
-    if (!M.ready || !M.gl.coast) return;
-    const L = M.gl.coast; L.removeAll();
-    if (!spec) return;
+  function reset() { M.marks = []; M.bridges = []; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); }
+  /* A small map of its own, in the corrosion guide (js/coast.js): the imagery and
+     its place names, the shoreline the distances were measured to (surf beaches
+     orange, other shore blue), and a dashed line from the site to each nearest
+     shore. Nothing here touches the main map, and it is never in the Word
+     picture. The wheel scrolls the guide unless Ctrl is held (as the main map's
+     zoom lock). Resolves to { destroy }, or null when the map library can't load. */
+  async function miniMap(container, spec) {
+    let E;
+    try { E = await loadEsri(); } catch (_) { return null; }
+    const map = new E.Map({ layers: [new E.ImageryTileLayer({ url: CFG.imagery })] });
+    try { map.add(new E.MapImageLayer({ url: CFG.imageryLabels })); } catch (_) { /* place names are a nicety */ }
+    const L = new E.GraphicsLayer(); map.add(L);
+    const line = (paths, color, width, style) => L.add(G_({ type: 'polyline', paths, spatialReference: { wkid: 4326 } }, { type: 'simple-line', color, width, style: style || 'solid' }));
+    (spec.shore || []).forEach(p => line([p], [90, 190, 255, 1], 1.6));
+    (spec.surf || []).forEach(p => line([p], [255, 140, 40, 1], 2.6));
     const pts = [pt(spec.lon, spec.lat)];
     (spec.lines || []).forEach(l => {
-      const col = l.surf ? [230, 90, 20, 1] : [20, 120, 200, 1];
-      L.add(G_({ type: 'polyline', paths: [[[spec.lon, spec.lat], [l.lon, l.lat]]], spatialReference: { wkid: 4326 } }, { type: 'simple-line', color: col, width: 2.5, style: 'dash' }));
-      L.add(G_(pt(l.lon, l.lat), { type: 'simple-marker', style: 'circle', size: 9, color: col, outline: { color: [255, 255, 255, 1], width: 1.5 } }));
-      L.add(G_(pt(l.lon, l.lat), text(`${l.label} — not in the Word picture`, [255, 255, 255], 12, 10)));
+      const col = l.surf ? [255, 140, 40, 1] : [90, 190, 255, 1];
+      line([[[spec.lon, spec.lat], [l.lon, l.lat]]], [255, 255, 255, 1], 2.5, 'dash');
+      L.add(G_(pt(l.lon, l.lat), { type: 'simple-marker', style: 'circle', size: 10, color: col, outline: { color: [255, 255, 255, 1], width: 1.5 } }));
+      L.add(G_(pt(l.lon, l.lat), text(l.label, [255, 255, 255], l.surf ? 12 : -20, 10)));   // surf above its point, other shores below: two near-together shores stay legible
       pts.push(pt(l.lon, l.lat));
     });
-    M.view.goTo(pts.map(p => G_(p)), { animate: true }).then(() => { M.view.zoom = Math.min(18, M.view.zoom - 0.5); }).catch(() => {});
+    L.add(G_(pt(spec.lon, spec.lat), { type: 'simple-marker', style: 'circle', size: 14, color: [214, 40, 40, 1], outline: { color: [255, 255, 255, 1], width: 2 } }));
+    L.add(G_(pt(spec.lon, spec.lat), text(spec.label || 'The site', [255, 255, 255], 14, 11)));
+    container.addEventListener('wheel', ev => { if (!(ev.ctrlKey || ev.metaKey)) ev.stopPropagation(); }, { capture: true, passive: true });
+    const view = new E.MapView({ container, map, center: [spec.lon, spec.lat], zoom: 13, spatialReference: { wkid: 3857 },
+      constraints: { rotationEnabled: false, snapToZoom: false }, ui: { components: ['zoom', 'attribution'] }, popupEnabled: false });
+    try {
+      await withTimeout(view.when(), CFG.timeouts.view, 'the distance map');
+      // Frame the site and the shores: at least ~1.2 km across, so a site on the shore isn't a blur.
+      const ext = { xmin: Infinity, ymin: Infinity, xmax: -Infinity, ymax: -Infinity };
+      pts.forEach(p => { ext.xmin = Math.min(ext.xmin, p.longitude); ext.xmax = Math.max(ext.xmax, p.longitude); ext.ymin = Math.min(ext.ymin, p.latitude); ext.ymax = Math.max(ext.ymax, p.latitude); });
+      const minHalf = 0.006, cx = (ext.xmin + ext.xmax) / 2, cy = (ext.ymin + ext.ymax) / 2;
+      const hx = Math.max(minHalf, (ext.xmax - ext.xmin) * 0.85), hy = Math.max(minHalf, (ext.ymax - ext.ymin) * 0.85);
+      await view.goTo(new E.Extent({ xmin: cx - hx, ymin: cy - hy, xmax: cx + hx, ymax: cy + hy, spatialReference: { wkid: 4326 } }), { animate: false });
+    } catch (_) { /* the view still shows what it can */ }
+    return { view, graphics: L, destroy: () => { try { view.destroy(); } catch (_) { /* gone already */ } } };
   }
   function focusPin(code, field) {
     resolvePins();
@@ -1239,6 +1260,6 @@
     return null;
   }
 
-  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, showCoast, CFG, _M: M,
+  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, miniMap, CFG, _M: M,
     ready: () => M.ready && !M.failed, version: () => M.version };
 })(window);

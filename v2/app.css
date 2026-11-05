@@ -299,6 +299,11 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
 .guide-dl dt { font-weight: 650; margin-top: 8px; }
 .guide-dl dd { margin: 2px 0 0 0; line-height: 1.5; }
 .guide-src { font-size: 13px; margin-top: 14px; }
+.guide-first { margin-top: 4px !important; }
+.guide-map { position: relative; height: 340px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg); margin-top: 8px; }
+.guide-map-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; text-align: center; color: var(--muted); font-size: 14px; }
+.guide-map-key { font-size: 13px; margin-top: 6px !important; }
+@media (max-width: 600px) { .guide-map { height: 260px; } }
 .guide-cmp td { font-size: 13px; white-space: nowrap; }
 .guide-cmp td.cmp-stricter, .cmp-key.cmp-stricter { background: var(--warn-bg); color: var(--warn); }
 .guide-cmp td.cmp-looser { background: var(--error-bg); color: var(--error); }

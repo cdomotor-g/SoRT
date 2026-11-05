@@ -28,6 +28,11 @@
   };
   const GAP = `<p style="margin:12px 0 0;font-family:Calibri,Arial,sans-serif;">&nbsp;</p>`;
   const esc = s => U().esc(s), escL = s => U().escLines(s);
+  // An answer line (rules.outputLines): text, or { text, bold?, bullet? } — the
+  // corrosion category is a bold heading over its parts, each a bullet.
+  const lineHtml = l => (typeof l === 'string' ? escL(l) : `${l.bullet ? '• ' : ''}${l.bold ? `<b>${escL(l.text)}</b>` : escL(l.text)}`);
+  const lineText = l => (typeof l === 'string' ? U().flat(l) : `${l.bullet ? '• ' : ''}${U().flat(l.text)}`);
+  const linesText = ls => ls.map(lineText).reduce((a, l) => (a ? a + (/[.!?]$/.test(a) ? ' ' : '; ') + l : l), '');
 
   const td0 = (html, extra) => `<td${wAttr(0)} style="font-weight:bold;vertical-align:top;padding:6px 8px;${B}${extra || ''}${wStyle(0)}">${html}</td>`;
   const td1 = (html, extra) => `<td${wAttr(1)} style="vertical-align:top;padding:6px 8px;${B}${extra || ''}${wStyle(1)}">${html}</td>`;
@@ -72,7 +77,7 @@
     head += span(`<i><b>${esc(withStation(tpl.title || tpl.label || '', s))}</b></i>`);
     head += `<tr>${td0('Item', 'background:#e8e8e8;')}${td1('Details', 'background:#e8e8e8;font-weight:bold;')}</tr>`;
     let rows = '';
-    scopeRows(ctx).forEach(r => { rows += `<tr>${td0(esc(r.q.label))}${td1(r.lines.map(escL).join('<br>'))}</tr>`; });
+    scopeRows(ctx).forEach(r => { rows += `<tr>${td0(esc(r.q.label))}${td1(r.lines.map(lineHtml).join('<br>'))}</tr>`; });
     if (inc.followUps) {
       const fu = openFollowUps(ctx, 'scope');
       if (fu.length) {
@@ -92,7 +97,7 @@
     }
     out += `${withStation(tpl.title || tpl.label || '', s)}\n\n`;
     out += 'Item\tDetails\n';
-    scopeRows(ctx).forEach(r => { out += `${r.q.label}\t${r.lines.map(U().flat).join('; ')}\n`; });
+    scopeRows(ctx).forEach(r => { out += `${r.q.label}\t${linesText(r.lines)}\n`; });
     if (inc.followUps) openFollowUps(ctx, 'scope').forEach(f => { out += `Follow-up\t${f.owner}: ${f.text}${f.link ? ' ' + f.link.url : ''}\n`; });
     return out;
   }

@@ -205,17 +205,22 @@
     if (f.unit && /^-?\d+(\.\d+)?$/.test(s)) s += ` ${f.unit}`;
     return s;
   }
-  // The answer cell's lines, as copied into Word.
+  // The answer cell's lines, as copied into Word: text, or { text, bold?, bullet? }.
   function outputLines(ctx, q) {
     const e = eff(ctx, q.code), lines = [];
     const pf = sch().presetField(q);
     if (pf) {
-      // The category first, then every part: ticked in its own words, unticked as the standard one.
+      // The category first, in bold — it heads the parts under it — then every part as a
+      // bullet, ticked in its own words, unticked as the standard one; each a sentence.
       const ticks = [].concat(e.value || []), cat = String(e.fields[pf.code] || '');
+      const stop = t => (/[.!?]$/.test(t) ? t : `${t}.`);
       if (cat || ticks.length) {
         const co = sch().flatOptions(pf.options).find(o => o.code === cat);
-        if (co) lines.push(`${pf.label}: ${co.label}`);
-        sch().flatOptions(q.options).forEach(o => { if (ticks.includes(o.code)) lines.push(o.label); else if (o.offText) lines.push(o.offText); });
+        if (co) lines.push({ text: stop(`${pf.label}: ${co.label}`), bold: true });
+        sch().flatOptions(q.options).forEach(o => {
+          const t = ticks.includes(o.code) ? o.label : o.offText;
+          if (t) lines.push({ text: stop(t), bullet: true });
+        });
       }
     } else if (e.value != null) [].concat(e.value).forEach(v => {
       const o = sch().option(q, v);

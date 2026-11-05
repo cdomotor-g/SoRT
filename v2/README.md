@@ -66,9 +66,12 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   coastline (live; river mouths are closed off by the layer's Coastline
   Junction lines) and to the surf beaches in `data/surf-coast.json`, and fills
   in the category as a Map suggestion — never over a person's answer; it
-  follows a relocation's new location; *📍 Show on map* draws the distances
-  (left out of the Word picture). Word gets the category and every part,
-  unticked ones as the standard part.
+  follows a relocation's new location; *🗺 Map of these distances* opens the
+  guide, which starts with a map of its own (the site, the coastline measured
+  to, a line to each nearest shore; never in the Word picture). A rounded
+  position is warned about only when it could change the category. Word gets
+  the category as a bold line and every part as a bullet under it (unticked
+  ones as the standard part), each a sentence.
 - **Rules and follow-ups**: e.g. a comms change to ERRTS raises "Hub rep to
   supply new ALERT IDs"; an ACMA licence transfer, vegetation management, an
   access track and a bridge attachment each raise their own follow-up, and the

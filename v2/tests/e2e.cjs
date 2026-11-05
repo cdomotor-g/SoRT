@@ -566,11 +566,17 @@ const scenarios = {
     ok(/AS 4312: C3\s*OTE: C4/.test(await p.innerText('#guideDlg .guide-cmp tr[data-shore="surf"] td:nth-child(6)')) && /Surf, 1–10 km: AS 4312 says C3 \(C3 and below\); OTE says C4 — stainless enclosure and orifice run\./.test(guide) && /Tropical quiet, 0\.5–1 km: AS 4312 says C3 \(C3 and below\); OTE says C5 and CX — all stainless — 2 categories apart\./.test(guide), 'and each difference is written out (surf 1–10 km: C3 against C4)');
     await p.click('#guideDlg .dlg-foot button:has-text("Close")');
     ok(!(await p.$('#guideDlg')), 'and closes');
+    // The card's map button opens the guide at this site's own map (the map library is blocked here, so it says so).
+    ok(!/Show on map/.test(await p.innerText('#coast-infraOptions')), 'no button draws on the main map any more');
+    await p.click('#coast-infraOptions button:has-text("Map of these distances")');
+    await p.waitForSelector('#guideDlg[open] #guideMap', { timeout: 5000 });
+    ok(/This site’s distance to the sea/.test(await p.innerText('#guideDlg .guide-body')) && await p.waitForFunction(() => /couldn’t load here/.test(document.querySelector('#guideMap').textContent), null, { timeout: 30000 }).then(() => true).catch(() => false), '“Map of these distances” opens the guide at the site’s own map');
+    await p.keyboard.press('Escape');
     // Word: the category, then every part (standard where it isn't ticked).
     await p.click('.top .copy-btn');
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
     const html = await p.clip();
-    ok(/Corrosion category: C4 — stainless enclosure and orifice run/.test(html) && /Standard galvanised tower/.test(html) && !/Aluminium enclosure/.test(html), 'Word has the category and each part');
+    ok(/<b>Corrosion category: C4 — stainless enclosure and orifice run\.<\/b>/.test(html) && /• Standard galvanised tower\.<br>• Stainless steel enclosure with stainless steel fixtures and fittings\.<br>• Stainless steel orifice run \(capillary conduit\) with stainless steel fixtures and fittings\./.test(html) && !/Aluminium enclosure/.test(html), 'Word: the category as a bold line, then each part as a bullet, each a sentence');
     // Relocating: the new location is measured; a person's answer stands.
     await p.click('#q-relocation .opt:has-text("Yes")');
     await p.fill('#q-relocation input[aria-label="Relocation — New Location (coordinates)"]', '-27.5123, 152.9355');
@@ -578,6 +584,21 @@ const scenarios = {
     await p.waitForFunction(() => /new location/.test((document.querySelector('#coast-infraOptions') || {}).textContent || '') && /Suggests C3/.test(document.querySelector('#coast-infraOptions').textContent), null, { timeout: 20000 });
     note = await p.innerText('#coast-infraOptions');
     ok(/Temperate semi-sheltered shore: 1\.6 km/.test(note) && /The answer below is C4/.test(note) && await onCat() === 'C4', 'the new location is measured (1.6 km: C3) and the answer chosen stands');
+    // A rounded position (2 decimal places, ±557 m) 600 m from the shore could be C3 or C5: it says so, until the position is someone's.
+    await p.newSession();
+    await p.fill('#stationSearch', 'Zzyzx Qqq Creek');
+    await p.waitForFunction(() => /No station by that name/.test(document.querySelector('.station-find .hint').textContent), null, { timeout: 20000 });
+    await p.click('.station-find .hint button:has-text("Enter it by hand")');
+    await p.fill('.manual-grid [name=name]', 'Zzyzx Creek AL');
+    await p.fill('.manual-grid [name=pos]', '-27.51, 152.9456');
+    await p.selectOption('.manual-grid [name=measures]', 'river');
+    await p.click('.manual-grid button:has-text("Use this station")');
+    await p.waitForFunction(() => /Suggests/.test((document.querySelector('#coast-infraOptions') || {}).textContent || ''), null, { timeout: 20000 });
+    ok(/rounded \(good to about ±557 m\), which is enough to make it C3 and below or C5 and CX/.test(await p.innerText('#coast-infraOptions')), 'a rounded position warns when it could change the category');
+    await p.fill('#q-coords input[aria-label="Instrumentation Coordinates — Existing"]', '-27.51, 152.9456');
+    await p.press('#q-coords input[aria-label="Instrumentation Coordinates — Existing"]', 'Tab');
+    await p.waitForTimeout(400);
+    ok(!/rounded/.test(await p.innerText('#coast-infraOptions')), 'and stops once a person has given the position');
     // No coastline service: no suggestion, and it says so.
     fail = true;
     await p.newSession();

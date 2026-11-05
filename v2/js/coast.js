@@ -112,13 +112,13 @@
     const best = {};
     const keep = (type, d2, x, y) => { if (!best[type] || d2 < best[type].d2) best[type] = { d2, x, y }; };
     // Surf: the whole file (it is small), so a far beach still has a distance.
-    const near = [];
-    lines.forEach(l => {
+    const near = [], surfNear = new Set();
+    lines.forEach((l, li) => {
       for (let i = 0; i < l.length - 1; i++) {
         const ax = F.x(l[i][0]), ay = F.y(l[i][1]), bx = F.x(l[i + 1][0]), by = F.y(l[i + 1][1]);
         const r = nearSeg(px, py, ax, ay, bx, by);
         keep(CFG.shore.surf, r[0], r[1], r[2]);
-        if (r[0] < (radius + 1000) ** 2) near.push([ax, ay, bx, by]);
+        if (r[0] < (radius + 1000) ** 2) { near.push([ax, ay, bx, by]); surfNear.add(li); }
       }
     });
     const onSurf = (x, y) => near.some(s => nearSeg(x, y, s[0], s[1], s[2], s[3])[0] <= CFG.surfTolM ** 2);
@@ -137,7 +137,8 @@
       if (t !== CFG.shore.surf && m > radius) return;
       shores[t] = { m, lat: F.lat(b.y), lon: F.lon(b.x) };
     });
-    return { shores, radius };
+    // What the distance map draws: the coastline fetched, and the surf stretches near the site.
+    return { shores, radius, draw: { shore: paths, surf: [...surfNear].map(i => lines[i]) } };
   }
   // The highest band any shore reaches: { category, because:[{shore, m, within}] }.
   function suggest(guide, shores) {
@@ -156,11 +157,12 @@
   function sync(A) {
     C.app = A;
     const q = question(A.ctx);
-    if (!q || !guideOf(A, q)) { if (C.key) { C.key = ''; C.res = null; clearMap(); } return; }
+    if (!q || !guideOf(A, q)) { if (C.key) { C.key = ''; C.res = null; } return; }
     const p = site(A.ctx);
     const key = `${A.session.id}|${q.code}|${p ? posKey(p) : ''}|${A.defs.version}`;
-    if (key === C.key) return;
-    C.key = key; clearMap();
+    const seen = `${key}|${p && p.checked}`;     // the same spot, now checked: the card's warning may go
+    if (key === C.key) { if (seen !== C.seen) { C.seen = seen; paint(A, q); } return; }
+    C.key = key; C.seen = seen;
     clearTimeout(C.timer);
     if (!p) { settle(A, q, { status: 'nopos' }); return; }
     if (!inQldCoast(p)) { settle(A, q, { status: 'outside', pos: p }); return; }
@@ -174,7 +176,7 @@
     let res;
     try {
       const m = await measure(p, guide);
-      res = { status: 'ok', pos: p, shores: m.shores, radius: m.radius, sugg: suggest(guide, m.shores), at: Date.now() };
+      res = { status: 'ok', pos: p, shores: m.shores, radius: m.radius, draw: m.draw, sugg: suggest(guide, m.shores), at: Date.now() };
       C.cache.set(posKey(p) + '|' + A.defs.version, res);
     } catch (e) {
       let surf = null;
@@ -278,10 +280,24 @@
     box.appendChild(line);
     const acts = h('div', { class: 'coast-acts' });
     if (cur !== sug) acts.appendChild(h('button', { type: 'button', class: 'btn-mini', onclick: () => use(A, q, sug) }, `Use ${catLabel(q, sug).split(' — ')[0]}`));
-    if (S.mapView && S.mapView.ready && S.mapView.ready()) acts.appendChild(h('button', { type: 'button', class: 'btn-mini', title: 'Draw the measured distances on the map (left out of the Word picture)', onclick: () => showOnMap(A, q) }, '📍 Show on map'));
+    if (Object.values(r.shores).some(v => v.m <= r.radius)) acts.appendChild(h('button', { type: 'button', class: 'btn-mini', title: 'A map of the site and the shores these distances are measured to, in the corrosion guide', onclick: () => openGuide(A, q) }, '🗺 Map of these distances'));
     if (acts.childNodes.length) box.appendChild(acts);
-    const prec = U().coordPrecision(r.pos.lat, r.pos.lon).metres;
-    if (!r.pos.checked && prec > 60) box.appendChild(h('div', { class: 'hint warn' }, `This position is only good to about ±${U().fmtDist(prec)} — check it on the map (✓ Position checked), and the distance is measured again.`));
+    const w = roundingWarning(A, q, r);
+    if (w) box.appendChild(h('div', { class: 'hint warn' }, w));
+  }
+  /* A rounded position (Flood-Net's are often to 2 or 3 decimal places) only
+     matters when moving the site by that much could change the category: then
+     say so, with the two it could be. Read afresh, so ✓ Position checked clears it. */
+  function roundingWarning(A, q, r) {
+    const p = site(A.ctx);
+    if (!p || p.checked || posKey(p) !== posKey(r.pos)) return '';
+    const prec = U().coordPrecision(p.lat, p.lon).metres;
+    if (prec <= 60) return '';
+    const g = guideOf(A, q), moved = d => Object.fromEntries(Object.entries(r.shores).map(([t, v]) => [t, { m: Math.max(0, v.m + d) }]));
+    const nearer = suggest(g, moved(-prec)).category, further = suggest(g, moved(prec)).category;
+    if (nearer === further) return '';
+    const name = c => catLabel(q, c).split(' — ')[0];
+    return `This position is rounded (good to about ±${U().fmtDist(prec)}), which is enough to make it ${name(further)} or ${name(nearer)}. On the map, move the pin onto the equipment and press ✓ Position checked: the distance is then measured from there.`;
   }
   function use(A, q, code) {
     const pf = sch().presetField(q), opt = sch().flatOptions(pf.options).find(o => o.code === code);
@@ -291,15 +307,6 @@
     a.fields[pf.code] = opt.code; a.value = (opt.ticks || []).slice();
     a.checked = { src: 'map', from: C.res && C.res.status === 'ok' ? fromText(A, q, C.res) : '', at: Date.now() };
     A.changed();
-  }
-  function clearMap() { if (S.mapView && S.mapView.showCoast) S.mapView.showCoast(null); }
-  function showOnMap(A, q) {
-    const r = C.res, g = guideOf(A, q);
-    if (!r || r.status !== 'ok' || !S.mapView || !S.mapView.showCoast) return;
-    const lines = Object.entries(r.shores).filter(([, v]) => v.m <= 50000)
-      .map(([t, v]) => ({ lat: v.lat, lon: v.lon, label: `${shoreDef(g, t).label} ${dist(v.m)}`, surf: t === CFG.shore.surf }));
-    S.mapView.showCoast({ lat: r.pos.lat, lon: r.pos.lon, lines });
-    const el = document.getElementById('map-card'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   /* ---------------- the guide (the pop-up) ---------------- */
@@ -343,6 +350,26 @@
     // Least severe first: C3 and below, C4, C5 and CX.
     const cats = [g.otherwise].concat((g.bands || []).slice().reverse()).filter(Boolean);
     const body = h('div', { class: 'dlg-body guide-body' });
+    let mini = null;
+    if (r) {
+      // This site: its distances to the sea, on a map of its own.
+      const box = h('div', { class: 'guide-map', id: 'guideMap', role: 'img', 'aria-label': 'Map of the site and the nearest shores' });
+      const within = Object.entries(r.shores).filter(([, v]) => v.m <= r.radius);
+      body.appendChild(h('h3', { class: 'guide-first' }, 'This site’s distance to the sea'));
+      body.appendChild(h('p', { class: 'guide-site' }, `This site (${U().formatCoord(r.pos.lat, r.pos.lon)}): `, h('b', null, catLabel(q, r.sugg.category)),
+        r.sugg.because.length ? ` — within ${r.sugg.because.map(b => `${lim(b.within)} of ${shoreDef(g, b.shore).short} (${dist(b.m)})`).join(', and ')}.` : ` — further from the sea than any of OTE’s distances${within.length ? '' : ` (no shore within ${dist(r.radius)})`}.`));
+      if (!within.length) body.appendChild(h('p', null, `No shore is within ${dist(r.radius)} of the site, so there is nothing to map${r.shores[CFG.shore.surf] ? ` (the nearest surf beach is ${dist(r.shores[CFG.shore.surf].m)} away)` : ''}.`));
+      else body.appendChild(box);
+      if (within.length) body.appendChild(h('p', { class: 'muted guide-map-key' }, 'Red: the site. Dashed: the distance measured to the nearest shore of each kind — orange a surf beach, blue any other shore (bays, river mouths). Only on this map, never in the Word picture.',
+        r.shores[CFG.shore.surf] && r.shores[CFG.shore.surf].m > r.radius ? ` The nearest surf beach is ${dist(r.shores[CFG.shore.surf].m)} away, off this map.` : ''));
+      if (!within.length) { /* nothing to map */ } else if (S.mapView && S.mapView.miniMap) {
+        box.appendChild(h('div', { class: 'guide-map-msg' }, 'Loading the map…'));
+        mini = S.mapView.miniMap(box, { lat: r.pos.lat, lon: r.pos.lon, label: 'The site', shore: (r.draw || {}).shore, surf: (r.draw || {}).surf,
+          lines: within.map(([t, v]) => ({ lat: v.lat, lon: v.lon, label: `${shoreDef(g, t).label} ${dist(v.m)}`, surf: t === CFG.shore.surf })) })
+          .then(m => { const msg = box.querySelector('.guide-map-msg'); if (m) { if (msg) msg.remove(); } else if (msg) msg.textContent = 'The map couldn’t load here; the distances are listed on the card.'; return m; });
+      } else box.appendChild(h('div', { class: 'guide-map-msg' }, 'The map isn’t available here; the distances are listed on the card.'));
+    }
+    body.appendChild(h('h3', null, 'About corrosion'));
     body.appendChild(h('p', null, g.intro || g.summary || ''));
     body.appendChild(h('h3', null, 'The three categories and their materials'));
     body.appendChild(h('table', { class: 'guide-tbl' },
@@ -366,8 +393,6 @@
           }),
           siteCol ? h('td', { class: 'site-col' }, v ? dist(v.m) : '—') : null);
       })))));
-    if (r) body.appendChild(h('p', { class: 'guide-site' }, `This site (${U().formatCoord(r.pos.lat, r.pos.lon)}): `, h('b', null, catLabel(q, r.sugg.category)),
-      r.sugg.because.length ? ` — within ${r.sugg.because.map(b => `${lim(b.within)} of ${shoreDef(g, b.shore).short} (${dist(b.m)})`).join(', and ')}.` : ' — further from the sea than any of the distances above.'));
     const cmp = compare(g);
     if (cmp) {
       const st = g.standard, nameOf = c => ((g.bands || []).find(b => b.category === c) || g.otherwise).name;
@@ -404,7 +429,7 @@
       body,
       h('div', { class: 'dlg-foot' }, h('span', { class: 'hint' }, 'The category you choose, and each part, go into Word.'),
         h('button', { type: 'button', class: 'btn btn-primary', onclick: () => dlg.close() }, 'Close')));
-    dlg.addEventListener('close', () => dlg.remove());
+    dlg.addEventListener('close', () => { if (mini) mini.then(m => m && m.destroy()); dlg.remove(); });
     document.body.appendChild(dlg);
     dlg.showModal();
   }
