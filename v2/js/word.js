@@ -221,7 +221,8 @@
     const s = ctx.session, inc = s.include;
     let html = scopeHtml(ctx), text = scopeText(ctx);
     if (inc.map && picture && picture.dataUrl) {
-      html += GAP + `<div><img src="${picture.dataUrl}" alt="Site map" style="width:16cm;max-width:100%;height:auto;border:1px solid #999;"></div>`;
+      // Centred, like the tables: align= for Word's paste, text-align for the preview.
+      html += GAP + `<div align="center" style="text-align:center;"><img src="${picture.dataUrl}" alt="Site map" style="width:16cm;max-width:100%;height:auto;border:1px solid #999;"></div>`;
       text += '\n\n[Site map image included]\n';
     }
     if (inc.map && inc.marks) {

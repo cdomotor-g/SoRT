@@ -748,6 +748,9 @@ const scenarios = {
     ok(/<img/.test(html), 'map picture copied');
     await p.$eval('#preview', e => e.scrollIntoView({ block: 'center' }));
     ok(await p.waitForFunction(() => !!document.querySelector('#preview img[alt="Site map"]'), null, { timeout: 30000 }).then(() => true).catch(() => false), 'the preview shows the map picture');
+    ok(/<div align="center"[^>]*><img[^>]*alt="Site map"/.test(html), 'the copied map picture is centred for Word');
+    const mid = await p.evaluate(() => { const c = b => b.left + b.width / 2; return [c(document.querySelector('#preview img[alt="Site map"]').getBoundingClientRect()), c(document.querySelector('#preview table').getBoundingClientRect())]; });
+    ok(Math.abs(mid[0] - mid[1]) < 2, `the preview's map picture is centred like the tables (${mid.map(Math.round).join(' vs ')})`);
     ok(/State survey marks near Abergowrie Bridge AL \(532028\)/.test(html), 'State survey marks table copied, headed with the station');
     // Zoom lock: on by default; the wheel scrolls past the map instead of zooming it.
     await p.evaluate(() => { document.querySelector('#map-card').scrollTop = 0; scrollTo(0, 0); });
