@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "curl -fsS --max-time 15 https://raw.githubusercontent.com/cdomotor-g/atlas/main/shared/instructions.md || echo 'Could not download the shared instructions when this session started. Before you reply, read https://github.com/cdomotor-g/atlas/blob/main/shared/instructions.md and follow it.'"
+          },
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "curl -fsS --max-time 15 https://raw.githubusercontent.com/cdomotor-g/atlas/main/shared/on-the-atlas.md || echo 'Could not download the shared instructions for repositories on the Atlas when this session started. Before you reply, read https://github.com/cdomotor-g/atlas/blob/main/shared/on-the-atlas.md and follow it.'"
+          }
+        ]
+      }
+    ]
+  }
+}
