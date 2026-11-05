@@ -561,6 +561,9 @@ const scenarios = {
     ok(/Temperate semi-sheltered\tAdelaide, Brisbane, Perth\tunder 100 m\t100 m – 1 km\tover 1 km\t600 m/.test(guide) && /Surf\tSydney, Wollongong, Newcastle, Gold Coast\tunder 1 km\t1 km – 10 km\tover 10 km/.test(guide), 'the distances by kind of shore, with this site’s');
     ok(await p.$$eval('#guideDlg .guide-matrix td.hit', e => e.map(x => x.textContent).join()) === '100 m – 1 km,over 10 km' && await p.$$eval('#guideDlg .guide-matrix td.decides', e => e.map(x => x.textContent).join()) === '100 m – 1 km', 'where this site sits for each shore is marked, and the one that decides it stands out');
     ok(/CX — Extreme/.test(guide) && /This site \(-27\.5123, 152\.9456\): C4/.test(guide), 'AS 4312’s grades, and what this site comes to');
+    ok(/How far from the shore — OTE’s instruction/.test(guide) && /AS 4312:2019 Table 4\.1 and OTE’s instruction compared/.test(guide), 'OTE’s distances and the standard’s own table, both shown');
+    ok(await p.$$eval('#guideDlg .guide-cmp td.cmp-stricter', e => e.length) === 6 && await p.$$eval('#guideDlg .guide-cmp td.cmp-looser', e => e.length) === 0 && /OTE is never less strict than the standard/.test(guide), 'the six bands where OTE is stricter are shaded; it is never less strict');
+    ok(/AS 4312: C3\s*OTE: C4/.test(await p.innerText('#guideDlg .guide-cmp tr[data-shore="surf"] td:nth-child(6)')) && /Surf, 1–10 km: AS 4312 says C3 \(C3 and below\); OTE says C4 — stainless enclosure and orifice run\./.test(guide) && /Tropical quiet, 0\.5–1 km: AS 4312 says C3 \(C3 and below\); OTE says C5 and CX — all stainless — 2 categories apart\./.test(guide), 'and each difference is written out (surf 1–10 km: C3 against C4)');
     await p.click('#guideDlg .dlg-foot button:has-text("Close")');
     ok(!(await p.$('#guideDlg')), 'and closes');
     // Word: the category, then every part (standard where it isn't ticked).

@@ -19,13 +19,13 @@
   "status": {
     "phase": "live",
     "updated": "2026-11-05",
-    "summary": "v2 is the Scope Builder since 4 Nov 2026 (/SoRT/ opens /SoRT/v2/; v1 kept at /SoRT/v1/): Flood-Net station lookup with corrections of its particulars for the Word tables, ACMA licences, and the radio path to base with fresh fade margins; the map beside the questions (each pane scrolling on its own) with survey marks and bridges; sessions shared with the whole forum through Flood-Net's server (a forum passphrase, no accounts or tokens), an in-page question editor, a Help guide, the local TBM as a desktop task, and follow-ups handed to Flood-Net's teams as tasks, and on the Water Level table a corrosion category for the infrastructure options (the Bureau engineers’ three AS 4312 groupings), suggested from the site’s distance to the sea on QSpatial’s coastline.",
+    "summary": "v2 is the Scope Builder since 4 Nov 2026 (/SoRT/ opens /SoRT/v2/; v1 kept at /SoRT/v1/): Flood-Net station lookup with corrections of its particulars for the Word tables, ACMA licences, and the radio path to base with fresh fade margins; the map beside the questions (each pane scrolling on its own) with survey marks and bridges; sessions shared with the whole forum through Flood-Net's server (a forum passphrase, no accounts or tokens), an in-page question editor, a Help guide, the local TBM as a desktop task, and follow-ups handed to Flood-Net's teams as tasks, and on the Water Level table a corrosion category for the infrastructure options (OTE’s three AS 4312 groupings, with the standard’s own table shown beside them), suggested from the site’s distance to the sea on QSpatial’s coastline.",
     "now": [
       "v2 at real forums as the default; v1 kept at /SoRT/v1/ in case"
     ],
     "next": [
       "Playbook: push the five seeded stations once the private repo exists; import more Word reports in batches",
-      "Corrosion guide: the engineering department to confirm its distances, which are stricter than AS 4312 Table 4.1 in four places (e.g. 1–10 km from a surf beach is C3 in the table, C4 in the guide)"
+      "Corrosion guide: OTE to confirm that its surf 1–10 km band (C4, where AS 4312 Table 4.1 gives C3) is deliberate; the guide shows both tables and the six bands where OTE is stricter"
     ],
     "later": [
       "A Dataverse import keyed on v2's permanent question and option codes (v2/playbook/export_tables.mjs writes the tables)"

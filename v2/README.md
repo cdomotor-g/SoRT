@@ -57,8 +57,9 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   category* — C3 and below (standard), C4 (stainless enclosure and orifice
   run), C5 and CX (all stainless) or Custom — sets the three stainless-steel
   tick boxes; changing a tick makes it Custom (or the category those ticks
-  are). The Bureau engineers' grouping of AS 4312:2019's grades, by distance
-  from the shore and the kind of shore (surf, semi-sheltered, quiet, tropical).
+  are). OTE's grouping of AS 4312:2019's grades, by distance from the shore
+  and the kind of shore (surf, semi-sheltered, quiet, tropical); see
+  [Corrosion: AS 4312 and OTE's instruction](#corrosion-as-4312-and-otes-instruction).
   The card has a brief summary and *📖 More about corrosion*, a guide with the
   distances table and this site's column. Once the site's position is known,
   `js/coast.js` measures its distance to the sea on QSpatial's Queensland
@@ -167,6 +168,50 @@ edit:
 ```bash
 node v2/tools/check-definitions.mjs
 ```
+
+## Corrosion: AS 4312 and OTE's instruction
+
+The Water Level table's corrosion categories follow **OTE's instruction**
+(November 2026), which groups AS 4312:2019's grades into three and sets the
+distances. Where its distances differ from the standard's own table they are
+**stricter, never less strict**; the tool follows OTE, and the guide pop-up
+shows both (worked out from `guides.corrosion` in `definitions.json`, so it
+stays true if either is edited).
+
+OTE's instruction — the category at each distance from the shoreline:
+
+| Shore (e.g.) | C5 and CX (all stainless) | C4 (stainless enclosure and orifice run) | C3 and below (standard) |
+| --- | --- | --- | --- |
+| Temperate quiet (Melbourne, Hobart) | — | under 100 m | over 100 m |
+| Temperate semi-sheltered (Adelaide, Brisbane, Perth) | under 100 m | 100 m – 1 km | over 1 km |
+| Tropical quiet (Cairns, Townsville, Mackay) | under 1 km | — | over 1 km |
+| Surf (Sydney, Wollongong, Newcastle, Gold Coast) | under 1 km | 1 – 10 km | over 10 km |
+
+AS 4312:2019 Table 4.1 (as reproduced in Timber Queensland Technical Data
+Sheet 35, April 2020) — the grade at each distance:
+
+| Shore | 0–50 m | 50–100 m | 100–500 m | 0.5–1 km | 1–10 km | 10–100 km |
+| --- | --- | --- | --- | --- | --- | --- |
+| Temperate quiet | C4 | C3 | C3 | C3 | C2 | C2 |
+| Temperate semi-sheltered | C5 | C4 | C4 | C3 | C3\* | C2 |
+| Tropical quiet | CX | CX | C5/C4 | C3 | C2 | C2 |
+| Surf | CX | CX/C5 | C5 | C4 | C3 | C3\* |
+
+\* Reduce to C2 where the site is more than 50 m above sea level and more
+than 5 km from the shoreline.
+
+Where OTE is stricter (6 of the 24 bands):
+
+| Shore, distance | AS 4312 | OTE |
+| --- | --- | --- |
+| Temperate quiet, 50–100 m | C3 (C3 and below) | C4 |
+| Temperate semi-sheltered, 50–100 m | C4 | C5 and CX |
+| Temperate semi-sheltered, 0.5–1 km | C3 (C3 and below) | C4 |
+| Tropical quiet, 0.5–1 km | C3 (C3 and below) | C5 and CX — two categories up |
+| Surf, 0.5–1 km | C4 | C5 and CX |
+| Surf, 1–10 km | C3 (C3 and below) | C4 — the one that matters most: much of the Gold Coast and Sunshine Coast hinterland |
+
+Asked of OTE: is the surf 1–10 km band (C4, not the standard's C3) deliberate?
 
 ## Version stamp
 

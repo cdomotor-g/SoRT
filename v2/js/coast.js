@@ -314,6 +314,27 @@
     cells.push({ cat: (guide.otherwise || {}).category, text: lo ? `over ${lim(lo)}` : 'anywhere', lo, hi: Infinity });
     return cells;
   }
+  /* AS 4312's own table (guide.standard) beside OTE's distances: for each kind
+     of shore and each of the standard's distance bands, the standard's grade
+     (as one of the three categories; a split grade at its higher one) and OTE's
+     category there. cmp: 'stricter' | 'same' | 'looser', steps = how many
+     categories apart. Worked out from the data, so it stays true if either changes. */
+  function compare(guide) {
+    const st = guide.standard;
+    if (!st || !guide.otherwise) return null;
+    const order = [guide.otherwise.category].concat((guide.bands || []).map(b => b.category).reverse());   // least severe first
+    const rank = c => order.indexOf(c);
+    const oteAt = (shore, m) => { for (const b of guide.bands || []) { const l = (b.within || {})[shore]; if (l != null && m < l) return b.category; } return guide.otherwise.category; };
+    const rows = (st.rows || []).map(r => ({ shore: r.shore, cells: (st.bands || []).map((band, i) => {
+      const grade = String(r.grades[i]);
+      const stdCat = grade.split('/').map(t => (st.groups || {})[t.replace(/[^A-Za-z0-9]/g, '')]).sort((a, b) => rank(b) - rank(a))[0];
+      const near = oteAt(r.shore, band.from), far = oteAt(r.shore, band.to - 1e-6);
+      const ote = rank(near) >= rank(far) ? near : far;      // a band across one of OTE's distances: its stricter end
+      const steps = rank(ote) - rank(stdCat);
+      return { band, grade, stdCat, ote, steps, cmp: steps > 0 ? 'stricter' : steps < 0 ? 'looser' : 'same' };
+    }) }));
+    return { rows };
+  }
   function openGuide(A, q) {
     const g = guideOf(A, q);
     if (!g) return;
@@ -328,7 +349,7 @@
       h('thead', null, h('tr', null, h('th', null, 'Category'), h('th', null, 'AS 4312 grade'), h('th', null, 'Materials'))),
       h('tbody', null, cats.map(c => h('tr', { class: r && r.sugg.category === c.category ? 'hit' : null },
         h('th', null, c.name), h('td', null, c.grade || ''), h('td', null, c.materials || ''))))));
-    body.appendChild(h('h3', null, 'How far from the shore'));
+    body.appendChild(h('h3', null, 'How far from the shore — OTE’s instruction'));
     const shores = (g.shores || []);
     const siteCol = !!r;
     body.appendChild(h('div', { class: 'guide-scroll' }, h('table', { class: 'guide-tbl guide-matrix' },
@@ -347,6 +368,27 @@
       })))));
     if (r) body.appendChild(h('p', { class: 'guide-site' }, `This site (${U().formatCoord(r.pos.lat, r.pos.lon)}): `, h('b', null, catLabel(q, r.sugg.category)),
       r.sugg.because.length ? ` — within ${r.sugg.because.map(b => `${lim(b.within)} of ${shoreDef(g, b.shore).short} (${dist(b.m)})`).join(', and ')}.` : ' — further from the sea than any of the distances above.'));
+    const cmp = compare(g);
+    if (cmp) {
+      const st = g.standard, nameOf = c => ((g.bands || []).find(b => b.category === c) || g.otherwise).name;
+      const all = [].concat(...cmp.rows.map(r => r.cells.map(c => ({ r, c }))));
+      const stricter = all.filter(x => x.c.cmp === 'stricter'), looser = all.filter(x => x.c.cmp === 'looser');
+      const words = ({ r, c }) => `${shoreDef(g, r.shore).label}, ${c.band.label}: AS 4312 says ${c.grade}${nameOf(c.stdCat) !== c.grade ? ` (${nameOf(c.stdCat)})` : ''}; OTE says ${catLabel(q, c.ote)}${Math.abs(c.steps) > 1 ? ` — ${Math.abs(c.steps)} categories apart` : ''}.`;
+      body.appendChild(h('h3', null, `${st.title || 'AS 4312'} and OTE’s instruction compared`));
+      body.appendChild(h('p', null, `${st.about || ''} Each box gives the standard’s grade, then OTE’s category at that distance. The tool follows OTE. `,
+        stricter.length ? h('span', { class: 'cmp-key cmp-stricter' }, 'Shaded') : null, stricter.length ? ` — OTE is stricter than the standard (${stricter.length} of ${all.length}).` : '',
+        looser.length ? h('b', null, ` ⚠ In ${looser.length} OTE is less strict than the standard.`) : ' OTE is never less strict than the standard.'));
+      body.appendChild(h('div', { class: 'guide-scroll' }, h('table', { class: 'guide-tbl guide-cmp' },
+        h('thead', null, h('tr', null, h('th', null, 'Shore'), (st.bands || []).map(b => h('th', null, b.label)))),
+        h('tbody', null, cmp.rows.map(r => h('tr', { dataset: { shore: r.shore } }, h('th', null, shoreDef(g, r.shore).label),
+          r.cells.map(c => h('td', { class: `cmp-${c.cmp}`, title: words({ r, c }) },
+            h('div', null, 'AS 4312: ', h('b', null, c.grade)), h('div', null, 'OTE: ', h('b', null, nameOf(c.ote)))))))))));
+      if (stricter.length || looser.length) {
+        body.appendChild(h('p', null, 'Where they differ:'));
+        body.appendChild(h('ul', { class: 'cmp-list' }, looser.concat(stricter).map(x => h('li', { class: x.c.cmp === 'looser' ? 'warn' : null }, words(x)))));
+      }
+      if ((st.footnotes || []).length) body.appendChild(h('ul', { class: 'muted cmp-notes' }, st.footnotes.map(n => h('li', null, n))));
+    }
     body.appendChild(h('h3', null, 'The kinds of shore'));
     body.appendChild(h('dl', { class: 'guide-dl' }, shores.map(s => [h('dt', null, s.label, s.examples ? h('span', { class: 'muted' }, ` — e.g. ${s.examples}`) : null), h('dd', null, s.about || '')])));
     if ((g.grades || []).length) {
@@ -367,5 +409,5 @@
     dlg.showModal();
   }
 
-  S.coast = { sync, summary, node, openGuide, site, measure, suggest, withinText, CFG, _C: C };
+  S.coast = { sync, summary, node, openGuide, site, measure, suggest, withinText, compare, CFG, _C: C };
 })(typeof window !== 'undefined' ? window : globalThis);

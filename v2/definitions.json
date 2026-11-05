@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 9,
+  "version": 10,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-11-05",
@@ -2422,9 +2422,9 @@
   "guides": {
     "corrosion": {
       "title": "Corrosion and the infrastructure options",
-      "summary": "Salt from the sea corrodes steel and aluminium, so the materials go by how far the site is from the shore (AS 4312).",
-      "intro": "Salt carried inland from the sea corrodes galvanised steel and aluminium far faster than inland air does. AS 4312:2019, Atmospheric corrosivity zones in Australia, grades a site’s air from C1 (very low) to CX (extreme), mostly by how far it is from the sea and how rough that sea is. The Bureau’s engineers group those grades into three categories, each with its own materials.",
-      "source": "Bureau engineering advice (November 2026), based on AS 4312:2019 Atmospheric corrosivity zones in Australia.",
+      "summary": "Salt from the sea corrodes steel and aluminium, so the materials go by how far the site is from the shore (OTE’s instruction, from AS 4312).",
+      "intro": "Salt carried inland from the sea corrodes galvanised steel and aluminium far faster than inland air does. AS 4312:2019, Atmospheric corrosivity zones in Australia, grades a site’s air from C1 (very low) to CX (extreme), mostly by how far it is from the sea and how rough that sea is. OTE groups those grades into three categories, each with its own materials, and sets the distances for each kind of shore. The tool follows OTE’s instruction; where its distances differ from the standard’s own table, both are shown below.",
+      "source": "OTE’s instruction (November 2026), based on AS 4312:2019 Atmospheric corrosivity zones in Australia. The standard’s Table 4.1 as reproduced in Timber Queensland Technical Data Sheet 35 (April 2020).",
       "shores": [
         {
           "code": "temperate_quiet",
@@ -2485,6 +2485,101 @@
         "grade": "medium, low and very low",
         "materials": "Standard galvanised tower, aluminium enclosure and galvanised orifice run. In a polluted river, a stainless steel orifice run: tick it, and the choice becomes Custom."
       },
+      "standard": {
+        "title": "AS 4312:2019 Table 4.1",
+        "about": "The standard’s own table: the corrosivity grade at each distance from the shoreline, for each kind of shore.",
+        "bands": [
+          {
+            "label": "0–50 m",
+            "from": 0,
+            "to": 50
+          },
+          {
+            "label": "50–100 m",
+            "from": 50,
+            "to": 100
+          },
+          {
+            "label": "100–500 m",
+            "from": 100,
+            "to": 500
+          },
+          {
+            "label": "0.5–1 km",
+            "from": 500,
+            "to": 1000
+          },
+          {
+            "label": "1–10 km",
+            "from": 1000,
+            "to": 10000
+          },
+          {
+            "label": "10–100 km",
+            "from": 10000,
+            "to": 100000
+          }
+        ],
+        "rows": [
+          {
+            "shore": "temperate_quiet",
+            "grades": [
+              "C4",
+              "C3",
+              "C3",
+              "C3",
+              "C2",
+              "C2"
+            ]
+          },
+          {
+            "shore": "temperate_semi",
+            "grades": [
+              "C5",
+              "C4",
+              "C4",
+              "C3",
+              "C3*",
+              "C2"
+            ]
+          },
+          {
+            "shore": "tropical_quiet",
+            "grades": [
+              "CX",
+              "CX",
+              "C5/C4",
+              "C3",
+              "C2",
+              "C2"
+            ]
+          },
+          {
+            "shore": "surf",
+            "grades": [
+              "CX",
+              "CX/C5",
+              "C5",
+              "C4",
+              "C3",
+              "C3*"
+            ]
+          }
+        ],
+        "groups": {
+          "C1": "c3_and_below",
+          "C2": "c3_and_below",
+          "C3": "c3_and_below",
+          "C4": "c4",
+          "C5": "c5_cx",
+          "CX": "c5_cx"
+        },
+        "footnotes": [
+          "* Reduce to C2 where the site is more than 50 m above sea level and more than 5 km from the shoreline.",
+          "A split grade (CX/C5, C5/C4) is compared at its higher grade.",
+          "The shoreline is not accurately defined; in critical applications take it as the high tide line."
+        ]
+      },
       "grades": [
         {
           "code": "C1",
@@ -2519,8 +2614,7 @@
       ],
       "notes": [
         "Measure to the shoreline at high tide. A river bank upstream of the mouth is not the shoreline: the distance is to the sea.",
-        "Local conditions can push a site up a category: strong onshore winds over flat ground, spray from a nearby headland, industry nearby, or a polluted river. If in doubt, take the higher category.",
-        "These distances are rounded to 100 m, 1 km and 10 km, on the safe side of the standard’s own table (AS 4312 Table 4.1), which is more finely graded."
+        "Local conditions can push a site up a category: strong onshore winds over flat ground, spray from a nearby headland, industry nearby, or a polluted river. If in doubt, take the higher category."
       ],
       "how": "When the site’s position is known (its Instrumentation Coordinates, or the new location when the station is being relocated), the page measures the distance to the sea on QSpatial’s Queensland coastline: to the nearest surf beach, and to the nearest other shore, which counts as tropical quiet north of the Tropic of Capricorn and temperate semi-sheltered south of it. The highest category any of them reaches is filled in as a Map suggestion, orange until you check it. Outside Queensland, choose it yourself from the table."
     }

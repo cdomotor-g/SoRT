@@ -167,6 +167,19 @@
         });
       });
       if (!g.otherwise || !cats.has(g.otherwise.category)) E(`${where}: guide "${q.guide}" needs "otherwise" with one of the ${f.code} choices`);
+      // The standard's own table, shown beside the guide's distances.
+      const st = g.standard;
+      if (st) {
+        const nb = (st.bands || []).length, groups = st.groups || {};
+        if (!nb) E(`${where}: guide standard has no bands`);
+        (st.bands || []).forEach(b => { if (!(typeof b.from === 'number' && typeof b.to === 'number' && b.to > b.from)) E(`${where}: guide standard band "${b.label}" needs from < to, in metres`); });
+        Object.entries(groups).forEach(([gr, c]) => { if (!cats.has(c)) E(`${where}: guide standard groups ${gr} into unknown choice "${c}"`); });
+        (st.rows || []).forEach(r => {
+          if (!shores.has(r.shore)) E(`${where}: guide standard row names unknown shore "${r.shore}"`);
+          if (!Array.isArray(r.grades) || r.grades.length !== nb) E(`${where}: guide standard row "${r.shore}" needs ${nb} grades`);
+          (r.grades || []).forEach(x => String(x).split('/').forEach(t => { const k = t.replace(/[^A-Za-z0-9]/g, ''); if (!groups[k]) E(`${where}: guide standard grade "${x}" is not in its groups`); }));
+        });
+      }
     };
     const checkQuestion = (where, q) => {
       if (!q.label) E(`${where}: no label`);
