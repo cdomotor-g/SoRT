@@ -1,8 +1,8 @@
 /* SoRT v2 — store.js
    Sessions, saved in this browser as you go, so a reload or a crashed tab never
    loses a forum's work (v1 kept no answers at all). One session = one station
-   at one forum sitting. Saving to the playbook (playbook.js) is separate and
-   deliberate; this is the safety net underneath it.
+   at one forum sitting. The playbook (playbook.js) shares each one with the
+   forum by itself; this is the safety net underneath it.
 
    Keys all start "sortv2." — v1's "Clear cache" removes only "sort." keys, so
    it can never wipe these, and v2 never touches v1's.
@@ -20,7 +20,7 @@
                  fadeMargin, checked:{lat, lon, movedM, at} } | null,
        template, answers{}, prefill{}, ps{answers, dirty, comments, general},
        map:{ features[], hiddenMarks[], marks[], bridges[] },
-       followUpState{}, include{}, playbook:{savedAt, sha} }                     */
+       followUpState{}, include{}, playbook:{savedAt, asOf, key, sha, fp, allowed[]} }                     */
 (function (G) {
   'use strict';
   const S = G.SoRT = G.SoRT || {};
@@ -97,6 +97,15 @@
     rememberForum(s.forum);
     return ok;
   }
+  // Write a session back exactly as it is — its time, its place in the list and
+  // which session is open all unchanged (the playbook noting that it was shared).
+  function update(s) {
+    if (!U().LS.get(P + 's.' + s.id)) return false;
+    const ok = U().LS.set(P + 's.' + s.id, JSON.stringify(s));
+    const list = index(), i = list.findIndex(x => x.id === s.id);
+    if (i >= 0) { list[i] = summary(s); writeIndex(list); }
+    return ok;
+  }
   function load(id) { return upgrade(U().LS.json(P + 's.' + id, null)); }
   function current() { const id = U().LS.get(P + 'current'); return id ? load(id) : null; }
   function remove(id) {
@@ -105,5 +114,5 @@
     if (U().LS.get(P + 'current') === id) U().LS.del(P + 'current');
   }
 
-  S.store = { newSession, upgrade, save, load, current, remove, index, forumDay, rememberForum, DEFAULT_INCLUDE, PREFIX: P };
+  S.store = { newSession, upgrade, save, update, load, current, remove, index, forumDay, rememberForum, DEFAULT_INCLUDE, PREFIX: P };
 })(typeof window !== 'undefined' ? window : globalThis);

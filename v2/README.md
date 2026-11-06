@@ -91,8 +91,16 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   (`floodwarning.net/api/sort/v1`, Flood-Net's `docs/sort-store.md`) for whoever
   has the **forum passphrase**, typed once per computer — no accounts, no tokens.
   With it, every session with a station and an answer is shared by itself a few
-  seconds after a change (`js/store-remote.js`, `js/playbook.js`); without it a
-  *⚠ Saved only in this browser* bar says so. Text that looks like a phone
+  seconds after each change — there is no Share button (`js/store-remote.js`,
+  `js/playbook.js`); the top bar says *✓ Shared* and when, and without the
+  passphrase a *⚠ Saved only in this browser* bar says so. Saves are kept
+  small: four seconds after the last change (at least every half minute while
+  changes keep coming), nothing is sent when a fingerprint says nothing stored
+  has changed, the station's file is written straight over the copy last seen
+  (read again only when another computer saved in between), and the index only
+  when the station's line in it changed — one request instead of four. A failed
+  save is tried again by itself, and sessions left unshared (made offline, or
+  closed straight after a change) go once the server answers. Text that looks like a phone
   number, an email or a gate code holds a session back until a person decides.
   Sessions → search; *Open* carries on with a shared session as saved, *Start
   from it* begins today's from its answers, *Use as a precedent* fills this one

@@ -19,6 +19,8 @@ const BASE = process.env.BASE || 'http://127.0.0.1:8642/v2/';
 const ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 let failures = 0;
 const ok = (cond, what) => { console.log(`${cond ? '  ✓' : '  ✗'} ${what}`); if (!cond) failures++; };
+// Wait (up to ms) for a check that is done outside the page — the fake store's files.
+const until = async (fn, ms) => { const end = Date.now() + (ms || 10000); for (;;) { if (await fn()) return true; if (Date.now() > end) return false; await new Promise(r => setTimeout(r, 200)); } };
 
 // An in-memory GitHub contents API: the SoRT repo's v2/definitions.json and the playbook.
 function fakeGithub(defsText) {
@@ -51,7 +53,8 @@ function fakeGithub(defsText) {
 // Flood-Net's shared session store (floodwarning.net/api/sort/v1), in memory:
 // the forum passphrase is TEST-PASS; files carry ETags; If-Match / If-None-Match.
 function fakeStore() {
-  const files = new Map(); let n = 0; let puts = 0;
+  const files = new Map(); let n = 0; let puts = 0; let failPuts = 0;
+  const log = [];   // "PUT files/index.json", … — every request after the passphrase
   const crypto = require('crypto');
   const N = p => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   let hash = crypto.createHash('sha256').update('sort-forum-v1:' + N('TEST-PASS')).digest('hex');
@@ -61,6 +64,8 @@ function fakeStore() {
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type, x-sort-passphrase, if-match, if-none-match', 'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS', 'Access-Control-Expose-Headers': 'ETag' } });
     if (crypto.createHash('sha256').update('sort-forum-v1:' + N(H['x-sort-passphrase'])).digest('hex') !== hash) return reply(route, 401, { error: 'passphrase' });
     const path = url.pathname.replace(/^\/api\/sort\/v1\//, '');
+    log.push(`${req.method()} ${path}`);
+    if (req.method() === 'PUT' && path.startsWith('files/') && failPuts > 0) { failPuts--; return reply(route, 503, { error: 'busy' }); }
     if (path === 'check') return reply(route, 200, { ok: true });
     if (path === 'passphrase' && req.method() === 'PUT') { const b = JSON.parse(req.postData() || '{}'); if (!/^[0-9a-f]{64}$/.test(b.sha256 || '')) return reply(route, 400, { error: 'sha256' }); hash = b.sha256; return reply(route, 200, { ok: true }); }
     const m = path.match(/^files\/(index\.json|stations\/[a-z0-9][a-z0-9-]*\.json)$/);
@@ -75,7 +80,7 @@ function fakeStore() {
     }
     return reply(route, 405, { error: 'method' });
   };
-  return { files, handler, puts: () => puts };
+  return { files, handler, puts: () => puts, log, failPuts: k => { failPuts = k; } };
 }
 
 async function page(browser, opts) {
@@ -83,6 +88,7 @@ async function page(browser, opts) {
   const ctx = await browser.newContext({ viewport: o.viewport || { width: 1360, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
   if (o.token) await ctx.addInitScript(() => { try { localStorage.setItem('sort.github', JSON.stringify({ token: 'fake', login: 'tester' })); } catch (e) { /* */ } });
   if (o.autosaveMs) await ctx.addInitScript(ms => { window.SORT_AUTOSAVE_MS = ms; }, o.autosaveMs);
+  if (o.retryMs) await ctx.addInitScript(ms => { window.SORT_RETRY_MS = ms; }, o.retryMs);
   let defsText = require('fs').readFileSync(require('path').join(__dirname, '..', 'definitions.json'), 'utf8');
   if (o.defsPatch) { const d = JSON.parse(defsText); o.defsPatch(d); defsText = JSON.stringify(d); }
   const gh = fakeGithub(defsText);
@@ -171,12 +177,16 @@ const scenarios = {
     await p.click('#q-stockFence .opt:has-text("Yes (standard")');
     await p.selectOption('#outcome', 'complete');
     await p.fill('[data-fk="installNotes::f::notes"]', 'Ring 0459 123 456'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
+    ok(!(await p.$('#playbookActs button')), 'no Share button: it is shared by itself');
+    await p.waitForSelector('#saveBar button:has-text("save it anyway")', { timeout: 15000 });
+    ok(/phone number/.test(await p.innerText('#saveBar')) && /Not shared/.test(await p.innerText('#shareChip')), 'the phone number holds it back, and the top bar says it isn’t shared');
     let warned = false; p.once('dialog', d => { warned = /phone number/.test(d.message()); });
-    await p.waitForTimeout(400);
-    await p.click('#playbookActs button');
+    await p.click('#saveBar button:has-text("save it anyway")');
     await p.waitForFunction(() => /Shared with the forum|Couldn/.test(document.querySelector('#toast').textContent), null, { timeout: 20000 });
-    ok(warned, 'the privacy check caught the phone number');
+    ok(warned, 'save it anyway asks first');
     ok(p.store.files.has('stations/540601.json') && p.store.files.has('index.json'), 'station file and index written to the shared store');
+    await p.fill('[data-fk="installNotes::f::notes"]', 'Ring 0459 123 456 after 5pm'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
+    ok(await until(() => /after 5pm/.test(p.store.files.get('stations/540601.json').text), 15000) && await p.$eval('#saveBar', e => e.hidden), 'once a person has said yes, the same text isn’t held back again');
     await p.newSession(); await p.pick('540335');
     await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
     await p.waitForTimeout(400);
@@ -194,6 +204,8 @@ const scenarios = {
     // Not connected: the page says the session is only in this browser.
     const n = await page(b);
     await n.pick('540601');
+    await n.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
+    ok(/Only in this browser/.test(await n.innerText('#shareChip')), 'the top bar says it is only in this browser');
     ok(/Saved only in this browser/.test(await n.innerText('#saveBar')) && await n.isVisible('#saveBar button:has-text("Enter the forum passphrase")'), 'no passphrase: a warning that it is only in this browser');
     await n.click('#saveBar button:has-text("Enter the forum passphrase")');
     await n.fill('#passInput', 'nope-nope'); await n.press('#passInput', 'Enter');
@@ -202,6 +214,7 @@ const scenarios = {
     await n.fill('#passInput', ' test-pass '); await n.press('#passInput', 'Enter');
     await n.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 8000 }).catch(() => {});
     ok(await n.evaluate(() => localStorage.getItem('sortv2.passphrase')) === 'TESTPASS' && await n.$eval('#saveBar', e => e.hidden), 'the right one (typed loosely) is remembered and the warning goes');
+    ok(await until(() => n.store.files.has('stations/540601.json')), 'the session answered before the passphrase is shared by itself once it is typed');
     // Changing it: only its fingerprint leaves, and the old one stops working.
     await n.click('#sessionsBtn'); await n.click('#changePass');
     await n.fill('#passNew', 'short'); await n.fill('#passNew2', 'short'); await n.click('.pass-dlg .btn-primary');
@@ -214,7 +227,7 @@ const scenarios = {
 
     await n.context().close();
     // Connected: it saves to the shared playbook by itself.
-    const p = await page(b, { pass: true, autosaveMs: 800 });
+    const p = await page(b, { pass: true, autosaveMs: 800, retryMs: 1000 });
     await p.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 10000 });
     ok(true, 'connected: no warning bar');
     await p.pick('540601');
@@ -222,10 +235,49 @@ const scenarios = {
     await p.click('#q-stockFence .opt:has-text("Yes (standard")');
     await p.waitForFunction(() => /playbook/.test(document.querySelector('#savedChip').textContent), null, { timeout: 15000 }).catch(() => {});
     ok(p.store.files.has('stations/540601.json') && p.store.files.has('index.json'), 'shared with the forum by itself, with no button');
+    await p.waitForFunction(() => /✓ Shared/.test(document.querySelector('#shareChip').textContent), null, { timeout: 8000 }).catch(() => {});
+    ok(!(await p.$('#playbookActs button')) && /Shared with the forum by itself/.test(await p.innerText('#shareState')) && /✓ Shared/.test(await p.innerText('#shareChip')), 'no Share button; it says it is shared, at the top and under Copy for Word');
     const first = JSON.parse(p.store.files.get('stations/540601.json').text).sessions[0].id;
+    const station = () => JSON.parse(p.store.files.get('stations/540601.json').text);
+    const answer = (c, f) => { const x = (station().sessions.find(z => z.id === first) || {}).session; return x && x.answers[c] ? x.answers[c].value : undefined; };
+    // A change that leaves the index line alone: one request — the station's file, nothing read first.
+    let mark = p.store.log.length;
+    await p.click('#q-stockFence .opt:has-text("No")');
+    ok(await until(() => answer('stockFence') === 'no'), 'a change is shared by itself');
+    await p.waitForTimeout(400);
+    ok(p.store.log.slice(mark).join() === 'PUT files/stations/540601.json', `one request for it: the station’s file, not read first, index untouched (${p.store.log.slice(mark).join(', ')})`);
+    // Nothing really changed: nothing is sent.
+    mark = p.store.log.length;
+    await p.evaluate(() => SoRT.app.changed({ light: true }));
+    await p.waitForTimeout(2500);
+    ok(p.store.log.length === mark, 'a change that changes nothing sends nothing');
+    // A change to what the index lists: the index too.
+    mark = p.store.log.length;
+    await p.click('#q-complexity .opt:has-text("Vegetation")');
+    ok(await until(() => p.store.log.slice(mark).includes('PUT files/index.json')), 'a change to what the shared list shows rewrites the index too');
+    // Another computer saved the station in between: read it again, keep theirs, add ours.
+    await p.waitForTimeout(600);
+    const f0 = p.store.files.get('stations/540601.json'), other = JSON.parse(f0.text);
+    other.sessions.push({ id: 'other-computer', source: 'sort-v2', forum: { date: '2026-01-01' }, summary: { answers: {} } });
+    p.store.files.set('stations/540601.json', { text: JSON.stringify(other), etag: '"elsewhere"' });
+    mark = p.store.log.length;
+    await p.click('#q-stockFence .opt:has-text("Yes (standard")');
+    ok(await until(() => answer('stockFence') === 'yes_standard_dimensions_and_configuration', 10000) && station().sessions.some(z => z.id === 'other-computer'), 'saved by another computer in between: both kept');
+    ok(/PUT files\/stations\/540601\.json,GET files\/stations\/540601\.json,PUT files\/stations\/540601\.json/.test(p.store.log.slice(mark).join()), 'it was refused once, read again, and written');
+    const tidy = station(); tidy.sessions = tidy.sessions.filter(z => z.id !== 'other-computer');
+    p.store.files.set('stations/540601.json', { text: JSON.stringify(tidy), etag: '"tidied"' });
+    // The server busy: it tries again by itself.
+    p.store.failPuts(1);
+    await p.click('#q-stockFence .opt:has-text("No")');
+    ok(await until(() => answer('stockFence') === 'no', 15000), 'Flood-Net’s server busy for a moment: shared when it tries again by itself');
+    // A Bureau number corrected: the session leaves the old station’s file for the new one.
+    await p.evaluate(() => { SoRT.app.session.station.number = '540699'; SoRT.app.changed({ light: true }); });
+    ok(await until(() => p.store.files.has('stations/540699.json') && JSON.parse(p.store.files.get('stations/540699.json').text).sessions.some(z => z.id === first) && !station().sessions.some(z => z.id === first)), 'a corrected number moves it to the right station');
+    await p.evaluate(() => { SoRT.app.session.station.number = '540601'; SoRT.app.changed({ light: true }); });
+    ok(await until(() => station().sessions.some(z => z.id === first) && !JSON.parse(p.store.files.get('index.json').text).stations.some(e => e.key === '540699')), 'and back, leaving nothing in the shared list under the wrong number');
     await p.fill('[data-fk="installNotes::f::notes"]', 'Ring 0459 123 456'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
-    await p.waitForFunction(() => /Not saved to the shared sessions/.test(document.querySelector('#saveBar').textContent), null, { timeout: 8000 }).catch(() => {});
-    ok(/Not saved to the shared sessions/.test(await p.innerText('#saveBar')) && /phone number/.test(await p.innerText('#saveBar')), 'a phone number holds it, and the bar says why');
+    await p.waitForFunction(() => /Not shared with the forum:/.test(document.querySelector('#saveBar').textContent), null, { timeout: 8000 }).catch(() => {});
+    ok(/Not shared with the forum:/.test(await p.innerText('#saveBar')) && /phone number/.test(await p.innerText('#saveBar')), 'a phone number holds it, and the bar says why');
     ok(!/0459/.test(p.store.files.get('stations/540601.json').text), 'nothing private was shared');
     await p.fill('[data-fk="installNotes::f::notes"]', 'Ring the hub before visiting'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
     await p.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 8000 }).catch(() => {});

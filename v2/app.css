@@ -234,6 +234,10 @@ input.pre-map, textarea.pre-map { background: var(--src-map); }
 .out-grid .fld:first-child { width: 260px; }
 .ticks { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0; }
 .out-acts { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+/* Sharing with the forum, by itself: a word in the top bar, a sentence under Copy for Word. */
+.share-chip.ok, .share-state.ok { color: var(--ok); }
+.share-chip.warn, .share-state.warn { color: var(--warn); font-weight: 600; }
+.share-state { font-size: 14px; color: var(--muted); }
 .paper { background: #fff; color: #000; border: 1px solid var(--line-2); border-radius: 6px; padding: 18px; overflow-x: auto; }
 .paper table { margin: 0 auto; }
 .paper a { color: #0563c1; }

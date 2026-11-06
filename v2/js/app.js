@@ -18,7 +18,7 @@
 
   const A = S.app = {
     defs: null, defsSource: '', defsNote: '', session: null, ctx: null, picture: null,
-    playbookChanged: () => { renderDupNote(); if (A.sessionsDraw) A.sessionsDraw(); },
+    playbookChanged: () => { renderDupNote(); renderSavedChip(); if (A.sessionsDraw) A.sessionsDraw(); },
     changed, hint, focusMapOn, drawOnMap, toast, newSession, openSession, refreshStation, useDefs, reloadDefs
   };
 
@@ -81,7 +81,7 @@
     rebuild();
     if (!(opts && opts.light)) { S.form.render($('#form')); S.form.renderPS($('#ps')); renderStation(); }
     renderProgress(); renderFollowUps(); previewSoon(); saveSoon();
-    if (S.playbook) { S.playbook.renderActs(A); S.playbook.autosaveSoon(A); }
+    if (S.playbook) { S.playbook.autosaveSoon(A); S.playbook.renderActs(A); }
     if (S.mapView) S.mapView.sync(A);
     Object.values(S.suggesters || {}).forEach(m => m.sync(A));   // the corrosion and soil suggestions
   }
@@ -153,7 +153,7 @@
   function renderSavedChip() {
     const s = A.session; if (!s) return;
     const pb = s.playbook && s.playbook.savedAt;
-    $('#savedChip').textContent = `Saved in this browser ${U.fmtClock(s.updatedAt)}${pb ? ' · playbook ' + U.fmtClock(pb) : ''}`;
+    $('#savedChip').textContent = `Saved in this browser ${U.fmtClock(s.updatedAt)}${pb ? ' · shared with the forum ' + U.fmtClock(pb) : ''}`;
   }
 
   /* ---------------- forum bar ---------------- */
@@ -683,6 +683,7 @@
     search.addEventListener('input', draw);
     draw();
     A.sessionsDraw = () => { if (dlg.open) draw(); };
+    if (S.playbook) S.playbook.onSessionsOpen();
     if (!dlg.open) dlg.showModal();
     search.focus(); search.select();
   }
@@ -765,6 +766,8 @@
     $('#importInput').addEventListener('change', ev => { if (ev.target.files[0]) importSession(ev.target.files[0]); ev.target.value = ''; });
     $('#sessionsClose').addEventListener('click', () => $('#sessionsDlg').close());
     G.addEventListener('beforeunload', () => { saveSoon.flush(); if (A.session) S.store.save(A.session); });
+    // Leaving the tab (or closing it): keep it here, and share it now rather than in a moment.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { saveSoon.flush(); if (S.playbook) S.playbook.flush(A); } });
     if (S.mapView) S.mapView.mount($('#mapMount'), A);
     watchPreview();
     if (S.playbook) S.playbook.init(A);

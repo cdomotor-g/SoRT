@@ -16,7 +16,9 @@
    Sessions imported from Word reports carry only the summary.
 
    It keeps no landholder names or contact details and no gate, padlock or key
-   codes: Save checks the typed text for anything that looks like one first. */
+   codes: sharing checks the typed text for anything that looks like one first,
+   and holds the session back until a person decides. There is no Share
+   button — see "sharing by itself" below. */
 (function (G) {
   'use strict';
   const S = G.SoRT = G.SoRT || {};
@@ -24,7 +26,7 @@
   const h = (...a) => U().h(...a);
   const REPO = { owner: 'cdomotor-g', repo: 'SoRT-playbook', branch: 'main' };
   const LS_INDEX = 'sortv2.pb.index';
-  const P = { A: null, index: null, status: 'off', error: '', files: new Map(), busy: false };
+  const P = { A: null, index: null, indexSha: '', indexAt: 0, status: 'off', error: '', files: new Map(), busy: false, held: new Map(), failure: null };
 
   /* ---------------- keys + loading ---------------- */
   const slug = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -35,15 +37,31 @@
     if (st.id) return slug(st.id);
     return st.name ? `manual-${slug(st.name)}` : null;
   }
+  let indexRetry = null;
   async function loadIndex() {
+    clearTimeout(indexRetry); indexRetry = null;
     if (!S.shared.has()) { P.status = 'off'; P.index = U().LS.json(LS_INDEX, null); refresh(); return; }
     P.status = 'loading'; refresh();
     try {
       const f = await S.shared.getFile('index.json');
-      if (!f) { P.index = []; P.status = 'ready'; }   // nothing saved yet: the first save makes the index
+      if (!f) { P.index = []; P.indexSha = ''; P.status = 'ready'; }   // nothing saved yet: the first save makes the index
       else { P.index = JSON.parse(f.text).stations || []; P.indexSha = f.sha; P.status = 'ready'; U().LS.set(LS_INDEX, JSON.stringify(P.index)); }
-    } catch (e) { P.status = e.status === 401 ? 'denied' : 'error'; P.error = e.message; P.index = U().LS.json(LS_INDEX, null); }
+      P.indexAt = Date.now();
+    } catch (e) {
+      P.status = e.status === 401 ? 'denied' : 'error'; P.error = e.message; P.index = U().LS.json(LS_INDEX, null);
+      // Out of reach (not refused): try again by itself in a minute.
+      if (P.status === 'error') indexRetry = setTimeout(loadIndex, RETRY_MS() * 4);
+    }
     refresh();
+    if (P.status === 'ready') catchUp();
+  }
+  // The index again, quietly, if it is more than a little old (Sessions opening).
+  async function freshIndex() {
+    if (P.status !== 'ready' || P.busy || Date.now() - P.indexAt < 20000) return;
+    try {
+      const f = await S.shared.getFile('index.json');
+      if (f && !P.busy) { P.index = JSON.parse(f.text).stations || []; P.indexSha = f.sha; P.indexAt = Date.now(); U().LS.set(LS_INDEX, JSON.stringify(P.index)); refresh(); }
+    } catch (_) { /* the list stays as it was */ }
   }
   async function loadStation(key, fresh) {
     if (!fresh && P.files.has(key)) return P.files.get(key);
@@ -123,66 +141,139 @@
   }
 
   /* ---------------- save ---------------- */
-  async function putJson(path, obj, msg, sha) { return S.shared.putFile(path, JSON.stringify(obj, null, 2) + '\n', msg, sha); }
-  async function save(A, session, quiet, auto) {
-    session = session || A.session;
-    if (auto && (!S.shared.has() || P.status !== 'ready' || P.busy)) return false;
-    if (!S.shared.has()) { S.shared.dialog({ why: 'Saving to the shared sessions needs the forum passphrase — once on this computer.', onDone: ok => { if (ok) { loadIndex().then(() => save(A, session)); } } }); return false; }
-    const st = session.station, key = stationKey(st);
-    if (!key) { A.toast('Choose (or enter) the station first — the playbook files sessions by station.'); return false; }
-    const found = privacyScan(session);
-    // Saving by itself never asks: what looks private holds it until a person decides.
-    if (auto) { if (found.length) { P.held = { id: session.id, found }; refresh(); return false; } }
-    else if (found.length && !G.confirm(`This session’s text looks like it holds:\n\n• ${found.slice(0, 6).join('\n• ')}\n\nThe playbook keeps no landholder contact details and no gate, padlock or key codes. Cancel to remove it first, or OK if it is fine to keep.`)) return false;
-    P.busy = true; refresh();
-    try {
-      const rec = record(A.defs, session);
-      const msg = `Session: ${st.name}${st.number ? ' (' + st.number + ')' : ''} — forum ${U().dmy(session.forum.date)}${session.outcome ? ' — ' + session.outcome.replace(/_/g, ' ') : ''}`;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const cur = await loadStation(key, true);
-        const file = cur ? cur.data : { schema: 'sort-playbook-station/1', key, sessions: [], tags: [] };
-        file.station = { number: st.number || '', name: st.name || '', floodnetId: st.source === 'floodnet' ? st.id : '', lat: st.lat, lon: st.lon,
-          kinds: st.kinds || [], lga: st.lga || '', hub: st.hubName || '', owner: st.owner || '' };
-        const i = file.sessions.findIndex(x => x.id === rec.id);
-        if (i >= 0) file.sessions[i] = rec; else file.sessions.push(rec);
-        file.sessions.sort((a, b) => String((a.forum || {}).date).localeCompare(String((b.forum || {}).date)));
-        try {
-          const r = await putJson(`stations/${key}.json`, file, msg, cur && cur.sha);
-          P.files.set(key, { data: file, sha: r.sha });
-          await upsertIndex(file, msg);
-          session.playbook = { savedAt: Date.now(), key, sha: r.sha };
-          if (P.held && P.held.id === session.id) P.held = null;
-          S.store.save(session);
-          if (!quiet) A.toast(`Shared with the forum (${st.name}).`);
-          return true;
-        } catch (e) { if (!(e.status === 409 || e.status === 422) || attempt) throw e; }   // someone saved in between: re-read, retry once
-      }
-    } catch (e) {
-      if (e.status === 401) { P.status = 'denied'; P.error = e.message; }
-      if (!quiet) A.toast(`Couldn’t save to the shared sessions (${e.message}) — it is still saved in this browser.`);
-      return false;
-    } finally { P.busy = false; refresh(); }
-    return false;
+  // A short fingerprint of what a save would store (cyrb53, 64 bits): the same
+  // fingerprint as last time means there is nothing new to send. The time it
+  // was taken and the time it was last edited don't count.
+  function hash(str) {
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
   }
-  async function upsertIndex(file, msg) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const cur = await S.shared.getFile('index.json');
-      const idx = cur ? JSON.parse(cur.text) : { schema: 'sort-playbook-index/1', stations: [] };
-      const e = indexEntry(file);
-      const i = idx.stations.findIndex(x => x.key === e.key);
-      if (i >= 0) idx.stations[i] = e; else idx.stations.push(e);
-      idx.stations.sort((a, b) => a.name.localeCompare(b.name));
-      idx.updated = new Date().toISOString();
-      try { await putJson('index.json', idx, msg, cur && cur.sha); P.index = idx.stations; U().LS.set(LS_INDEX, JSON.stringify(P.index)); return; }
-      catch (err) { if (!(err.status === 409 || err.status === 422) || attempt) throw err; }
+  const fingerprint = rec => hash(JSON.stringify(Object.assign({}, rec, { savedAt: null, session: Object.assign({}, rec.session, { updatedAt: null }) })));
+  const sameLine = (a, b) => !!a && !!b && JSON.stringify(Object.assign({}, a, { updatedAt: null })) === JSON.stringify(Object.assign({}, b, { updatedAt: null }));
+
+  async function putJson(path, obj, sha) { return S.shared.putFile(path, JSON.stringify(obj, null, 2) + '\n', '', sha); }
+  // The station's file with this session put in. Written straight over the copy
+  // this computer last read or wrote (one request); only if another computer
+  // saved it in between (412) is it read again and the session put in afresh.
+  // A copy of the same session that was changed later elsewhere is never
+  // replaced by an older one from here, unless this is the session on screen.
+  async function putStation(key, st, rec, onScreen) {
+    let cur = P.files.get(key) || await loadStation(key, true), reread = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const file = cur ? U().clone(cur.data) : { schema: 'sort-playbook-station/1', key, sessions: [], tags: [] };
+      file.station = { number: st.number || '', name: st.name || '', floodnetId: st.source === 'floodnet' ? st.id : '', lat: st.lat, lon: st.lon,
+        kinds: st.kinds || [], lga: st.lga || '', hub: st.hubName || '', owner: st.owner || '' };
+      file.sessions = file.sessions || [];
+      const i = file.sessions.findIndex(x => x.id === rec.id);
+      const theirs = i >= 0 ? ((file.sessions[i].session || {}).updatedAt || 0) : 0;
+      if (!onScreen && theirs > (rec.session.updatedAt || 0)) return { file, sha: cur.sha, newer: true, reread };
+      if (i >= 0) file.sessions[i] = rec; else file.sessions.push(rec);
+      file.sessions.sort((a, b) => String((a.forum || {}).date).localeCompare(String((b.forum || {}).date)));
+      try {
+        const r = await putJson(`stations/${key}.json`, file, cur && cur.sha);
+        P.files.set(key, { data: file, sha: r.sha });
+        return { file, sha: r.sha, reread };
+      } catch (e) {
+        if (e.status !== 409 || attempt === 2) throw e;
+        cur = await loadStation(key, true); reread = true;   // someone saved in between: read it again
+      }
     }
   }
-  async function saveAllUnsaved(A) {
-    const todo = S.store.index().filter(x => !x.playbookAt && x.name);
-    if (!todo.length) { A.toast('Every session with a station is already shared.'); return; }
-    let n = 0;
-    for (const x of todo) { const s = S.store.load(x.id); if (s && await save(A, s, true)) n++; }
-    A.toast(`${n} of ${todo.length} session${todo.length > 1 ? 's' : ''} shared with the forum.`);
+  // The index: rewritten only when this station's line in it changed (or when
+  // another computer had saved the station since — its line may be behind).
+  async function upsertIndex(file, force) {
+    const e = file.sessions.length ? indexEntry(file) : null;
+    const was = (P.index || []).find(x => x.key === file.key);
+    if (!force && (e ? sameLine(was, e) : !was)) return;
+    let cur = P.indexSha ? { sha: P.indexSha, idx: { schema: 'sort-playbook-index/1', stations: (P.index || []).slice() } } : null;
+    if (!cur) { const f = await S.shared.getFile('index.json'); cur = f ? { sha: f.sha, idx: JSON.parse(f.text) } : null; }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const idx = cur ? cur.idx : { schema: 'sort-playbook-index/1', stations: [] };
+      idx.stations = (idx.stations || []).filter(x => x.key !== file.key);
+      if (e) idx.stations.push(e);
+      idx.stations.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      idx.updated = new Date().toISOString();
+      try {
+        const r = await putJson('index.json', idx, cur && cur.sha);
+        P.index = idx.stations; P.indexSha = r.sha; P.indexAt = Date.now(); U().LS.set(LS_INDEX, JSON.stringify(P.index));
+        return;
+      } catch (err) {
+        if (err.status !== 409 || attempt === 2) throw err;
+        const f = await S.shared.getFile('index.json');   // someone saved it in between: read it again
+        cur = f ? { sha: f.sha, idx: JSON.parse(f.text) } : null;
+      }
+    }
+  }
+  // A session whose station changed (a Bureau number corrected) leaves the old station's file.
+  async function moveOut(key, id) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const cur = await loadStation(key, true);
+      if (!cur || !(cur.data.sessions || []).some(x => x.id === id)) return;
+      const file = U().clone(cur.data);
+      file.sessions = file.sessions.filter(x => x.id !== id);
+      try {
+        const r = await putJson(`stations/${key}.json`, file, cur.sha);
+        P.files.set(key, { data: file, sha: r.sha });
+        await upsertIndex(file, true);
+        return;
+      } catch (e) { if (e.status !== 409 || attempt === 2) throw e; }
+    }
+  }
+  // Note on the session — on screen, in this browser's copy, or both — that it is shared.
+  function markShared(session, pb) {
+    session.playbook = pb;
+    const live = P.A && P.A.session && P.A.session.id === session.id ? P.A.session : null;
+    if (live && live !== session) live.playbook = Object.assign({}, pb);
+    const kept = S.store.load(session.id);
+    if (kept) { kept.playbook = Object.assign({}, pb); S.store.update(kept); }
+  }
+
+  // Share one session with the forum. auto: by itself (never asks anything;
+  // what looks private holds it until a person decides). → 'saved' (sent),
+  // 'same' (nothing new to send), 'newer' (a later copy is already shared),
+  // 'held', 'off', 'none' (no station), 'no' (a person said no) or 'failed'.
+  async function save(A, session, quiet, auto) {
+    session = session || A.session;
+    if (!S.shared.has()) {
+      if (!auto) S.shared.dialog({ why: 'Sharing with the forum needs the forum passphrase — once on this computer.', onDone: ok => { if (ok) loadIndex(); } });
+      return 'off';
+    }
+    const st = session.station, key = stationKey(st);
+    if (!key) { if (!auto) A.toast('Choose (or enter) the station first — the shared sessions are filed by station.'); return 'none'; }
+    const old = session.playbook || {};
+    // A person who said "save it anyway" isn't asked again about the same text.
+    const allowed = new Set(old.allowed || []);
+    const found = privacyScan(session).filter(f => !allowed.has(hash(f)));
+    if (found.length) {
+      if (auto) { P.held.set(session.id, found); refresh(); return 'held'; }
+      if (!G.confirm(`This session’s text looks like it holds:\n\n• ${found.slice(0, 6).join('\n• ')}\n\nThe shared sessions keep no landholder contact details and no gate, padlock or key codes. Cancel to remove it first, or OK if it is fine to keep.`)) return 'no';
+      found.forEach(f => allowed.add(hash(f)));
+      session.playbook = Object.assign({}, old, { allowed: [...allowed] });
+    }
+    P.held.delete(session.id);
+    const rec = record(A.defs, session), fp = fingerprint(rec);
+    const pb = (sha, savedAt) => ({ savedAt: savedAt || Date.now(), asOf: rec.session.updatedAt || Date.now(), key, sha: sha || '', fp, allowed: [...allowed] });
+    if (old.fp === fp && old.key === key && old.savedAt) { markShared(session, pb(old.sha, old.savedAt)); refresh(); return 'same'; }
+    P.busy = session.id; refresh();
+    try {
+      const onScreen = !!(A.session && A.session.id === session.id);
+      const r = await putStation(key, st, rec, onScreen);
+      if (r.newer) { markShared(session, Object.assign(pb(r.sha), { fp: null })); return 'newer'; }
+      await upsertIndex(r.file, r.reread);
+      if (old.key && old.key !== key) await moveOut(old.key, session.id).catch(() => {});
+      markShared(session, pb(r.sha));
+      P.failure = null;
+      if (!quiet) A.toast(`Shared with the forum (${st.name}).`);
+      return 'saved';
+    } catch (e) {
+      if (e.status === 401) { P.status = 'denied'; P.error = e.message; }
+      P.failure = { message: e.message, status: e.status, at: Date.now(), id: session.id };
+      if (!quiet) A.toast(`Couldn’t share it with the forum (${e.message}) — it is still saved in this browser.`);
+      return 'failed';
+    } finally { P.busy = false; refresh(); }
   }
 
   /* ---------------- precedents ---------------- */
@@ -322,35 +413,119 @@
         h('button', { type: 'button', class: 'btn-mini', onclick: () => usePrecedent(A, x.e.key) }, 'Use'))));
     }
   }
-  function renderActs(A) {
-    P.A = A;
-    const el = document.getElementById('playbookActs'); if (!el) return;
-    el.innerHTML = '';
-    const s = A.session, at = s.playbook && s.playbook.savedAt;
-    const stale = at && s.updatedAt > at + 2000;
-    el.appendChild(h('button', { type: 'button', class: 'btn', disabled: P.busy, title: 'Share it with the forum now (it is also shared by itself a few seconds after each change)', onclick: () => save(A) }, P.busy ? 'Saving…' : (at ? 'Share again now' : 'Share with the forum')));
-    el.appendChild(h('span', { class: 'hint' }, at ? ` Shared ${U().fmtClock(at)}${stale ? ' — changed since, sharing shortly' : ''}.` : ' Not shared yet.'));
-  }
-  /* ---------------- saving by itself, to the shared playbook ---------------- */
-  // A few seconds after the last change (and before another session opens),
-  // the open session goes to the playbook — once it has a station, while
-  // this computer has the forum passphrase and the shared sessions can be read.
-  const AUTOSAVE_MS = () => (typeof G.SORT_AUTOSAVE_MS === 'number' ? G.SORT_AUTOSAVE_MS : 12000);
-  let autoTimer = null, autoFor = null;
+  /* ---------------- sharing by itself ---------------- */
+  // Every change is shared with the forum by itself, with nothing to press: a
+  // few seconds after the last change (so a burst of clicks is one save), and
+  // at least every half minute while changes keep coming. A save sends only
+  // what changed: nothing when the fingerprint is the same as last time, else
+  // the station's file once (putStation) and the index only when its line
+  // changed (upsertIndex) — one request where it used to be four.
+  // What fails (no internet, the server busy) is tried again by itself, and
+  // sessions left unshared — made offline, before the passphrase was typed, or
+  // closed before their save went — go one at a time once the server answers.
+  // Only what looks private waits for a person (the bar at the top).
+  const AUTOSAVE_MS = () => (typeof G.SORT_AUTOSAVE_MS === 'number' ? G.SORT_AUTOSAVE_MS : 4000);
+  const MAX_WAIT_MS = () => AUTOSAVE_MS() * 8;
+  const RETRY_MS = () => (typeof G.SORT_RETRY_MS === 'number' ? G.SORT_RETRY_MS : 15000);
+  // Between sessions being caught up: Flood-Net's brake is 120 requests a
+  // minute for a whole office (its computers usually share one address).
+  const GAP_MS = () => Math.min(4000, AUTOSAVE_MS());
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Something worth keeping: a station, and at least one answer (looking a station up files nothing).
   const answered = s => Object.values(s.answers || {}).some(a => a && (!R().emptyVal(a.value) || Object.values(a.fields || {}).some(v => String(v || '').trim())))
     || Object.values((s.ps || {}).answers || {}).some(v => String(v || '').trim()) || !!s.outcome;
-  const needsSave = s => !!(s && s.station && stationKey(s.station) && answered(s) && (!s.playbook || !s.playbook.savedAt || s.updatedAt > s.playbook.savedAt + 1000));
-  function autosaveSoon(A) {
-    if (P.status !== 'ready' || !S.shared.has() || !A.session || !stationKey(A.session.station)) return;
-    clearTimeout(autoTimer); autoFor = A.session;
-    autoTimer = setTimeout(() => { const s = autoFor; autoTimer = null; autoFor = null; if (needsSave(s)) save(A, s, true, true); }, AUTOSAVE_MS());
+  // Changed since it was last shared (asOf: the last change that save carried).
+  function needsSave(s) {
+    if (!(s && s.station && stationKey(s.station) && answered(s))) return false;
+    const pb = s.playbook || {};
+    if (!pb.savedAt) return true;
+    return (s.updatedAt || 0) > (pb.asOf != null ? pb.asOf : pb.savedAt + 1000);
   }
-  function flush(A) {   // before switching away from a session
-    if (!autoTimer) return;
-    clearTimeout(autoTimer); autoTimer = null;
-    const s = autoFor; autoFor = null;
-    if (needsSave(s)) save(A, s, true, true);
+  const todo = new Map();   // id → the session to share (the one on screen is the live object)
+  let soon = null, since = 0, running = false, retry = null, retryAt = 0, fails = 0;
+  const ready = () => P.status === 'ready' && S.shared.has();
+  const retryable = st => st == null || st === 0 || st === 409 || st === 429 || st >= 500;
+
+  function autosaveSoon(A) {
+    P.A = A;
+    if (!ready() || !A.session || !stationKey(A.session.station)) return;
+    const now = Date.now(), s = A.session;
+    if (!soon) since = now;
+    clearTimeout(soon);
+    soon = setTimeout(() => { soon = null; todo.set(s.id, s); pump(); }, Math.max(0, Math.min(AUTOSAVE_MS(), since + MAX_WAIT_MS() - now)));
+  }
+  // Now rather than in a moment: before another session opens, or when the page is hidden.
+  function flush(A) {
+    const s = A && A.session;
+    if (soon) { clearTimeout(soon); soon = null; }
+    if (s && needsSave(s)) todo.set(s.id, s);
+    pump();
+  }
+  // Every session in this browser that has changed since it was shared.
+  function catchUp() {
+    if (!ready()) return;
+    const live = P.A && P.A.session;
+    S.store.index().forEach(x => {
+      if (!x.name || todo.has(x.id) || P.held.has(x.id) || (x.playbookAt && (x.updatedAt || 0) <= x.playbookAt)) return;
+      const s = live && live.id === x.id ? live : S.store.load(x.id);
+      if (needsSave(s)) todo.set(x.id, s);
+    });
+    pump();
+  }
+  async function pump() {
+    if (running || retry || !ready()) return;
+    running = true;
+    try {
+      while (todo.size && ready()) {
+        const live = P.A && P.A.session;
+        const id = live && todo.has(live.id) ? live.id : todo.keys().next().value;   // the session on screen first
+        const s = live && live.id === id ? live : todo.get(id); todo.delete(id);
+        if (!needsSave(s)) continue;
+        const r = await save(P.A, s, true, true);
+        if (r === 'failed') {
+          const st = (P.failure || {}).status;
+          if (!retryable(st) || !ready()) break;   // refused (the passphrase, too large): the bar says so; the next change tries again
+          if (!todo.has(s.id)) todo.set(s.id, s);
+          fails++;
+          const wait = st === 429 ? 60000 : Math.min(RETRY_MS() * 2 ** (fails - 1), 300000);
+          retryAt = Date.now() + wait;
+          retry = setTimeout(() => { retry = null; retryAt = 0; pump(); }, wait);
+          break;
+        }
+        fails = 0;
+        if (r === 'saved' && s !== (P.A && P.A.session) && todo.size) await sleep(GAP_MS());
+      }
+    } finally { running = false; refresh(); }
+  }
+  function tryNow() {
+    clearTimeout(retry); retry = null; retryAt = 0;
+    if (P.status === 'error') loadIndex(); else { flush(P.A); catchUp(); }
+  }
+
+  // Where the session on screen stands with the forum: a short word for the top
+  // bar, and a sentence for under Copy for Word.
+  function shareState(A) {
+    const s = A && A.session; if (!s) return null;
+    const clock = t => U().fmtClock(t);
+    if (!S.shared.has() || P.status === 'off') return { cls: 'warn', short: '⚠ Only in this browser', text: 'Saved only in this browser — with the forum passphrase (the bar at the top) it is shared with the forum by itself.' };
+    if (P.status === 'denied') return { cls: 'warn', short: '⚠ Only in this browser', text: 'Saved only in this browser — the forum passphrase on this computer isn’t right any more (the bar at the top).' };
+    if (P.status === 'loading') return { cls: '', short: 'Connecting…', text: 'Connecting to the shared sessions…' };
+    if (P.status !== 'ready') return { cls: 'warn', short: '⚠ Only in this browser', text: `Saved only in this browser for now — the shared sessions can’t be reached (${P.error}). It is shared by itself once they can.` };
+    if (P.held.has(s.id)) return { cls: 'warn', short: '⚠ Not shared', text: 'Not shared: its text looks like it holds something private — see the bar at the top.' };
+    if (!stationKey(s.station) || !answered(s)) return { cls: '', short: '', text: 'It is shared with the forum by itself once it has a station and an answer.' };
+    if (P.busy === s.id) return { cls: '', short: 'Sharing…', text: 'Sharing with the forum…' };
+    if (P.failure && needsSave(s)) return { cls: 'warn', short: '⚠ Not shared yet', text: `Not shared yet — ${P.failure.message}. ${retryAt ? `It tries again by itself at ${clock(retryAt)}.` : 'It tries again at the next change.'} Everything is saved in this browser meanwhile.` };
+    if (soon || todo.has(s.id) || needsSave(s)) return { cls: '', short: 'Sharing in a moment…', text: 'Changed — shared with the forum by itself in a moment.' };
+    const at = (s.playbook || {}).savedAt;
+    return { cls: 'ok', short: `✓ Shared ${clock(at)}`, text: `✓ Shared with the forum by itself — last sent at ${clock(at)}.` };
+  }
+  function renderActs(A) {
+    P.A = A;
+    const st = shareState(A); if (!st) return;
+    const el = document.getElementById('playbookActs');
+    if (el) { el.innerHTML = ''; el.appendChild(h('span', { class: `share-state ${st.cls}`, id: 'shareState' }, st.text)); }
+    const chip = document.getElementById('shareChip');
+    if (chip) { chip.textContent = st.short ? ` · ${st.short}` : ''; chip.className = `share-chip ${st.cls}`; chip.title = st.text; }
   }
 
   // Open a session exactly as it was last saved to the playbook (another
@@ -362,31 +537,43 @@
       if (!rec) { continueFrom(A, key); return; }
       const mine = S.store.load(rec.id);
       const theirs = U().clone(rec.session);
-      theirs.playbook = { savedAt: Date.parse(rec.savedAt) || Date.now(), key, sha: f.sha };
+      // Its fingerprint as shared, so opening it sends nothing until something changes.
+      theirs.playbook = { savedAt: Date.parse(rec.savedAt) || Date.now(), asOf: theirs.updatedAt || 0, key, sha: f.sha, fp: fingerprint(rec) };
       if (!mine || (theirs.updatedAt || 0) >= (mine.updatedAt || 0)) { theirs.playbook.savedAt = Math.max(theirs.playbook.savedAt, theirs.updatedAt || 0); S.store.save(theirs, true); }
       A.openSession(rec.id);
     } catch (e) { A.toast(`Couldn’t read the playbook: ${e.message}`); }
   }
 
   /* ---------------- where this session is kept: the warning bar ---------------- */
+  // Hidden while all is well; it speaks only when a person is needed, or when
+  // sharing has been failing for a while.
   function renderSaveBar(A) {
     const el = document.getElementById('saveBar'); if (!el || !A || !A.session) return;
     el.innerHTML = '';
     const dl = () => { const b = document.getElementById('downloadBtn'); if (b) b.click(); };
     const bar = (cls, ...kids) => { el.className = 'save-bar ' + cls; el.hidden = false; kids.forEach(k => k && el.appendChild(k)); };
     const link = (label, run, title) => h('button', { type: 'button', class: 'link', onclick: run, title: title || null }, label);
-    if (P.held && P.held.id === A.session.id) {
-      bar('warn', h('span', null, h('b', null, 'Not saved to the shared sessions: '), `it looks like it holds ${P.held.found[0]}${P.held.found.length > 1 ? ` (and ${P.held.found.length - 1} more)` : ''}. Shared sessions keep no landholder contact details and no gate, padlock or key codes — remove it, or `),
-        link('save it anyway', () => save(A)), document.createTextNode('.'));
+    const held = P.held.get(A.session.id);
+    if (held) {
+      bar('warn', h('span', null, h('b', null, 'Not shared with the forum: '), `it looks like it holds ${held[0]}${held.length > 1 ? ` (and ${held.length - 1} more)` : ''}. Shared sessions keep no landholder contact details and no gate, padlock or key codes — remove it, or `),
+        link('save it anyway', () => save(A), 'Share it as it is — you won’t be asked again about this text'), document.createTextNode('.'));
       return;
     }
-    if (P.status === 'ready') { el.hidden = true; return; }
+    if (P.status === 'ready') {
+      const f = P.failure;
+      if (f && needsSave(A.session) && (fails >= 2 || !retry)) {
+        bar('warn', h('span', null, h('b', null, '⚠ Not shared with the forum yet'), ` — ${f.message}. `, retry ? `It keeps trying by itself (next at ${U().fmtClock(retryAt)}); ` : '', 'everything is saved in this browser meanwhile. '),
+          link('Try now', tryNow), document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
+        return;
+      }
+      el.hidden = true; return;
+    }
     if (P.status === 'loading') { bar('info', h('span', null, 'Connecting to the shared sessions…')); return; }
-    const why = P.status === 'off' ? null : P.status === 'denied' ? 'the forum passphrase on this computer isn’t right any more' : `the shared sessions can’t be reached just now (${P.error})`;
+    const why = P.status === 'off' ? null : P.status === 'denied' ? 'the forum passphrase on this computer isn’t right any more' : `the shared sessions can’t be reached just now (${P.error}); it keeps trying by itself`;
     bar('warn', h('span', null, h('b', null, '⚠ Saved only in this browser'), why ? ` — ${why}. ` : '. ',
       'Nobody else can open this session, and clearing the browser loses it. '),
-      P.status === 'off' || P.status === 'denied' ? link('Enter the forum passphrase', () => S.shared.dialog({ onDone: () => loadIndex() }), 'Once on this computer: then every session is saved where the whole forum can open it')
-        : link('Try again', () => loadIndex()),
+      P.status === 'off' || P.status === 'denied' ? link('Enter the forum passphrase', () => S.shared.dialog({ onDone: () => loadIndex() }), 'Once on this computer: then every session is shared with the whole forum by itself')
+        : link('Try now', tryNow),
       document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
   }
 
@@ -414,9 +601,10 @@
           other ? h('button', { type: 'button', class: 'btn btn-quiet', title: `Fill ${A.session.station ? A.session.station.name : 'this session'}’s unanswered questions from this station’s last session — each one orange until you check it`, onclick: () => { close(); usePrecedent(A, e.key); } }, 'Use as a precedent') : null)));
     });
     if (!q && rows.length > 12) box.appendChild(h('p', { class: 'hint' }, `${rows.length - 12} more — search to find them.`));
-    const unsaved = S.store.index().filter(x => !x.playbookAt && x.name).length;
+    const waiting = todo.size + (P.busy ? 1 : 0), held = P.held.size;
+    if (waiting) box.appendChild(h('p', { class: 'hint' }, `${waiting} session${waiting > 1 ? 's' : ''} from this browser ${waiting > 1 ? 'are' : 'is'} being shared by ${waiting > 1 ? 'themselves' : 'itself'}, one at a time.`));
+    if (held) box.appendChild(h('p', { class: 'hint' }, `${held} session${held > 1 ? 's' : ''} in this browser ${held > 1 ? 'are' : 'is'} held back: the text looks like it holds a phone number, an email or a gate code. Open ${held > 1 ? 'each' : 'it'} to see what, and remove it or save it anyway.`));
     box.appendChild(h('p', { class: 'hint' }, h('button', { type: 'button', class: 'link', id: 'changePass', onclick: () => S.shared.changeDialog({ onDone: () => A.toast('Forum passphrase changed — tell the forum; each computer asks for it next time.') }) }, 'Change the forum passphrase')));
-    if (unsaved) box.appendChild(h('div', { class: 'out-acts' }, h('button', { type: 'button', class: 'btn', onclick: () => saveAllUnsaved(A) }, `Share the ${unsaved} session${unsaved > 1 ? 's' : ''} only in this browser`)));
     return box;
   }
   // The station's other sessions — in this browser and in the playbook — for the card's warning.
@@ -432,7 +620,13 @@
   }
 
   function refresh() { fillStrip(); if (P.A) { renderActs(P.A); renderSaveBar(P.A); if (P.A.playbookChanged) P.A.playbookChanged(); } }
-  function init(A) { P.A = A; renderSaveBar(A); loadIndex(); }
+  function init(A) {
+    P.A = A; renderSaveBar(A); loadIndex();
+    // Back online: what was waiting goes now.
+    G.addEventListener('online', () => { if (retry || P.status === 'error') tryNow(); });
+  }
+  // Sessions opening: the shared list as it is now, and anything left unshared.
+  function onSessionsOpen() { freshIndex(); catchUp(); }
 
-  S.playbook = { REPO, init, stationStrip, renderActs, panel, existing, openSaved, autosaveSoon, flush, renderSaveBar, save, saveAllUnsaved, usePrecedent, continueFrom, similar, summary, record, indexEntry, stationKey, privacyScan, loadIndex, state: P };
+  S.playbook = { REPO, init, stationStrip, renderActs, panel, existing, openSaved, autosaveSoon, flush, catchUp, onSessionsOpen, renderSaveBar, save, needsSave, shareState, usePrecedent, continueFrom, similar, summary, record, indexEntry, fingerprint, stationKey, privacyScan, loadIndex, state: P };
 })(typeof window !== 'undefined' ? window : globalThis);

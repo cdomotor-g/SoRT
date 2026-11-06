@@ -27,9 +27,10 @@
     ] },
     { id: 'saved', title: 'Where your work is kept', items: [
       'Every change is saved **in this browser** as you go — the footer shows the time of the last save. A reload or a crashed tab loses nothing.',
-      'Once this computer has the **forum passphrase** (typed once: **Enter the forum passphrase** on the warning bar — the forum chair has it), each session is also **shared with the forum** by itself a few seconds after a change, so every forum computer can open it. Until then a **⚠ Saved only in this browser** bar says so: nobody else can open it, and clearing the browser loses it.',
+      'Once this computer has the **forum passphrase** (typed once: **Enter the forum passphrase** on the warning bar — the forum chair has it), each session is also **shared with the forum** by itself a few seconds after each change, so every forum computer can open it. There is nothing to press: the top bar says **✓ Shared** and the time. Until then a **⚠ Saved only in this browser** bar says so: nobody else can open it, and clearing the browser loses it.',
+      'No internet for a while, or the tab closed straight after a change? Nothing is lost: it is kept in this browser and shared by itself as soon as Flood-Net’s server answers — or the next time SoRT opens on this computer.',
       '**Download a copy** (on that bar, or **Download session** at the foot of the page) saves the session as a file — the fallback if anything is ever wrong.',
-      'If a session’s text looks like it holds a phone number, email or gate code, it is **not** shared by itself — the bar says what it found; remove it, or **save it anyway**.'
+      'If a session’s text looks like it holds a phone number, email or gate code, it is **not** shared by itself — the bar says what it found; remove it, or **save it anyway** (it won’t ask again about the same text).'
     ] },
     { id: 'badges', title: 'Answers filled in for you (the coloured badges)', items: [
       '**Flood-Net**, **Map**, **Precedent** and **Earlier session** mark answers suggested from Flood-Net, the map, a similar station or this station’s last forum. They count as answered but **not checked**: the question has an **orange** bar until you press the badge’s **✓** (or change it), then a **green** bar and **✓ checked**. The header’s **“N to confirm”** jumps to the next one.',
@@ -95,7 +96,7 @@
       'The passphrase is a sentence: capitals, spaces and punctuation don’t matter. Anyone who has it can change it — **Sessions** → **Change the forum passphrase** — and every other computer then asks for the new one.',
       'A station that has been to SoRT before offers **Continue from it** — its last answers come back marked **Earlier session**.',
       '**A precedent**: when this station is best handled like one done before, **Sessions** → find that station → **Use as a precedent** (or **Similar stations** → **Use** on the card). Its answers fill the questions still empty here — never coordinates, licence numbers, the TBM or notes — each **orange** until you check it.',
-      'Keep it clean: no landholder names, phone numbers or emails, and no gate, padlock or key codes. Sharing checks the text for them first, and holds the session back if it finds one.'
+      'Keep it clean: no landholder names, phone numbers or emails, and no gate, padlock or key codes. Before sharing, SoRT checks the text for them, and holds the session back if it finds one.'
     ] },
     { id: 'questions', title: 'Changing the questions', items: [
       'For a quick change mid-forum: **Edit questions** (footer). It stays a draft **in your browser only** (a banner says so) until **Publish to GitHub** — then everyone gets it the next time they open the page.',
