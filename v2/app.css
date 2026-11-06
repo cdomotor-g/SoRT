@@ -350,9 +350,11 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
 .map-view.placing, .map-view.placing * { cursor: crosshair !important; }
 .map-view.grab, .map-view.grab * { cursor: grab !important; }
 .map-view.grabbing, .map-view.grabbing * { cursor: grabbing !important; }
-.map-legend { position: absolute; left: 10px; top: 10px; max-width: 60%; background: rgba(255, 255, 255, .88); color: #152531; border-radius: 6px; padding: 6px 10px; font-size: 13px; pointer-events: none; display: grid; gap: 5px; }
+/* The key sits under the map (as it does under the Word picture), covering none of it. */
+.map-legend { background: #fff; color: #152531; border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 5px 18px; margin-top: -4px; }
+.map-legend[hidden] { display: none; }
 .lg { display: flex; gap: 8px; align-items: flex-start; }
-.lg-title { font-weight: 700; border-bottom: 1px solid rgba(21, 37, 49, .25); padding-bottom: 3px; }
+.lg-title { font-weight: 700; flex: 1 0 100%; }
 .lg-sub { display: block; font-size: 11px; color: #3a4a56; font-variant-numeric: tabular-nums; }
 .lg-sym { flex: 0 0 auto; width: 12px; height: 12px; margin-top: 3px; background: var(--c); border-radius: 50%; }
 .lg-mark { background: transparent; border: 2.5px solid var(--c); }
@@ -360,7 +362,7 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
 .lg-bridge { border-radius: 0; transform: rotate(45deg) scale(.85); }
 .lg-tree { border-radius: 0; background: transparent; width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 12px solid var(--c); }
 .lg-line { height: 4px; border-radius: 2px; margin-top: 7px; width: 16px; }
-.map-stamp { position: absolute; right: 10px; top: 10px; background: rgba(255, 255, 255, .88); color: #152531; border-radius: 6px; padding: 4px 9px; font-size: 12px; pointer-events: none; }
+.lg-contour { height: 2px; border-radius: 1px; margin-top: 8px; width: 16px; }
 .map-edges { position: absolute; inset: 0; pointer-events: none; }
 .edge { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; display: flex; align-items: center; gap: 3px; background: rgba(255, 255, 255, .88); color: #1b4f72; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 5px; }
 .edge-arrow { display: inline-block; }

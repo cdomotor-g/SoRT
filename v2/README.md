@@ -43,7 +43,8 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   Flood-Net posts them back to this tab alone (`js/benchmarks.js`; the contract
   is Flood-Net's Atlas `benchmarks-for-sort`; *Paste from Flood-Net* if the tab
   link is lost). *Use* fills the Local TBM (AHD, or the height on the gauge —
-  LGH); they go into Word as their own table, B1, B2….
+  LGH); they go into Word as their own table, BoM-TBM-1, BoM-TBM-2… (B1, B2…
+  until 6 Nov 2026, when the bridges were B1… too).
 - **Side by side, each pane scrolls on its own**: the questions on the left,
   the map pane on the right, and neither starts the other at its end.
 - **The map is on the page**: v1's imagery, contours, road reserve and rail; the
@@ -51,8 +52,13 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   step against Flood-Net's often-rounded position; a vegetation clearance
   circle, trees and an access track drawn for the scope; the nearest 5 survey
   marks within 2 km (S1–S5, linked to their reports, tabled under the map in
-  Word); bridges within 1 km and who manages them. The picture in Word is the
-  map you are looking at.
+  Word); the bridges on the map (BR1, BR2…, nearest first, from those within
+  1 km; a bridge's span is drawn), each with who manages it — Transport and
+  Main Roads for a bridge on its register, otherwise whoever manages the road
+  it carries, from Queensland Roads and Tracks — and who to contact, from
+  QLDTraffic's road lookup (Flood-Net's `docs/road-owners.md` sources, ported),
+  tabled under the map in Word. The picture in Word is the map you are looking
+  at, with its key below the map and the copyright line, covering none of it.
 - **Infrastructure options and corrosion (Water Level table)**: a *Corrosion
   category* — C3 and below (standard), C4 (stainless enclosure and orifice
   run), C5 and CX (all stainless) or Custom — sets the three stainless-steel

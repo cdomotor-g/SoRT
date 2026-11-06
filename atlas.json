@@ -19,7 +19,7 @@
   "status": {
     "phase": "live",
     "updated": "2026-11-06",
-    "summary": "v2 is the Scope Builder since 4 Nov 2026 (/SoRT/ opens /SoRT/v2/; v1 kept at /SoRT/v1/): Flood-Net station lookup with corrections of its particulars for the Word tables, ACMA licences, and the radio path to base with fresh fade margins; the map beside the questions (each pane scrolling on its own) with survey marks and bridges; sessions shared with the whole forum by themselves through Flood-Net's server (no Share button; a forum passphrase, no accounts or tokens), an in-page question editor, a Help guide, the local TBM as a desktop task, and follow-ups handed to Flood-Net's teams as tasks, and on the Water Level table a corrosion category for the infrastructure options (OTE’s three AS 4312 groupings, with the standard’s own table shown beside them), suggested from the site’s distance to the sea on QSpatial’s coastline, and an acid sulfate soil flag (Queensland’s soil maps at the site) that asks the contractor for testing.",
+    "summary": "v2 is the Scope Builder since 4 Nov 2026 (/SoRT/ opens /SoRT/v2/; v1 kept at /SoRT/v1/): Flood-Net station lookup with corrections of its particulars for the Word tables, ACMA licences, and the radio path to base with fresh fade margins; the map beside the questions (each pane scrolling on its own) with survey marks and the bridges on it (BR1…, each with who manages it and who to call, tabled in Word), its key under the map in the picture; sessions shared with the whole forum by themselves through Flood-Net's server (no Share button; a forum passphrase, no accounts or tokens), an in-page question editor, a Help guide, the local TBM as a desktop task, and follow-ups handed to Flood-Net's teams as tasks, and on the Water Level table a corrosion category for the infrastructure options (OTE’s three AS 4312 groupings, with the standard’s own table shown beside them), suggested from the site’s distance to the sea on QSpatial’s coastline, and an acid sulfate soil flag (Queensland’s soil maps at the site) that asks the contractor for testing.",
     "now": [
       "v2 at real forums as the default; v1 kept at /SoRT/v1/ in case"
     ],
@@ -313,6 +313,22 @@
         "date": "2026-11-05"
       },
       "on_change": "If site-exposure.js changed how it reads the acid sulfate soil maps (its layers, ASS_ORDER or assLevel), bring v2/js/soil.js into step and run node v2/tests/e2e.cjs soil; then move this pin."
+    },
+    {
+      "id": "floodnet-road-owners",
+      "from": "flood-net",
+      "provider": "stations-map",
+      "into": "v2-app",
+      "what": "How Flood-Net's Road & bridge owners works out who manages a bridge — TMR's register of State-controlled bridges merged with Queensland Roads and Tracks' bridges, a bridge not on the register going with the road it carries (Roads and Tracks' road_owner and scr_indicator, in Flood-Net's owner classes), and who to call from QLDTraffic's road lookup — ported into v2/js/map.js for the bridges on the map (BR1…) and the Word bridges table.",
+      "how": "ported",
+      "watch": [
+        "map-road-owners.js",
+        "site-roads.js"
+      ],
+      "since": {
+        "date": "2026-11-06"
+      },
+      "on_change": "If map-road-owners.js changed its bridge sources, its owner classes (OWNER_CODE, classOf) or the road lookup (LOOKUP_URL, digestContacts, pickContact), bring v2/js/map.js's bridges into step and run node v2/tests/e2e.cjs map; then move this pin."
     }
   ]
 }

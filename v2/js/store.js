@@ -28,7 +28,7 @@
   const P = 'sortv2.';
   const MAX_KEPT = 80;
 
-  const DEFAULT_INCLUDE = { header: true, station: true, empty: true, followUps: true, ps: true, map: true, marks: true, bureauBM: true };
+  const DEFAULT_INCLUDE = { header: true, station: true, empty: true, followUps: true, ps: true, map: true, marks: true, bridges: true, bureauBM: true };
 
   function forumDay() {
     const f = U().LS.json(P + 'forum', null);

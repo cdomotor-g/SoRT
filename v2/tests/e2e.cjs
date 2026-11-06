@@ -480,11 +480,11 @@ const scenarios = {
     await p.waitForFunction(() => /Bureau benchmarks? from Flood-Net/.test(document.querySelector('#toast').textContent), null, { timeout: 10000 });
     await fn.close();
     const list = await p.innerText(`${box} .bbm-list`);
-    ok(/B1/.test(list) && /45\.678 m AHD/.test(list) && /2\.345 m on the gauge \(LGH\)/.test(list) && /B3/.test(list) && /not AHD or LGH/.test(list), 'the marks are listed, B1…, with level, datum and height on the gauge');
+    ok(/BoM-TBM-1/.test(list) && /45\.678 m AHD/.test(list) && /2\.345 m on the gauge \(LGH\)/.test(list) && /BoM-TBM-3/.test(list) && /not AHD or LGH/.test(list), 'the marks are listed, BoM-TBM-1…, with level, datum and height on the gauge');
     ok(await p.$$eval(`${box} .bbm-list li`, e => e.length) === 3, 'only the answer to its own request was taken');
     await p.click(`${box} .bbm-list li:first-child button:has-text("Use")`);
     ok((await p.$$eval('#q-localTbm .opt.on', e => e.map(x => x.textContent))).join() === 'On hand – AHD value', 'Use fills the Local TBM: AHD');
-    ok((await p.$eval('[data-fk="localTbm::f::value"]', e => e.value)) === '45.678' && /Test mark one.*2\.345 m on the gauge \(LGH\).*Bureau benchmark B1, HDB Benchmark Details 15\/10\/2026/.test(await p.$eval('[data-fk="localTbm::f::location"]', e => e.value)), 'with its level, where it is and where that came from');
+    ok((await p.$eval('[data-fk="localTbm::f::value"]', e => e.value)) === '45.678' && /Test mark one.*2\.345 m on the gauge \(LGH\).*Bureau benchmark BoM-TBM-1, HDB Benchmark Details 15\/10\/2026/.test(await p.$eval('[data-fk="localTbm::f::location"]', e => e.value)), 'with its level, where it is and where that came from');
     ok(!/DESKTOP TASK/.test(await p.innerText('#followups')), 'so no desktop task for the TBM');
     await p.click(`${box} .bbm-list li:nth-child(2) button:has-text("Use")`);
     ok((await p.$$eval('#q-localTbm .opt.on', e => e.map(x => x.textContent))).join() === 'On hand – LGH value' && (await p.$eval('[data-fk="localTbm::f::value"]', e => e.value)) === '1.100', 'a State-datum mark gives its height on the gauge (LGH)');
@@ -492,6 +492,10 @@ const scenarios = {
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
     const html = await p.clip();
     ok(/Bureau benchmarks \(HDB\) — Bengalla TM \(41506\)/.test(html) && /Test mark three/.test(html) && /not State survey marks/.test(html), 'the Word copy has them as their own table');
+    ok(/>BoM-TBM-1<\/td>/.test(html) && !/>B1<\/td>/.test(html), 'named BoM-TBM-1… in Word, not B1 (which bridges were too)');
+    // A Local TBM filled in before the rename (…Bureau benchmark B1, …) still shows its mark in use.
+    await p.evaluate(() => { const a = SoRT.app.session.answers.localTbm; a.fields.location = a.fields.location.replace(/Bureau benchmark BoM-TBM-(\d+),/, 'Bureau benchmark B$1,'); SoRT.app.changed(); });
+    ok(/in use/.test(await p.innerText(`${box} .bbm-list li:nth-child(2)`)), 'an older session’s “Bureau benchmark B2” is still shown in use');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
@@ -767,6 +771,21 @@ const scenarios = {
     const side = await p.innerText('.map-side');
     ok(/PSM \d+/.test(side), 'survey marks listed');
     ok(/Abergowrie Bridge/.test(side) && /Transport and Main Roads/.test(side), 'the TMR bridge listed');
+    // Bridges: only those on the map, numbered BR1… nearest first; who manages each, and who to call.
+    await p.waitForFunction(() => SoRT.mapView._M.bridges.length && SoRT.mapView._M.bridges.every(b => b.asked), null, { timeout: 30000 }).catch(() => {});
+    const br = await p.evaluate(() => {
+      const M = SoRT.mapView._M, W = M.view.width, H = M.view.height;
+      const inView = b => { const s = M.view.toScreen(new M.esri.Graphic({ geometry: { type: 'point', longitude: b.lon, latitude: b.lat } }).geometry); return !!s && s.x >= 0 && s.x <= W && s.y >= 0 && s.y <= H; };
+      return { all: M.bridges.length, shown: M.shown.map(b => ({ ref: b.ref, d: b.d, on: inView(b) })), off: M.bridges.filter(b => !b.ref).map(inView),
+        stored: SoRT.app.session.map.bridges.map(b => b.ref), first: SoRT.app.session.map.bridges[0] || null };
+    });
+    ok(br.shown.length > 0 && br.shown.every((b, i) => b.ref === `BR${i + 1}` && b.on && (!i || b.d >= br.shown[i - 1].d)), `bridges on the map numbered BR1… nearest first (${br.shown.map(b => b.ref).join(', ')} of ${br.all})`);
+    ok(br.off.every(v => !v) && br.stored.join() === br.shown.map(b => b.ref).join(), 'bridges off the map get no number and stay out of what Word is given');
+    ok(br.first && br.first.who === 'Transport and Main Roads' && /structure 7646/.test(br.first.why) && br.first.contact && /Transport and Main Roads/.test(br.first.contact.name) && /\d/.test(br.first.contact.phone),
+      `the TMR bridge: managed by TMR, its structure, and TMR's district to call (${JSON.stringify(br.first && br.first.contact)})`);
+    ok(/BR1/.test(await p.innerText('.map-side')) && !/\bB1\b/.test(await p.innerText('.map-side')), 'the list says BR1, not B1');
+    ok(await p.evaluate(() => { const lg = document.querySelector('.map-legend'); return !!lg && !lg.closest('.map-frame') && lg.getBoundingClientRect().top >= document.querySelector('.map-frame').getBoundingClientRect().bottom - 1; }), 'the key is under the map, not over it');
+    ok(/Bridges? BR1/.test(await p.innerText('.map-legend')) && /Contours: 5 m LiDAR/.test(await p.innerText('.map-legend')), 'the key names the bridges on the map and the contours');
     await p.click('[data-ps="bridgeAttach"] .opt:has-text("Yes")');
     ok(/structure 7646/.test(await p.$eval('[data-fk="ps::bridgeAttach.detail"]', e => e.value)), 'bridge detail filled into Property Services');
     await p.click('.loc[data-pin="relocation.newLocation"] button:has-text("Place")');
@@ -798,6 +817,9 @@ const scenarios = {
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 90000 });
     const html = await p.clip();
     ok(/<img/.test(html), 'map picture copied');
+    const pic = await p.evaluate(async () => { const r = SoRT.app.picture; const i = new Image(); i.src = r.dataUrl; await i.decode(); return { h: i.naturalHeight, map: r.mapHeight }; });
+    ok(pic.map && pic.h > pic.map + 20, `the picture's key is below the map, inside the picture (${pic.map} px of map, ${pic.h} px in all)`);
+    ok(/Bridges on the map — Abergowrie Bridge AL \(532028\)/.test(html) && />BR1<\/td>/.test(html) && /structure 7646/.test(html) && /TMR’s register of State-controlled bridges/.test(html), 'the bridges table: on the map only, who manages each');
     await p.$eval('#preview', e => e.scrollIntoView({ block: 'center' }));
     ok(await p.waitForFunction(() => !!document.querySelector('#preview img[alt="Site map"]'), null, { timeout: 30000 }).then(() => true).catch(() => false), 'the preview shows the map picture');
     ok(/<div align="center"[^>]*><img[^>]*alt="Site map"/.test(html), 'the copied map picture is centred for Word');

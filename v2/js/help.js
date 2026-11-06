@@ -44,6 +44,8 @@
       '**Locations** (beside or below the map) lists every location the table asks for. Type a coordinate (decimal or degrees-minutes-seconds), or press **Place** and click the map. Placing the relocation site answers **Relocation: Yes** and measures the distance.',
       '**Drawn for the scope**: the vegetation clearance circle (its radius comes from the Vegetation Management question), trees to remove (**T1, T2…**), and the access track — click along the route, then double-click, press Enter or **✓ Finish route**. **Esc** cancels placing or drawing.',
       '**State survey marks** (Queensland’s, from QSpatial): the nearest 5 within 2 km (**S1–S5**). An arrow at the edge points to one that’s off the map. Untick one to leave it out of Word; the mark’s number opens its State survey report. They are not the station’s own **Bureau benchmarks** — those are on the Local TBM question.',
+      '**Bridges** (diamonds; a bridge’s span is drawn too): only the ones **on the map** are numbered — **BR1, BR2…**, nearest first — and go in the key and in Word’s bridges table; zoom out to bring in others within 1 km. Each says **who manages it**: Transport and Main Roads for a bridge on its register of State-controlled bridges, otherwise whoever manages the road it carries (from Queensland’s road data), with **who to contact** from QLDTraffic’s road lookup. A bridge over a creek often sits outside the road reserve — the creek’s bed is a parcel of its own, so the reserve stops at each bank — but it is still the road’s.',
+      '**The key is under the map**, in the picture too (below the copyright line), so it covers none of the map.',
       '**The picture in Word is the map as you see it** — frame it first (**⤢ Fit locations**, zoom). Copy warns if a location falls outside the picture. Flood-Net’s ring and its other stations are left out of the picture.',
       '**⇅ Map above / ⇆ beside the questions** (on the map card) switches the layout; your choice is remembered.',
       'If the map won’t load (some networks block the map services), everything else still works — type coordinates into the questions. **Map details** at the bottom of the map card copies a report for troubleshooting.'
@@ -56,9 +58,9 @@
       '**ACMA Licence**: the hint shows what Flood-Net and the ACMA register know about the site. The register copy can be months old — check anything recent on the ACMA register itself.'
     ] },
     { id: 'word', title: 'Copying into Word', items: [
-      '**Copy for Word** puts the scope table, the map picture, the survey marks table and the Property Services table on the clipboard. Wait a few seconds for **“Copied — paste into Word”** while the map picture is made, then paste with Ctrl+V.',
+      '**Copy for Word** puts the scope table, the map picture, the survey marks and bridges tables and the Property Services table on the clipboard. Wait a few seconds for **“Copied — paste into Word”** while the map picture is made, then paste with Ctrl+V.',
       'Every table’s heading carries the **station name and number** — check it matches the report you’re pasting into.',
-      'A follow-up you **tick as done** is left out of the Word tables; untick it to put it back. The ticks under **Follow-ups and output** choose what else goes in (header, empty rows, map picture, survey marks, Property Services).',
+      'A follow-up you **tick as done** is left out of the Word tables; untick it to put it back. The ticks under **Follow-ups and output** choose what else goes in (header, empty rows, map picture, survey marks, bridges, Property Services).',
       '**“Copied as plain text only”** means the browser refused the formatted copy: click anywhere on the page and press Copy again.'
     ] },
     { id: 'tasks', title: 'Handing tasks to teams (Flood-Net)', items: [
@@ -68,7 +70,7 @@
       'Sending again is safe: tasks already made are recognised and left out. Each team sees its tasks on Flood-Net’s **Tasks** tab; who is on a team is seen only by that team and Flood-Net’s administrators.'
     ] },
     { id: 'tbm', title: 'Local TBM and the Bureau benchmarks (water level tables)', items: [
-      '**Bureau benchmarks (HDB)** are the station’s own marks — level, datum, height on the gauge (LGH), what each is and where — from the Bureau’s HDB, kept in Flood-Net for its editors. On the Local TBM question press **Get them from Flood-Net ↗**: sign in there as an editor and press **Send to SoRT**, and they come back to this tab only. **Use** fills the Local TBM with one; they also go into Word as their own table (B1, B2…), apart from the State survey marks (S1–S5).',
+      '**Bureau benchmarks (HDB)** are the station’s own marks — level, datum, height on the gauge (LGH), what each is and where — from the Bureau’s HDB, kept in Flood-Net for its editors. On the Local TBM question press **Get them from Flood-Net ↗**: sign in there as an editor and press **Send to SoRT**, and they come back to this tab only. **Use** fills the Local TBM with one; they also go into Word as their own table (**BoM-TBM-1, BoM-TBM-2…**), apart from the State survey marks (S1–S5) and the bridges (BR1, BR2…).',
       'If Flood-Net says it can’t reach this tab (a sign-in can lose the link), press its **Copy for SoRT**, then **Paste from Flood-Net** here.',
       'If the forum has the site’s TBM to hand (HDB or the hardcopy station file), choose **On hand – AHD value** or **On hand – LGH value** and type the value and where the TBM is.',
       'If not, choose **Not on hand** (or leave it): the Word table gets a **DESKTOP TASK** for technical staff to look it up. It leaves the table once the value and its location are filled in.',

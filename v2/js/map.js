@@ -5,6 +5,14 @@
    clearance circle, trees, access track), survey marks and bridges near the
    station, Flood-Net's other stations nearby, and the picture for Word.
 
+   Bridges: TMR's register of the bridges it manages and Queensland Roads and
+   Tracks' bridges, merged (Flood-Net's map-road-owners.js, ported): a bridge on
+   TMR's register is TMR's; any other goes with the road it carries, found in
+   Roads and Tracks with its owner code; who to call is QLDTraffic's road lookup
+   for the bridge's point. Only the bridges on the map — in the picture — are
+   numbered (BR1, BR2… by distance), keyed and tabled; the rest within 1 km are
+   counted in the list and left out.
+
    Because the map is always on the page and visible, the picture is simply the
    map you are looking at — v1's machinery for capturing a hidden modal (the
    off-screen rebuild, the suspended-view checks, the red rings) is not needed.
@@ -41,7 +49,11 @@
     roadsAndTracks: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/RoadsAndTracks/MapServer',
     stateRoads: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/StateRoadInformation/MapServer',
     marks: { radiusM: 2000, max: 5 },               // the owner's call: on by default, 2 km, 5 marks
-    bridges: { radiusM: 1000, max: 5, prefillWithinM: 150, mergeM: 60 },
+    bridges: { radiusM: 1000, max: 8, prefillWithinM: 150, mergeM: 60, roadM: 20 },
+    // QLDTraffic's road lookup: for a point, the council, the TMR district and
+    // TMR's state centre, each with a phone and an email. Keyless and open to
+    // other sites, but not a published interface (Flood-Net's docs/road-owners.md).
+    roadLookup: 'https://r8s97t2t19.execute-api.ap-southeast-2.amazonaws.com/prod/lookuproad',
     nearby: { radiusKm: 3, max: 30 },
     dynamicMinScale: 20000,                           // contours and road reserve stop at ~1:20,000
     siteZoom: 17,
@@ -59,7 +71,7 @@
     app: null, root: null, els: {}, esri: null, esriP: null, view: null, map: null, layers: {}, gl: {},
     contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true, ghost: false },   // Flood-Net's position: hidden unless ticked
     move: false, hover: null, drag: null, place: null, measure: null, sketch: null,
-    pins: [], anchor: null, fetchedAt: null, marks: [], bridges: [], nearby: [], diag: {}, log: [],
+    pins: [], anchor: null, fetchedAt: null, marks: [], bridges: [], shown: [], shownSig: '', nearby: [], diag: {}, log: [],
     framedFor: null, ready: false, failed: null, contourIds: null, railIds: null,
     zoomLocked: true, homeNext: false   // the wheel scrolls the page until 🔒 is pressed; a new session goes home
   };
@@ -179,8 +191,7 @@
     M.els.check = h('div', { class: 'map-check', id: 'mapCheck' });
     M.els.view = h('div', { class: 'map-view', id: 'mapView', role: 'region', 'aria-label': 'Map' });
     M.els.status = h('div', { class: 'map-status' }, 'Loading the map…');
-    M.els.legend = h('div', { class: 'map-legend', 'aria-hidden': 'true' });
-    M.els.stamp = h('div', { class: 'map-stamp', 'aria-hidden': 'true' });
+    M.els.legend = h('div', { class: 'map-legend', title: 'The key, as it is under the map in the Word picture' });
     M.els.edges = h('div', { class: 'map-edges', 'aria-hidden': 'true' });
     M.els.progress = h('div', { class: 'map-progress', hidden: true }, h('div'));
     M.els.placeHint = h('div', { class: 'map-place', hidden: true });
@@ -196,8 +207,8 @@
       M.els.check,
       h('div', { class: 'map-grid' },
         h('div', { class: 'map-main' }, tools,
-          M.els.frame = h('div', { class: 'map-frame' }, M.els.view, M.els.legend, M.els.stamp, M.els.edges, M.els.placeHint, M.els.drawActs, M.els.lockHint, M.els.status, M.els.progress),
-          M.els.banners),
+          M.els.frame = h('div', { class: 'map-frame' }, M.els.view, M.els.edges, M.els.placeHint, M.els.drawActs, M.els.lockHint, M.els.status, M.els.progress),
+          M.els.legend, M.els.banners),
         M.els.side),
       h('details', { class: 'map-details' }, h('summary', null, 'Map details (for troubleshooting)'),
         h('button', { type: 'button', class: 'btn-mini', onclick: () => { navigator.clipboard.writeText(M.els.diag.textContent).then(() => M.app.toast('Map details copied.')); } }, 'Copy map details'),
@@ -262,7 +273,7 @@
     attachInteraction();
     E.reactiveUtils.watch(() => M.view.updating, u => { M.els.progress.hidden = !u; });
     E.reactiveUtils.watch(() => [M.view.extent, M.view.scale], () => { renderEdges(); renderStamp(); });
-    E.reactiveUtils.watch(() => M.view.stationary, still => { if (still) changedPicture(); });
+    E.reactiveUtils.watch(() => M.view.stationary, still => { if (still) { changedPicture(); refreshShown(); } });
     E.reactiveUtils.watch(() => M.view.updating, busy => { if (!busy) changedPicture(); });
     loadLabels(); loadContours(); loadRoad(); loadRail();
     sync(M.app);
@@ -426,6 +437,7 @@
     if (M.layers.road) M.layers.road.visible = M.on.road;
     if (M.layers.rail) M.layers.rail.visible = M.on.rail;
     if (M.gl.ghost) M.gl.ghost.visible = M.on.ghost;
+    updateShown();
     storeNear();
     drawMarks(); drawBridges(); drawNearby(); renderSide(); renderLegend(); renderEdges();
     if (M.app) M.app.changed({ light: true });
@@ -511,40 +523,203 @@
       const [tid, qid] = await Promise.all([sublayerId(CFG.stateRoads, /^state controlled bridge$/i, 3), sublayerId(CFG.roadsAndTracks, /^bridges$/i, 22)]);
       const q = (url, id, where, fields) => getJson(`${url}/${id}/query?${new URLSearchParams({ where, geometry: `${b.w},${b.s},${b.e},${b.n}`, geometryType: 'esriGeometryEnvelope',
         inSR: '4326', outSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: fields, returnGeometry: 'true', geometryPrecision: '6', f: 'geojson' })}`, 'Bridges', CFG.timeouts.query).catch(() => null);
-      const [tj, qj] = await Promise.all([q(CFG.stateRoads, tid, '1=1', 'name,struc_id,struc_type,rsect_name,road_code'),
-        q(CFG.roadsAndTracks, qid, "operational_status NOT IN ('Dismantled','Proposed')", 'name,feature_type,operational_status,additional_names')]);
+      const [tj, qj] = await Promise.all([q(CFG.stateRoads, tid, '1=1', 'name,struc_id,struc_type,cons_type,cons_mtrl,rsect_name,road_code'),
+        q(CFG.roadsAndTracks, qid, "operational_status NOT IN ('Dismantled','Proposed')", 'objectid,name,feature_type,operational_status,additional_names')]);
       if (!tj && !qj) throw new Error('the bridge registers didn’t answer');
+      const str = v => (v == null ? '' : String(v).trim());
+      // One per structure on TMR's register (its carriageway points averaged),
+      // with the roads it carries (ON) or passes over (OVER).
       const tmr = new Map();
       ((tj || {}).features || []).forEach(f => {
         const g = f.geometry; if (!g || g.type !== 'Point') return;
         const [lon, lat] = g.coordinates, p = f.properties || {};
         const id = p.struc_id != null ? String(p.struc_id) : `${lat},${lon}`;
-        const s = tmr.get(id) || { kind: 'tmr', struc: p.struc_id != null ? String(p.struc_id) : '', name: (p.name || '').trim(), type: (p.struc_type || '').trim(), roads: new Set(), pts: [] };
-        s.pts.push({ lat, lon }); if (p.rsect_name) s.roads.add(`${String(p.road_code || '').toUpperCase() === 'OVER' ? 'over ' : ''}${p.rsect_name}`);
+        const s = tmr.get(id) || { kind: 'tmr', key: `t${id}`, struc: p.struc_id != null ? String(p.struc_id) : '', name: str(p.name), type: str(p.struc_type),
+          build: [str(p.cons_type), str(p.cons_mtrl).toLowerCase()].filter(Boolean).join(', '), roads: new Map(), pts: [] };
+        s.pts.push({ lat, lon });
+        const road = str(p.rsect_name);
+        if (road) { const how = s.roads.get(road) || new Set(); how.add(str(p.road_code).toUpperCase() === 'OVER' ? 'over' : 'on'); s.roads.set(road, how); }
         tmr.set(id, s);
       });
-      const list = [...tmr.values()].map(s => ({ kind: 'tmr', struc: s.struc, name: s.name, type: s.type, roads: [...s.roads],
+      const list = [...tmr.values()].map(s => Object.assign(s, { roads: [...s.roads].map(([name, how]) => ({ name, on: how.has('on'), over: how.has('over') })),
         lat: s.pts.reduce((x, p) => x + p.lat, 0) / s.pts.length, lon: s.pts.reduce((x, p) => x + p.lon, 0) / s.pts.length }));
+      // Then Roads and Tracks' bridges that aren't one of those: not TMR's.
       ((qj || {}).features || []).forEach(f => {
         const g = f.geometry; if (!g) return;
-        const lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
-        const pts = lines.flat().map(([lon, lat]) => ({ lat, lon }));
+        const paths = (g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []).filter(l => l && l.length);
+        const pts = paths.flat().map(([lon, lat]) => ({ lat, lon }));
         if (!pts.length) return;
-        if (list.some(t => t.kind === 'tmr' && pts.some(p => near(p, t) <= CFG.bridges.mergeM))) return;   // the same bridge
-        const mid = pts[Math.floor(pts.length / 2)];
         const p = f.properties || {};
-        list.push({ kind: 'qrt', name: (p.name || p.additional_names || '').trim(), type: (p.feature_type || 'Road bridge').trim(), lat: mid.lat, lon: mid.lon, pts });
+        const name = str(p.name) || str(p.additional_names);
+        const same = list.find(t => t.kind === 'tmr' && pts.some(x => near(x, t) <= CFG.bridges.mergeM));
+        if (same) { if (!same.name && name) same.name = name; return; }   // the same bridge
+        // Its marker halfway along it, by length.
+        let total = 0, run = 0, mid = pts[0];
+        for (let i = 1; i < pts.length; i++) total += near(pts[i - 1], pts[i]);
+        for (let i = 1; i < pts.length; i++) {
+          const d = near(pts[i - 1], pts[i]);
+          if (d > 0 && run + d >= total / 2) { const t = (total / 2 - run) / d; mid = { lat: pts[i - 1].lat + t * (pts[i].lat - pts[i - 1].lat), lon: pts[i - 1].lon + t * (pts[i].lon - pts[i - 1].lon) }; break; }
+          run += d;
+        }
+        list.push({ kind: 'qrt', key: `q${p.objectid != null ? p.objectid : `${mid.lat},${mid.lon}`}`, name, type: str(p.feature_type) || 'Road bridge', lat: mid.lat, lon: mid.lon, pts, paths, roads: [] });
       });
-      const dist = br => br.pts ? Math.min(...br.pts.map(p => near(a, p))) : near(a, br);
-      const out = list.map(br => Object.assign(br, { d: dist(br) })).filter(br => br.d <= CFG.bridges.radiusM).sort((x, y) => x.d - y.d)
-        .slice(0, CFG.bridges.max).map((br, i) => {
-          const title = br.name || (br.kind === 'tmr' && br.struc ? `Structure ${br.struc}` : br.type || 'Bridge');
-          const who = br.kind === 'tmr' ? `Transport and Main Roads${br.struc ? ', structure ' + br.struc : ''}${br.roads.length ? ' — ' + br.roads.join('; ') : ''}` : 'not State-controlled (normally the council’s)';
-          return { ref: `B${i + 1}`, title, who, kind: br.kind, lat: br.lat, lon: br.lon, d: br.d, away: away(a, br) };
-        });
+      // How far: to the nearest of a structure's points, or anywhere along a
+      // bridge's line (a station at one end of a long bridge is at the bridge);
+      // which way: to its marker.
+      const dist = br => (br.paths ? Math.min(...br.paths.map(l => toLineM(a, l))) : Math.min(...br.pts.map(p => near(a, p))));
+      const out = list.map(br => { const d = dist(br); return Object.assign(br, { d, away: `${U().fmtDist(d)} ${U().compass(U().bearingDeg(a, br))}`, road: null, contact: null, asked: false, ref: null }); })
+        .filter(br => br.d <= CFG.bridges.radiusM).sort((x, y) => x.d - y.d).slice(0, CFG.bridges.max);
       diag('bridges', 'loaded', `${out.length} within ${U().fmtDist(CFG.bridges.radiusM)}`, now() - t0);
       return out;
     } catch (e) { diag('bridges', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); return null; }
+  }
+
+  /* ---------------- who manages each bridge, and who to call ---------------- */
+  // Queensland Roads and Tracks' road_owner codes, in Flood-Net's classes
+  // (map-road-owners.js), so the two apps say it alike. A road declared
+  // State-controlled (scr_indicator T) is TMR's whatever the owner code says.
+  const ROAD_CLASS = { TMR: 'tmr', LG: 'council', QPWS: 'park', Forestry: 'park', Private: 'private', STATE: 'other', WA: 'other', PA: 'other', UP: 'other', Other: 'other', Unknown: 'unknown' };
+  const OTHER_BODY = { STATE: 'another State authority', WA: 'a water authority', PA: 'a port authority', UP: 'a utility provider', Other: 'another body' };
+  const ROAD_WHERE = "class NOT IN ('Walkway','Bikeway','Ferry') AND op_status_ind <> 'Proposed'";
+  // Metres from a point to a line ([lon, lat] vertices), on a plane — fine over the tens of metres asked about.
+  function toLineM(p, line) {
+    const kx = 111320 * Math.cos(p.lat * Math.PI / 180), ky = 110574;
+    if (line.length === 1) return Math.hypot((line[0][0] - p.lon) * kx, (line[0][1] - p.lat) * ky);
+    let best = Infinity;
+    for (let i = 1; i < line.length; i++) {
+      const ax = (line[i - 1][0] - p.lon) * kx, ay = (line[i - 1][1] - p.lat) * ky, bx = (line[i][0] - p.lon) * kx, by = (line[i][1] - p.lat) * ky;
+      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy, t = l2 > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+      best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+    }
+    return best;
+  }
+  // The road a Roads and Tracks bridge carries: of the road segments round it,
+  // the one nearest, on average, to both its ends and its middle (a road
+  // passing under it is near the middle only).
+  async function roadCarried(br) {
+    const lons = br.pts.map(p => p.lon), lats = br.pts.map(p => p.lat), pad = 0.0003;
+    const id = await sublayerId(CFG.roadsAndTracks, /^roads and tracks$/i, 10);
+    const j = await getJson(`${CFG.roadsAndTracks}/${id}/query?${new URLSearchParams({ where: ROAD_WHERE,
+      geometry: `${Math.min(...lons) - pad},${Math.min(...lats) - pad},${Math.max(...lons) + pad},${Math.max(...lats) + pad}`, geometryType: 'esriGeometryEnvelope',
+      inSR: '4326', outSR: '4326', spatialRel: 'esriSpatialRelIntersects', returnGeometry: 'true', geometryPrecision: '6', f: 'geojson',
+      outFields: 'road_name_full,class,road_owner,scr_indicator,lga_name_left,lga_name_right' })}`, 'Roads', CFG.timeouts.query);
+    const probe = [br.pts[0], { lat: br.lat, lon: br.lon }, br.pts[br.pts.length - 1]];
+    let best = null;
+    ((j || {}).features || []).forEach(f => {
+      const g = f.geometry; if (!g) return;
+      const lines = (g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : []).filter(l => l && l.length);
+      if (!lines.length) return;
+      const mean = probe.reduce((x, p) => x + Math.min(...lines.map(l => toLineM(p, l))), 0) / probe.length;
+      if (mean <= CFG.bridges.roadM && (!best || mean < best.mean)) best = { mean, p: f.properties || {} };
+    });
+    if (!best) return { none: true };
+    const p = best.p, owner = String(p.road_owner || '').trim() || 'Unknown', scr = String(p.scr_indicator || '').trim().toUpperCase();
+    const name = String(p.road_name_full || '').trim();
+    return { name: !name || /^(road|track)$/i.test(name) ? '' : name, owner, cls: scr === 'T' || owner === 'TMR' ? 'tmr' : (ROAD_CLASS[owner] || 'unknown'),
+      lga: String(p.lga_name_left || p.lga_name_right || '').trim() };
+  }
+  // QLDTraffic's road lookup, once per ~100 m; values off a third-party
+  // service, so only a plain phone number and a plain address are kept.
+  const lookups = new Map();
+  function contactsAt(lat, lon) {
+    const k = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+    if (!lookups.has(k)) {
+      lookups.set(k, getJson(`${CFG.roadLookup}?lat=${lat.toFixed(6)}&lng=${lon.toFixed(6)}`, 'Road lookup', CFG.timeouts.query).then(list => {
+        if (!Array.isArray(list)) throw new Error('the road lookup answered with something unreadable');
+        const out = {};
+        list.forEach(c => {
+          if (!c || typeof c !== 'object') return;
+          const type = String(c.contact_type || '').toLowerCase(), name = String(c.display_name || c.name || '').trim();
+          const slot = type === 'local' ? 'local' : type === 'district' ? 'district' : type === 'state' ? 'state' : ['busway', 'transurban', 'private_owned'].includes(type) ? 'special' : null;
+          if (!slot || !name || out[slot]) return;
+          const phone = String(c.phone_number || '').trim(), email = String(c.email || '').trim();
+          out[slot] = { name: name.slice(0, 120), phone: /^[0-9 ()+-]{3,24}$/.test(phone) ? phone : '', email: /^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/i.test(email) ? email : '' };
+        });
+        return out;
+      }).catch(e => { lookups.delete(k); log(`Road lookup: ${e.message}`); return null; }));
+    }
+    return lookups.get(k);
+  }
+  // Fill in each bridge's road and contacts; the list is redrawn as they land.
+  async function enrichBridges(list) {
+    await Promise.all(list.map(async br => {
+      const [road, contact] = await Promise.all([br.kind === 'qrt' ? roadCarried(br).catch(() => null) : Promise.resolve(null), contactsAt(br.lat, br.lon)]);
+      br.road = road; br.contact = contact; br.asked = true;
+    }));
+  }
+  const cap = t => (t ? t[0].toUpperCase() + t.slice(1) : t);
+  // Who manages a bridge, in a few words (who), and why (the basis for it).
+  function ownerOf(b) {
+    const r = b.road && !b.road.none ? b.road : null;
+    const local = b.contact && b.contact.local ? b.contact.local.name : '';
+    const council = local || (r && r.lga ? `${r.lga} Council` : 'the council');
+    if (b.kind === 'tmr') return { cls: 'tmr', who: 'Transport and Main Roads', why: `On TMR’s register of State-controlled bridges${b.struc ? ` as structure ${b.struc}` : ''}` };
+    const not = 'Not on TMR’s bridge register, so it goes with the road it carries';
+    if (!r) return { cls: 'council', who: `Normally ${council}`, why: `${not}${!b.asked ? '' : b.road ? ' — which isn’t mapped here' : ' — the State’s road data didn’t answer'}` };
+    const road = r.name || 'an unnamed road';
+    switch (r.cls) {
+      case 'tmr': return { cls: 'tmr', who: 'Transport and Main Roads', why: `${not}: ${road}, a State-controlled road` };
+      case 'council': return { cls: 'council', who: council, why: `${not}: ${road}, the council’s as the State records it` };
+      case 'unknown': return { cls: 'unknown', who: `${council}, or private`, why: `${not}: ${road}, not State-controlled — the State hasn’t recorded whether it’s the council’s or private` };
+      case 'park': return { cls: 'park', who: 'Queensland Parks and Wildlife Service', why: `${not}: ${road}, in a national park or State forest` };
+      case 'private': return { cls: 'private', who: 'Private — the owner of the land it crosses', why: `${not}: ${road}, a private road` };
+      default: return { cls: 'other', who: cap(OTHER_BODY[r.owner] || 'another public body'), why: `${not}: ${road}` };
+    }
+  }
+  // Who to call: the road's operator where QLDTraffic names one, the TMR
+  // district for a State-controlled bridge, the council for any other.
+  function contactOf(b) {
+    const c = b.contact; if (!c) return null;
+    const cls = ownerOf(b).cls;
+    if (c.special) return c.special;
+    if (cls === 'tmr') return c.district || c.state || null;
+    if (cls === 'council' || cls === 'unknown') return c.local || null;
+    return null;
+  }
+  // What it is: its kind, TMR's structure number and build, the roads at it.
+  function bridgeTitle(b) {
+    if (b.name) return b.name;
+    if (b.kind === 'tmr') return b.struc ? `Structure ${b.struc}` : (b.type || 'Bridge');
+    const r = b.road && !b.road.none && b.road.name ? b.road.name : '';
+    const kind = cap(String(b.type || 'Road bridge').toLowerCase());
+    return r ? `${kind} on ${r}` : kind;
+  }
+  function bridgeWhat(b) {
+    if (b.kind === 'tmr') {
+      const roads = b.roads.map(r => (r.on && r.over ? `on and over ${r.name}` : r.over ? `over ${r.name}` : `carries ${r.name}`));
+      return [b.struc ? `Structure ${b.struc}` : '', b.build, ...roads].filter(Boolean).join(' · ');
+    }
+    const r = b.road && !b.road.none ? b.road : null;
+    return [b.name ? cap(String(b.type || '').toLowerCase()) : '', r && r.name && b.name ? `carries ${r.name}` : ''].filter(Boolean).join(' · ');
+  }
+  // The bridges whose marker is on the map now, numbered BR1… by distance.
+  // Markers close together on screen (a road bridge and its footbridges) share
+  // one label, "BR2, BR3, BR4", so the numbers never print over each other.
+  function updateShown() {
+    let list = [];
+    const at = new Map();
+    if (M.on.bridges && M.ready && M.view && M.view.width) {
+      const W = M.view.width, H = M.view.height, m = 6;
+      list = M.bridges.filter(b => { const s = M.view.toScreen(G_(pt(b.lon, b.lat)).geometry); if (s) at.set(b, s); return s && s.x >= m && s.x <= W - m && s.y >= m && s.y <= H - m; });
+    }
+    M.bridges.forEach(b => { b.ref = null; b.label = null; });
+    list.forEach((b, i) => { b.ref = `BR${i + 1}`; });
+    const groups = [];
+    list.forEach(b => {
+      const s = at.get(b), g = groups.find(x => Math.hypot(x.s.x - s.x, x.s.y - s.y) < 26);
+      if (g) g.list.push(b); else groups.push({ s, list: [b] });
+    });
+    // The group's label goes over its top-most marker, clear of the others.
+    groups.forEach(g => { g.list.reduce((top, b) => (at.get(b).y < at.get(top).y ? b : top)).label = g.list.map(b => b.ref).join(', '); });
+    const sig = list.map(b => `${b.key}:${b.label || ''}`).join('|'), changed = sig !== M.shownSig;
+    M.shown = list; M.shownSig = sig;
+    return changed;
+  }
+  // After the map moves: when other bridges are now on it, renumber and retable.
+  function refreshShown() {
+    if (!updateShown()) return;
+    drawBridges(); renderSide(); renderLegend(); storeNear();
+    if (M.app) M.app.changed({ light: true });
   }
   async function fetchNearby(a) {
     try {
@@ -557,7 +732,7 @@
   async function refreshNear(force) {
     resolvePins();
     const a = M.anchor;
-    if (!a) { M.marks = []; M.bridges = []; M.nearby = []; storeNear(); drawMarks(); drawBridges(); drawNearby(); renderSide(); return; }
+    if (!a) { M.marks = []; M.bridges = []; M.nearby = []; updateShown(); storeNear(); drawMarks(); drawBridges(); drawNearby(); renderSide(); renderLegend(); return; }
     if (!force && M.fetchedAt && near(M.fetchedAt, a) < 100) return;
     M.fetchedAt = { lat: a.lat, lon: a.lon };
     M.looking = true; renderSide();
@@ -566,23 +741,36 @@
     if (marks) M.marks = marks;
     if (bridges) M.bridges = bridges;
     M.nearby = nearby;
+    updateShown();
     storeNear();
     drawMarks(); drawBridges(); drawNearby(); renderSide(); renderLegend(); renderEdges();
     M.app.changed({ light: true });
     if (M.app.ctx) S.form.render(document.getElementById('form'));   // the Benchmark hint
     S.form.renderPS(document.getElementById('ps'));
+    // Then who manages each bridge and who to call — the list is up meanwhile.
+    if (bridges && bridges.length) {
+      await enrichBridges(bridges);
+      if (M.bridges !== bridges) return;   // the station moved on meanwhile
+      storeNear(); drawBridges(); renderSide(); renderLegend();
+      M.app.changed({ light: true });
+      S.form.renderPS(document.getElementById('ps'));
+    }
   }
   // Keep what the Word copy and the playbook need in the session.
   function storeNear() {
     const s = M.app.session;
     s.map.marks = M.on.marks ? M.marks.map(m => ({ id: m.id, ref: m.ref, name: m.name, lat: m.lat, lon: m.lon, ahd: m.ahd, condition: m.condition, lastVisit: m.lastVisit, report: m.report, away: m.away })) : [];
-    s.map.bridges = M.bridges.map(b => ({ ref: b.ref, title: b.title, who: b.who, lat: b.lat, lon: b.lon, away: b.away }));
+    // Only the bridges on the map (BR1…), as the picture shows them.
+    s.map.bridges = M.shown.map(b => { const o = ownerOf(b), c = contactOf(b); return { ref: b.ref, kind: b.kind, title: bridgeTitle(b), what: bridgeWhat(b),
+      who: o.who, why: o.why, contact: c ? { name: c.name, phone: c.phone, email: c.email } : null, lat: b.lat, lon: b.lon, away: b.away }; });
     // The nearest bridge, close enough to be the one equipment might attach to,
     // fills Property Services' bridge detail (shown once that answer is Yes).
     const b = M.bridges.find(x => x.d <= CFG.bridges.prefillWithinM);
     s.prefill.__ps = s.prefill.__ps || {};
-    if (b) s.prefill.__ps['bridgeAttach.detail'] = `${b.title} — ${b.who} (${b.away} of the station)`;
-    else delete s.prefill.__ps['bridgeAttach.detail'];
+    if (b) {
+      const o = ownerOf(b), c = contactOf(b);
+      s.prefill.__ps['bridgeAttach.detail'] = `${bridgeTitle(b)}, ${b.away} of the station — managed by ${o.who}. ${o.why}.${c ? ` Contact: ${c.name}${c.phone ? ', ' + c.phone : ''}.` : ''}`;
+    } else delete s.prefill.__ps['bridgeAttach.detail'];
   }
 
   // Anything that changes what the picture would show moves the version on, and
@@ -631,9 +819,16 @@
     changedPicture();
     const L = M.gl.bridges; L.removeAll();
     if (!M.on.bridges) return;
+    const col = b => (b.kind === 'tmr' ? [128, 0, 32, 1] : [110, 76, 60, 1]);
+    // A Roads and Tracks bridge is a line: its span is drawn, so the bridge
+    // shows where the road reserve stops at a creek's banks.
+    M.bridges.forEach(b => (b.paths || []).forEach(path => {
+      const line = (color, width) => L.add(G_({ type: 'polyline', paths: [path], spatialReference: { wkid: 4326 } }, { type: 'simple-line', color, width, cap: 'round' }));
+      line([255, 255, 255, 0.9], 6); line(col(b), 3.5);
+    }));
     M.bridges.forEach(b => {
-      L.add(G_(pt(b.lon, b.lat), { type: 'simple-marker', style: 'diamond', size: 13, color: b.kind === 'tmr' ? [128, 0, 32, 1] : [110, 76, 60, 1], outline: { color: [255, 255, 255, 1], width: 1.5 } }, { bridge: b.ref }));
-      L.add(G_(pt(b.lon, b.lat), text(b.ref, [255, 240, 230], 12, 10)));
+      L.add(G_(pt(b.lon, b.lat), { type: 'simple-marker', style: 'diamond', size: 13, color: col(b), outline: { color: [255, 255, 255, 1], width: 1.5 } }, { bridge: b.key }));
+      if (b.label) L.add(G_(pt(b.lon, b.lat), text(b.label, [255, 240, 230], 12, 10)));
     });
   }
   function drawNearby() {
@@ -949,14 +1144,26 @@
           m.ahd != null ? `benchmark ${m.ahd} m AHD` : 'no AHD height', h('br'),
           h('span', { class: 'hint' }, [m.condition, m.lastVisit && `last visited ${m.lastVisit}`, m.away].filter(Boolean).join(' · ')))));
     });
-    // Bridges.
-    el.appendChild(h('h4', null, 'Bridges ', h('span', { class: 'hint' }, `within ${U().fmtDist(CFG.bridges.radiusM)}`)));
+    // Bridges: the ones on the map, and who manages each.
+    el.appendChild(h('h4', { title: 'Road bridges on the map (from those within 1 km), numbered BR1… by distance, and who manages each: Transport and Main Roads for a bridge on its register of State-controlled bridges, otherwise whoever manages the road it carries. A bridge over a creek often sits outside the road reserve — the creek’s bed is a parcel of its own, so the reserve stops at each bank — but it is still the road’s.' },
+      'Bridges ', h('span', { class: 'hint' }, 'on the map — who manages them')));
     if (!M.on.bridges) el.appendChild(h('p', { class: 'hint' }, 'Switched off.'));
     else if (!M.anchor) el.appendChild(h('p', { class: 'hint' }, 'Shown once the station has a location.'));
     else if (M.looking && !M.bridges.length) el.appendChild(h('p', { class: 'hint' }, 'Asking the bridge registers…'));
-    else if (!M.bridges.length) el.appendChild(h('p', { class: 'hint' }, M.diag.bridges && M.diag.bridges.status !== 'loaded' ? `Couldn’t ask the bridge registers (${M.diag.bridges.note}).` : 'None within 1 km.'));
-    M.on.bridges && M.bridges.forEach(b => el.appendChild(h('div', { class: 'mark', dataset: { ref: `b-${b.ref}` } }, h('b', null, b.ref),
-      h('div', null, b.title, h('br'), h('span', { class: 'hint' }, `${b.who} · ${b.away}`)))));
+    else if (!M.bridges.length) el.appendChild(h('p', { class: 'hint' }, M.diag.bridges && M.diag.bridges.status !== 'loaded' ? `Couldn’t ask the bridge registers (${M.diag.bridges.note}).` : `None within ${U().fmtDist(CFG.bridges.radiusM)}.`));
+    if (M.on.bridges) {
+      M.shown.forEach(b => {
+        const o = ownerOf(b), c = contactOf(b), what = bridgeWhat(b);
+        el.appendChild(h('div', { class: 'mark', dataset: { ref: `b-${b.key}` } }, h('b', null, b.ref),
+          h('div', null, bridgeTitle(b), what ? [h('br'), h('span', { class: 'hint' }, what)] : null, h('br'),
+            'Managed by ', h('b', null, o.who), h('br'), h('span', { class: 'hint' }, o.why),
+            c ? [h('br'), 'Contact: ', c.name, c.phone ? [' · ', h('a', { href: `tel:${c.phone.replace(/[^0-9+]/g, '')}` }, c.phone)] : null,
+              c.email ? [' · ', h('a', { href: `mailto:${c.email}` }, c.email)] : null] : !b.asked ? [h('br'), h('span', { class: 'hint' }, 'Contact: asking QLDTraffic’s road lookup…')] : null,
+            h('br'), h('span', { class: 'hint' }, b.away))));
+      });
+      const off = M.bridges.length - M.shown.length;
+      if (off > 0) el.appendChild(h('p', { class: 'hint' }, `${M.shown.length ? `${off} more` : off} within ${U().fmtDist(CFG.bridges.radiusM)} ${off > 1 ? 'are' : 'is'} off the map, so left out of the key and the Word copy — zoom out to bring ${off > 1 ? 'them' : 'it'} in.`));
+    }
     if (keep) { const k = el.querySelector(`[data-fk="${CSS.escape(keep)}"]`); if (k) k.focus(); }
   }
 
@@ -975,7 +1182,10 @@
     const hidden = new Set(M.app.session.map.hiddenMarks || []);
     const marks = M.on.marks ? M.marks.filter(m => !hidden.has(m.id)) : [];
     if (marks.length) items.push({ kind: 'mark', colour: [27, 79, 114], label: `State survey marks ${marks.map(m => m.ref).join(', ')} — table below the map` });
-    if (M.on.bridges && M.bridges.length) items.push({ kind: 'bridge', colour: [128, 0, 32], label: `Bridges ${M.bridges.map(b => b.ref).join(', ')}` });
+    if (M.on.bridges && M.shown.length) items.push({ kind: 'bridge', colour: M.shown.some(b => b.kind === 'tmr') ? [128, 0, 32] : [110, 76, 60],
+      label: `${M.shown.length > 1 ? 'Bridges' : 'Bridge'} ${M.shown.map(b => b.ref).join(', ')} — who manages ${M.shown.length > 1 ? 'them' : 'it'}: table below the map` });
+    const stamp = stampText();
+    if (stamp) items.push({ kind: 'contour', colour: CFG.contourLine.color.slice(0, 3), label: stamp });
     return items;
   }
   function renderLegend() {
@@ -987,7 +1197,9 @@
       h('span', null, h('b', null, i.label), i.sub ? h('span', { class: 'lg-sub' }, i.sub) : null))));
   }
   function stampText() { return M.contour === 'off' ? '' : `Contours: ${M.contour} m LiDAR${M.view && M.view.scale > CFG.dynamicMinScale ? ' (zoom in to see them)' : ''}`; }
-  function renderStamp() { if (M.els.stamp) { const t = stampText(); M.els.stamp.hidden = !t; M.els.stamp.textContent = t; } }
+  // The contour caption is in the key (below the map): redrawn when it changes.
+  let lastStamp = null;
+  function renderStamp() { const t = stampText(); if (t !== lastStamp) { lastStamp = t; renderLegend(); } }
   // Survey marks outside the current view: an arrow at the edge, pointing at them.
   function offscreenMarks() {
     if (!M.ready || !M.on.marks) return [];
@@ -1001,19 +1213,14 @@
       const k = Math.min((W / 2 - 22) / Math.abs(dx || 1e-9), (H / 2 - 22) / Math.abs(dy || 1e-9));
       out.push({ m, x: cx + dx * k, y: cy + dy * k, angle: Math.atan2(dy, dx), label: `${m.ref} ${U().fmtDist(m.d)}` });
     });
-    // Labels on the same edge are spread apart along it so none overlap, and
-    // step clear of the legend (top left) and the contour caption (top right).
+    // Labels on the same edge are spread apart along it so none overlap (the
+    // key and the contour caption are below the map, so nothing else is in the way).
     const edgeOf = o => (o.y <= 23 ? 't' : o.y >= H - 23 ? 'b' : o.x <= 23 ? 'l' : 'r');
     const LW = o => o.label.length * 7 + 22, LH = 22;
     const frame = M.els.view.getBoundingClientRect();
     const boxOf = el => { if (!el || el.hidden || !el.offsetWidth) return null; const r = el.getBoundingClientRect(); return { l: r.left - frame.left, t: r.top - frame.top, r: r.right - frame.left, b: r.bottom - frame.top }; };
-    const legend = boxOf(M.els.legend), stamp = boxOf(M.els.stamp), ui = boxOf(M.els.view.querySelector('.esri-ui-bottom-right'));
+    const ui = boxOf(M.els.view.querySelector('.esri-ui-bottom-right'));
     out.forEach(o => {
-      const e = edgeOf(o);
-      if (legend && e === 't' && o.x - LW(o) / 2 < legend.r + 4) o.x = legend.r + 4 + LW(o) / 2;
-      if (legend && e === 'l' && o.y - LH / 2 < legend.b + 4) o.y = legend.b + 4 + LH / 2;
-      if (stamp && e === 't' && o.x + LW(o) / 2 > stamp.l - 4) o.x = Math.max(LW(o) / 2 + 4, stamp.l - 4 - LW(o) / 2);
-      if (stamp && e === 'r' && o.y - LH / 2 < stamp.b + 4) o.y = stamp.b + 4 + LH / 2;
       // Whole label inside the map.
       o.x = Math.min(W - LW(o) / 2 - 4, Math.max(LW(o) / 2 + 4, o.x));
       o.y = Math.min(H - LH / 2 - 4, Math.max(LH / 2 + 4, o.y));
@@ -1105,41 +1312,11 @@
     x.globalCompositeOperation = 'destination-over'; x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.globalCompositeOperation = 'source-over';
     const sc = W / M.view.width;                               // device pixels per CSS pixel
     const pad = Math.round(10 * sc), fs = Math.round(13 * sc), fs2 = Math.round(11 * sc);
+    const font = (bold, size) => `${bold ? 'bold ' : ''}${size}px Segoe UI, Arial, sans-serif`;
     x.textBaseline = 'top';
-    // Legend, top-left.
-    const items = legendItems();
-    if (items.length) {
-      let wmax = 0;
-      items.forEach(i => { x.font = `bold ${fs}px Segoe UI, Arial, sans-serif`; wmax = Math.max(wmax, x.measureText(i.label).width); if (i.sub) { x.font = `${fs2}px Segoe UI, Arial, sans-serif`; wmax = Math.max(wmax, x.measureText(i.sub).width); } });
-      const rowH = i => fs + (i.sub ? fs2 + 3 * sc : 0) + 7 * sc;
-      const boxW = Math.min(W * 0.6, wmax + pad * 3.4), boxH = items.reduce((a, i) => a + rowH(i), 0) + pad;
-      x.fillStyle = 'rgba(255,255,255,0.88)'; roundRect(x, pad, pad, boxW, boxH, 6 * sc); x.fill();
-      let y = pad + pad / 2;
-      items.forEach(i => {
-        const cx = pad * 2.1, cy = y + fs * 0.55, col = `rgb(${i.colour.join(',')})`;
-        x.fillStyle = col; x.strokeStyle = col; x.lineWidth = 2 * sc;
-        if (i.kind === 'title') { x.fillStyle = '#152531'; x.font = `bold ${fs}px Segoe UI, Arial, sans-serif`; x.fillText(i.label, pad * 1.2, y); y += rowH(i); return; }
-        if (i.kind === 'pin') { x.beginPath(); x.arc(cx, cy, fs * 0.42, 0, Math.PI * 2); x.fill(); }
-        else if (i.kind === 'mark') { x.beginPath(); x.arc(cx, cy, fs * 0.38, 0, Math.PI * 2); x.stroke(); }
-        else if (i.kind === 'bridge') { x.beginPath(); x.moveTo(cx, cy - fs * .45); x.lineTo(cx + fs * .45, cy); x.lineTo(cx, cy + fs * .45); x.lineTo(cx - fs * .45, cy); x.closePath(); x.fill(); }
-        else if (i.kind === 'tree') { x.beginPath(); x.moveTo(cx, cy - fs * .45); x.lineTo(cx + fs * .45, cy + fs * .4); x.lineTo(cx - fs * .45, cy + fs * .4); x.closePath(); x.fill(); }
-        else if (i.kind === 'line') { x.beginPath(); x.moveTo(cx - fs * .5, cy); x.lineTo(cx + fs * .5, cy); x.lineWidth = 3.5 * sc; x.stroke(); }
-        else if (i.kind === 'circle') { x.setLineDash([3 * sc, 2 * sc]); x.beginPath(); x.arc(cx, cy, fs * 0.42, 0, Math.PI * 2); x.stroke(); x.setLineDash([]); }
-        x.fillStyle = '#152531'; x.font = `bold ${fs}px Segoe UI, Arial, sans-serif`; x.fillText(i.label, pad * 3.4, y);
-        if (i.sub) { x.fillStyle = '#3a4a56'; x.font = `${fs2}px Segoe UI, Arial, sans-serif`; x.fillText(i.sub, pad * 3.4, y + fs + 3 * sc); }
-        y += rowH(i);
-      });
-    }
-    // Contour caption, top-right.
-    const stamp = stampText();
-    if (stamp) {
-      x.font = `${fs2}px Segoe UI, Arial, sans-serif`; const sw = x.measureText(stamp).width;
-      x.fillStyle = 'rgba(255,255,255,0.88)'; roundRect(x, W - sw - pad * 2.4, pad, sw + pad * 1.4, fs2 + pad, 6 * sc); x.fill();
-      x.fillStyle = '#152531'; x.fillText(stamp, W - sw - pad * 1.7, pad * 1.5);
-    }
     // Survey marks off the picture: an arrow at the edge with the distance.
     offscreenMarks().forEach(o => {
-      x.font = `bold ${fs2}px Segoe UI, Arial, sans-serif`;
+      x.font = font(true, fs2);
       const tw = x.measureText(o.label).width, bw = tw + 22 * sc, bh = fs2 + 6 * sc;
       const bx = Math.min(W - bw - 2 * sc, Math.max(2 * sc, o.x * sc - bw / 2)), by = Math.min(H - bh - fs2 - pad * 1.5, Math.max(2 * sc, o.y * sc - bh / 2));
       x.fillStyle = 'rgba(255,255,255,0.9)'; roundRect(x, bx, by, bw, bh, 3 * sc); x.fill();
@@ -1147,13 +1324,66 @@
       x.fillStyle = '#1b4f72'; x.beginPath(); x.moveTo(6 * sc, 0); x.lineTo(-4 * sc, -4.5 * sc); x.lineTo(-4 * sc, 4.5 * sc); x.closePath(); x.fill(); x.restore();
       x.fillStyle = '#1b4f72'; x.fillText(o.label, bx + 18 * sc, by + 3 * sc);
     });
-    // Attribution band.
+    // Attribution band, along the bottom of the map.
     const band = fs2 + pad;
     x.fillStyle = 'rgba(0,0,0,0.55)'; x.fillRect(0, H - band, W, band);
-    x.fillStyle = '#fff'; x.font = `${fs2}px Segoe UI, Arial, sans-serif`; x.fillText(CFG.attribution, pad, H - band + pad * 0.45);
+    // Smaller type where the whole line wouldn't otherwise fit across.
+    x.font = font(false, fs2);
+    const aw = x.measureText(CFG.attribution).width, afs = aw > W - pad * 2 ? Math.max(Math.round(8 * sc), Math.floor(fs2 * (W - pad * 2) / aw)) : fs2;
+    x.fillStyle = '#fff'; x.font = font(false, afs); x.fillText(CFG.attribution, pad, H - band + (band - afs) / 2);
+    // The key, below the map and its attribution: part of the picture, but
+    // covering none of the map. The station on its own line, then the rest in
+    // as many columns as fit, a long label wrapping inside its column.
+    const items = legendItems();
+    let out = c;
+    if (items.length) {
+      const m = document.createElement('canvas').getContext('2d');
+      const sym = Math.round(24 * sc), gap = Math.round(20 * sc), inner = W - pad * 2, lineH = fs + 3 * sc;
+      const title = items.find(i => i.kind === 'title'), rest = items.filter(i => i.kind !== 'title');
+      const textW = (t, f) => { m.font = f; return m.measureText(t).width; };
+      const wrap = (t, f, max) => {
+        const lines = []; let line = '';
+        String(t).split(' ').forEach(w => { const next = line ? `${line} ${w}` : w; if (line && textW(next, f) > max) { lines.push(line); line = w; } else line = next; });
+        if (line) lines.push(line);
+        return lines;
+      };
+      const widest = rest.reduce((a, i) => Math.max(a, sym + Math.max(textW(i.label, font(true, fs)), i.sub ? textW(i.sub, font(false, fs2)) : 0)), 0);
+      const ncol = Math.max(1, Math.min(rest.length || 1, Math.floor((inner + gap) / (widest + gap))));
+      const cw = (inner + gap) / ncol - gap;
+      const lay = rest.map(i => { const lines = wrap(i.label, font(true, fs), cw - sym); return { i, lines, h: lines.length * lineH + (i.sub ? fs2 + 3 * sc : 0) }; });
+      const rows = [];
+      for (let r = 0; r < lay.length; r += ncol) rows.push(lay.slice(r, r + ncol));
+      const rowH = row => Math.max(...row.map(t => t.h)) + 7 * sc;
+      const titleH = title ? fs + 10 * sc : 0;
+      const KH = Math.round(pad * 1.2 + titleH + rows.reduce((a, r) => a + rowH(r), 0) + pad * 0.5);
+      out = document.createElement('canvas'); out.width = W; out.height = H + KH;
+      const k = out.getContext('2d');
+      k.fillStyle = '#fff'; k.fillRect(0, 0, W, H + KH);
+      k.drawImage(c, 0, 0);
+      k.textBaseline = 'top';
+      let y = H + pad * 1.2;
+      if (title) { k.fillStyle = '#152531'; k.font = font(true, fs); k.fillText(title.label, pad, y); y += titleH; }
+      rows.forEach(row => {
+        row.forEach((t, col) => {
+          const i = t.i, x0 = pad + col * (cw + gap), cx = x0 + 9 * sc, cy = y + fs * 0.55, colour = `rgb(${i.colour.join(',')})`;
+          k.fillStyle = colour; k.strokeStyle = colour; k.lineWidth = 2 * sc;
+          if (i.kind === 'pin') { k.beginPath(); k.arc(cx, cy, fs * 0.42, 0, Math.PI * 2); k.fill(); }
+          else if (i.kind === 'mark') { k.beginPath(); k.arc(cx, cy, fs * 0.38, 0, Math.PI * 2); k.stroke(); }
+          else if (i.kind === 'bridge') { k.beginPath(); k.moveTo(cx, cy - fs * .45); k.lineTo(cx + fs * .45, cy); k.lineTo(cx, cy + fs * .45); k.lineTo(cx - fs * .45, cy); k.closePath(); k.fill(); }
+          else if (i.kind === 'tree') { k.beginPath(); k.moveTo(cx, cy - fs * .45); k.lineTo(cx + fs * .45, cy + fs * .4); k.lineTo(cx - fs * .45, cy + fs * .4); k.closePath(); k.fill(); }
+          else if (i.kind === 'line') { k.beginPath(); k.moveTo(cx - fs * .5, cy); k.lineTo(cx + fs * .5, cy); k.lineWidth = 3.5 * sc; k.stroke(); }
+          else if (i.kind === 'contour') { k.beginPath(); k.moveTo(cx - fs * .5, cy); k.lineTo(cx + fs * .5, cy); k.lineWidth = 1.6 * sc; k.stroke(); }
+          else if (i.kind === 'circle') { k.setLineDash([3 * sc, 2 * sc]); k.beginPath(); k.arc(cx, cy, fs * 0.42, 0, Math.PI * 2); k.stroke(); k.setLineDash([]); }
+          k.fillStyle = '#152531'; k.font = font(true, fs);
+          t.lines.forEach((l, n) => k.fillText(l, x0 + sym, y + n * lineH));
+          if (i.sub) { k.fillStyle = '#3a4a56'; k.font = font(false, fs2); k.fillText(i.sub, x0 + sym, y + t.lines.length * lineH); }
+        });
+        y += rowH(row);
+      });
+    }
     const ext = M.view.extent;
     const outside = shownPins().filter(p => ext && !ext.contains(G_(pt(p.lon, p.lat)).geometry)).length;
-    return { dataUrl: c.toDataURL('image/png'), outside, at: Date.now() };
+    return { dataUrl: out.toDataURL('image/png'), outside, mapHeight: H, at: Date.now() };
   }
 
   /* ---------------- what app.js calls ---------------- */
@@ -1190,6 +1420,7 @@
     if (M.homeNext) { M.homeNext = false; if (M.anchor) { M.framedFor = key(M.anchor); frame(false); } else home(); }
     if (M.anchor && M.view.center && near(M.anchor, { lat: M.view.center.latitude, lon: M.view.center.longitude }) > 5000 && M.framedFor !== key(M.anchor)) { M.framedFor = key(M.anchor); frame(false); }
     drawPins(); drawMarks(); drawBridges(); drawFeatures(); renderEdges();
+    refreshShown();
   }
   const refreshNearSoon = (() => { let t = null; return () => { clearTimeout(t); t = setTimeout(() => refreshNear(false), 600); }; })();
   // A (new) station: frame it, and fetch what is near it.
@@ -1203,7 +1434,7 @@
     const k = key(M.anchor);
     if (k && M.framedFor !== k) { M.framedFor = k; M.homeNext = false; frame(false); }
   }
-  function reset() { M.marks = []; M.bridges = []; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); }
+  function reset() { M.marks = []; M.bridges = []; M.shown = []; M.shownSig = ''; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); }
   /* A small map of its own, in the corrosion guide (js/coast.js): the imagery and
      its place names, the shoreline the distances were measured to (surf beaches
      orange, other shore blue), and a dashed line from the site to each nearest

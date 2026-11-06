@@ -11,8 +11,9 @@
 
    Not to be confused with the State survey marks (QSpatial's PSMs, S1–S5 on the
    map): those are public and found by the map. These are the station's own
-   marks, B1, B2…, with a level, a datum, the height on the gauge where Flood-Net
-   can work it out, what each is and where. */
+   marks, BoM-TBM-1, BoM-TBM-2…, with a level, a datum, the height on the gauge
+   where Flood-Net can work it out, what each is and where. (They were B1, B2…
+   until 6 Nov 2026, when bridges were B1… too; bridges are now BR1….) */
 (function (G) {
   'use strict';
   const S = G.SoRT = G.SoRT || {};
@@ -32,7 +33,8 @@
   };
   const KEY = st => (st ? (st.source === 'floodnet' && st.id ? `fn:${st.id}` : st.number ? `no:${st.number}` : '') : '');
   const m3 = v => (v == null || !isFinite(v) ? '' : Number(v).toFixed(3));
-  const label = m => `B${m.ord + 1}`;
+  const label = m => `BoM-TBM-${m.ord + 1}`;
+  const oldLabel = m => `B${m.ord + 1}`;   // what a Local TBM filled in before 6 Nov 2026 says
 
   let pending = null;     // { nonce, key, win } — the request this tab is waiting on, and the tab it opened
 
@@ -124,7 +126,7 @@
     A.changed();
     A.toast(`Local TBM: Bureau benchmark ${label(m)}, ${u.value} m ${u.option === 'ahd' ? 'AHD' : 'on the gauge (LGH)'}.`);
   }
-  const inUse = (A, m) => { const a = A.session.answers.localTbm; return !!(a && a.fields && String(a.fields.location || '').includes(`(Bureau benchmark ${label(m)},`)); };
+  const inUse = (A, m) => { const a = A.session.answers.localTbm, t = String((a && a.fields && a.fields.location) || ''); return [label(m), oldLabel(m)].some(l => t.includes(`(Bureau benchmark ${l},`)); };
 
   // The block on the Local TBM question.
   function node(A) {

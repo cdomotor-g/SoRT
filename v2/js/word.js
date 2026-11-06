@@ -4,7 +4,8 @@
    v1's hard-won Word geometry (fixed layout, absolute widths on every cell, a
    <colgroup>), because Word's autofit otherwise squashes the left column to a
    character wide. New in v2: a Station row in the header, a Follow-up Actions
-   row, the survey marks under the map picture, and Property Services actions. */
+   row, the survey marks and the bridges (who manages each) under the map
+   picture, and Property Services actions. */
 (function (G) {
   'use strict';
   const S = G.SoRT = G.SoRT || {};
@@ -132,8 +133,38 @@
       `${m.ref}\t${m.name}\t${m.ahd != null ? `State benchmark ${m.ahd} m AHD` : 'PSM'}\t${m.condition || ''}${m.lastVisit ? ', last visited ' + m.lastVisit : ''}\t${m.away || ''}\t${U().formatCoord(m.lat, m.lon)}\t${m.report || ''}`).join('\n') + '\n';
   }
 
+  // ---- bridges on the map (BR1…), and who manages each ---------------------------
+  // Only the bridges in the picture: the map keeps s.map.bridges to those.
+  const BR_COLS = [1.2, 3.0, 4.0, 4.0, 1.8, 2.0].map(wp);
+  const bridgeHead = s => (stationLine(s) ? `Bridges on the map — ${stationLine(s)}` : 'Bridges on the map');
+  const BRIDGE_NOTE = 'Bridges © State of Queensland (Transport and Main Roads; Department of Natural Resources and Mines, Manufacturing and Regional and Rural Development): TMR’s register of State-controlled bridges and Queensland Roads and Tracks. A bridge not on TMR’s register is managed with the road it carries. Contacts from QLDTraffic’s road lookup. A guide to who to ask, not a permit.';
+  function bridgesHtml(s) {
+    const list = s.map.bridges || [];
+    if (!list.length) return '';
+    const th = (t, i) => `<td width="${BR_COLS[i].px}" style="background:#e8e8e8;font-weight:bold;padding:4px 6px;${B}width:${BR_COLS[i].cm}cm;">${t}</td>`;
+    // A long address breaks inside its column (Word does so by itself; the preview needs telling).
+    const tdm = (t, i) => `<td width="${BR_COLS[i].px}" style="vertical-align:top;padding:4px 6px;${B}width:${BR_COLS[i].cm}cm;overflow-wrap:anywhere;">${t}</td>`;
+    let rows = `<tr><td colspan="6"${wAttr()} style="background:#4a1220;color:#fff;font-weight:bold;padding:6px 8px;${B}${wStyle()}">${esc(bridgeHead(s))}</td></tr>`;
+    rows += `<tr>${['', 'Bridge', 'Managed by', 'Who to contact', 'From station', 'Coordinates'].map(th).join('')}</tr>`;
+    list.forEach(b => {
+      const c = b.contact;
+      const contact = c ? [esc(c.name), c.phone ? esc(c.phone) : '', c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''].filter(Boolean).join('<br>') : '—';
+      rows += `<tr>${[esc(b.ref), `<b>${esc(b.title)}</b>${b.what ? `<br>${esc(b.what)}` : ''}`, `<b>${esc(b.who || '')}</b>${b.why ? `<br>${esc(b.why)}` : ''}`,
+        contact, esc(b.away || ''), esc(U().formatCoord(b.lat, b.lon))].map(tdm).join('')}</tr>`;
+    });
+    const t = `<table${wAttr()} style="border-collapse:collapse;table-layout:fixed;width:${FULL.cm}cm;font-family:Calibri,Arial,sans-serif;font-size:9pt;"><colgroup>${BR_COLS.map(c => `<col style="width:${c.cm}cm;">`).join('')}</colgroup>${rows}</table>`;
+    return t + `<p style="margin:2px 0 0;font-family:Calibri,Arial,sans-serif;font-size:8pt;color:#555;">${esc(BRIDGE_NOTE)}</p>`;
+  }
+  function bridgesText(s) {
+    const list = s.map.bridges || [];
+    if (!list.length) return '';
+    return `${bridgeHead(s)}\n` + list.map(b => [b.ref, [b.title, b.what].filter(Boolean).join(' — '), [b.who, b.why].filter(Boolean).join(' — '),
+      b.contact ? [b.contact.name, b.contact.phone, b.contact.email].filter(Boolean).join(', ') : '', b.away || '', U().formatCoord(b.lat, b.lon)].join('\t')).join('\n') + '\n';
+  }
+
   // ---- the Bureau's benchmarks (HDB, via Flood-Net) ---------------------------
-  const BM_COLS = [1.0, 2.0, 2.2, 2.4, 5.4, 3.0].map(wp);
+  // The first column holds BoM-TBM-1…: wide enough for it on one line.
+  const BM_COLS = [1.9, 1.8, 2.0, 2.1, 5.2, 3.0].map(wp);
   function bureauHtml(s, b) {
     const BB = S.bureauBM;
     const th = (t, i) => `<td width="${BM_COLS[i].px}" style="background:#e8e8e8;font-weight:bold;padding:4px 6px;${B}width:${BM_COLS[i].cm}cm;">${t}</td>`;
@@ -229,6 +260,10 @@
       const mh = marksHtml(s);
       if (mh) { html += GAP + mh; text += '\n' + marksText(s); }
     }
+    if (inc.map && inc.bridges !== false && picture && picture.dataUrl) {
+      const bh = bridgesHtml(s);
+      if (bh) { html += GAP + bh; text += '\n' + bridgesText(s); }
+    }
     const bb = inc.bureauBM !== false && S.bureauBM ? S.bureauBM.forWord(s) : null;
     if (bb) { html += GAP + bureauHtml(s, bb); text += '\n' + bureauText(s, bb); }
     if (inc.ps) { html += GAP + psHtml(ctx); text += '\n\n' + psText(ctx); }
@@ -260,5 +295,5 @@
     return 'plain';
   }
 
-  S.word = { build, scopeHtml, psHtml, marksHtml, toClipboard, stationLine, WORD_TABLE_CM };
+  S.word = { build, scopeHtml, psHtml, marksHtml, bridgesHtml, toClipboard, stationLine, WORD_TABLE_CM };
 })(typeof window !== 'undefined' ? window : globalThis);
