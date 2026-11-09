@@ -85,6 +85,8 @@
   // Anything changed. `light` = typing in a box: no re-render of the form (so
   // the caret stays put), just the things that read the answers.
   function changed(opts) {
+    A.edited = true;
+    if (A.earlierForum && !A.forumAsked) { A.forumAsked = true; A.forumAsk = true; renderForum(); }
     rebuild();
     if (!(opts && opts.light)) { S.form.render($('#form')); S.form.renderPS($('#ps')); renderStation(); renderOutputControls(); }
     renderProgress(); renderFollowUps(); previewSoon(); saveSoon();
@@ -107,11 +109,20 @@
     if (S.mapView) S.mapView.startDraw(code); else toast('The map isn’t available here.');
   }
 
+  // An older session opened only to look at keeps its forum date and its
+  // "changed" time: it is saved, and its date offered for moving, only once
+  // somebody actually changes something in it.
+  function arrive() {
+    A.edited = false; A.forumAsk = false; A.forumAsked = false;
+    const d = A.session && A.session.forum && A.session.forum.date;
+    A.earlierForum = !!(d && d !== U.todayIso());
+  }
+  function leave() { if (A.session && A.edited) S.store.save(A.session); }
   // dropped: the session on screen was just deleted — not saved back on the way out.
   function newSession(station, dropped) {
-    if (A.session && !dropped) S.store.save(A.session);
+    if (!dropped) leave();
     if (S.playbook) S.playbook.flush(dropped ? null : A);
-    A.session = S.store.newSession(A.defs);
+    A.session = S.store.newSession(A.defs); arrive();
     if (station) A.session.station = station;
     A.picture = null;
     if (S.mapView) S.mapView.reset();
@@ -120,9 +131,9 @@
   function openSession(id) {
     const s = S.store.load(id);
     if (!s) { toast('That session is no longer saved in this browser.'); return; }
-    if (A.session) S.store.save(A.session);
+    leave();
     if (S.playbook) S.playbook.flush(A);
-    A.session = s; A.picture = null;
+    A.session = s; arrive(); A.picture = null;
     if (!S.schema.template(A.defs, s.template)) s.template = A.defs.templates[0].id;
     if (S.mapView) S.mapView.reset();
     rebuild(); renderAll();
@@ -224,7 +235,7 @@
     const f = A.session.forum;
     const root = $('#forum'); root.innerHTML = '';
     const date = h('input', { type: 'date', id: 'forumDate', value: f.date });
-    date.addEventListener('change', ev => { f.date = ev.target.value; S.store.rememberForum(f, { dateChosen: true }); changed(); });
+    date.addEventListener('change', ev => { f.date = ev.target.value; A.forumAsked = true; A.forumAsk = false; S.store.rememberForum(f, { dateChosen: true }); changed(); });
     const chips = h('div', { class: 'chips', id: 'attendeeChips' });
     const clear = h('button', { type: 'button', class: 'chips-clear', title: 'Remove every attendee from the list', onclick: () => { const was = f.attendees.slice(); f.attendees = []; renderForum(); changed({ light: true }); toast('Attendees cleared.', { label: 'Undo', run: () => { f.attendees = was; renderForum(); changed({ light: true }); } }); } }, 'Clear all');
     const drawChips = () => {
@@ -246,6 +257,14 @@
     const reuse = (!f.attendees.length && last.length) ? h('button', { type: 'button', class: 'link', onclick: () => { f.attendees = last.slice(); renderForum(); changed({ light: true }); } }, `Same as last forum (${last.join(', ')})`) : null;
     const oos = h('input', { type: 'checkbox', checked: f.outOfSession });
     oos.addEventListener('change', ev => { f.outOfSession = ev.target.checked; changed({ light: true }); });
+    if (A.forumAsk) {
+      const old = f.date, today = U.todayIso();
+      const done = move => { A.forumAsk = false; if (move) { f.date = today; changed({ light: true }); } renderForum(); };
+      root.appendChild(h('div', { class: 'forum-ask', id: 'forumAsk', role: 'alert' },
+        h('span', null, `This session is from the forum of ${U.dmy(old)}. You’ve started changing it — keep that forum date, or move it to today’s forum (${U.dmy(today)})?`), ' ',
+        h('button', { type: 'button', class: 'btn btn-primary', onclick: () => done(false) }, `Keep ${U.dmy(old)}`), ' ',
+        h('button', { type: 'button', class: 'btn', onclick: () => done(true) }, `Move to ${U.dmy(today)}`)));
+    }
     root.appendChild(h('div', { class: 'forum-grid' },
       h('label', { class: 'fld' }, h('span', { class: 'fld-label' }, 'SoRT Forum date'), date),
       h('div', { class: 'fld fld-grow' }, h('label', { class: 'fld-label', for: 'attendeeInput' }, 'Attendees'), h('div', { class: 'chips-box' }, chips, add, clear), reuse),
@@ -866,7 +885,7 @@
     $('#bootMsg').remove();
     renderDefsChip();
     S.store.pruneBlank();
-    A.session = S.store.current() || S.store.newSession(A.defs);
+    A.session = S.store.current() || S.store.newSession(A.defs); arrive();
     if (!S.schema.template(A.defs, A.session.template)) A.session.template = A.defs.templates[0].id;
     rebuild();
     U.$$('.copy-btn').forEach(b => b.addEventListener('click', copyForWord));
@@ -875,7 +894,7 @@
     $('#downloadBtn').addEventListener('click', downloadSession);
     $('#importInput').addEventListener('change', ev => { if (ev.target.files[0]) importSession(ev.target.files[0]); ev.target.value = ''; });
     $('#sessionsClose').addEventListener('click', () => $('#sessionsDlg').close());
-    G.addEventListener('beforeunload', () => { saveSoon.flush(); if (A.session) keepLocal(); });
+    G.addEventListener('beforeunload', () => { saveSoon.flush(); if (A.session && A.edited) keepLocal(); });
     // Leaving the tab (or closing it): keep it here, and share it now rather than in a moment.
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { saveSoon.flush(); if (S.playbook) S.playbook.flush(A); } });
     if (S.mapView) S.mapView.mount($('#mapMount'), A);

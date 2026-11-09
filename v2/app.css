@@ -86,6 +86,7 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .hint.error { color: var(--error); }
 
 /* forum */
+.forum-ask { margin: 0 0 10px; padding: 8px 10px; border: 1px solid var(--accent, #2f6fdb); border-radius: 6px; }
 .forum-grid { display: flex; gap: 14px 18px; align-items: end; flex-wrap: wrap; }
 .forum-grid .fld:first-child { width: 170px; }
 .fld-grow { flex: 1 1 320px; }

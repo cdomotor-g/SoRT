@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, shared, delete, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil, pictures. They use the live Flood-Net
+   Scenarios: oldforum, station, copy, playbook, shared, delete, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil, pictures. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    "coast" gives QSpatial's coastline a stand-in too: one straight shore, so the
@@ -655,6 +655,34 @@ const scenarios = {
     const m = await page(b, { viewport: { width: 390, height: 800 } });
     ok(await m.evaluate(() => { const r = document.querySelector('#helpBtn').getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && document.documentElement.scrollWidth <= innerWidth; }), 'on a phone the Help button fits, with no sideways scroll');
     await m.context().close();
+  },
+  async oldforum(b) {
+    const p = await page(b);
+    // An older session, saved on a past forum day, as if from last week.
+    const old = await p.evaluate(() => {
+      const s = SoRT.store.newSession(SoRT.app.defs);
+      s.forum.date = '2026-10-01'; s.station = { name: 'Old Gauge', number: '99999', source: 'manual' };
+      s.updatedAt = 1000; SoRT.store.save(s, true);
+      SoRT.store.rememberForum({ date: SoRT.util.todayIso(), attendees: ['AB'], outOfSession: false });
+      return s.id;
+    });
+    await p.evaluate(id => SoRT.app.openSession(id), old);
+    await p.waitForTimeout(300);
+    ok(await p.inputValue('#forumDate') === '2026-10-01', 'an older session opens with its own forum date');
+    await p.evaluate(() => SoRT.app.newSession()); await p.waitForTimeout(300);
+    const after = await p.evaluate(id => ({ at: JSON.parse(localStorage.getItem('sortv2.s.' + id)).updatedAt, dflt: JSON.parse(localStorage.getItem('sortv2.forum')).date }), old);
+    ok(after.at === 1000, 'only looking at it leaves its “changed” time alone');
+    ok(after.dflt === await p.evaluate(() => SoRT.util.todayIso()), 'and does not drag today’s forum date back to the old one');
+    await p.evaluate(id => SoRT.app.openSession(id), old); await p.waitForTimeout(300);
+    ok(!(await p.$('#forumAsk')), 'no question while it is only being viewed');
+    await p.click('#q-comms .opt >> nth=0'); await p.waitForTimeout(200);
+    ok(/forum of 01\/10\/2026/.test(await p.innerText('#forumAsk')), 'the first change asks whether to keep the old forum date');
+    ok(await p.inputValue('#forumDate') === '2026-10-01', 'the date is not touched until the user answers');
+    await p.click('#forumAsk button:has-text("Move to")'); await p.waitForTimeout(200);
+    ok(await p.inputValue('#forumDate') === await p.evaluate(() => SoRT.util.todayIso()), '“Move to” puts it on today’s forum');
+    ok(!(await p.$('#forumAsk')), 'and the question is gone');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
   },
   async cutover(b) {
     // The old address opens v2, keeping what follows it; v1 is kept at /v1/.
