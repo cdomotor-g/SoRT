@@ -648,6 +648,7 @@
     root.innerHTML = S.word.build(A.ctx, A.session.include.map ? A.picture : null).html;
   }
   A.mapChanged = () => refreshPicture();
+  A.picturesLoaded = () => previewSoon();   // a question's pictures reached memory (js/pictures.js)
   function watchPreview() {
     const el = $('#preview'); if (!el || !G.IntersectionObserver) { previewSeen = true; return; }
     new G.IntersectionObserver(es => { previewSeen = es.some(e => e.isIntersecting); if (previewSeen) refreshPicture(); }, { rootMargin: '200px' }).observe(el);
@@ -667,6 +668,7 @@
         if (!picture && !note) note = ' (no map picture — no location yet)';
         if (picture && picture.outside) note = ` — ${picture.outside} location${picture.outside > 1 ? 's are' : ' is'} outside the map picture`;
       }
+      if (S.pictures) await S.pictures.ready(A.session);   // the questions' pictures, into memory for build()
       return S.word.build(A.ctx, picture);
     })();
     try {
@@ -686,8 +688,10 @@
     } catch (e) { toast(`Copy failed: ${e.message}`); }
     finally { btns.forEach(b => { b.disabled = false; }); }
   }
-  function downloadSession() {
-    const blob = new Blob([JSON.stringify(A.session, null, 2)], { type: 'application/json' });
+  async function downloadSession() {
+    // The questions' pictures go in the file too (the session itself keeps only their names).
+    const pics = S.pictures ? await S.pictures.bundle(A.session) : null;
+    const blob = new Blob([JSON.stringify(pics ? Object.assign({}, A.session, { pictureFiles: pics }) : A.session, null, 2)], { type: 'application/json' });
     const st = A.session.station || {};
     const name = `sort-session-${(st.number || st.name || 'station').toString().replace(/[^\w.-]+/g, '-')}-${A.session.forum.date}.json`;
     const a = h('a', { href: URL.createObjectURL(blob), download: name });
@@ -695,10 +699,12 @@
   }
   function importSession(file) {
     const r = new FileReader();
-    r.onload = () => {
+    r.onload = async () => {
       try {
         const s = S.store.upgrade(JSON.parse(r.result));
         if (!s || !s.id || s.schema !== 'sort-session/1') throw new Error('not a SoRT session file');
+        if (s.pictureFiles && S.pictures) await S.pictures.unbundle(s.pictureFiles);
+        delete s.pictureFiles;
         S.store.save(s); openSession(s.id);
       } catch (e) { toast(`Couldn’t open that file: ${e.message}`); }
     };

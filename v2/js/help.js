@@ -62,6 +62,7 @@
     { id: 'word', title: 'Copying into Word', items: [
       '**Copy for Word** puts the scope table, the map picture, the survey marks and bridges tables and the Property Services table on the clipboard. Wait a few seconds for **“Copied — paste into Word”** while the map picture is made, then paste with Ctrl+V.',
       'Every table’s heading carries the **station name and number** — check it matches the report you’re pasting into.',
+      '**Paste a picture** (a Snipping Tool snip, a photo): click into the question it belongs to, then **Ctrl+V** — or **📋 Add picture** under it, or drop an image file on it. It goes into Word under that row, with its caption; click it to see it larger, **✕** to remove it. Pictures are shared with the forum like the rest: no landholder names, contact details or gate codes in them.',
       'A follow-up you **tick as done** is left out of the Word tables; untick it to put it back. The ticks under **Follow-ups and output** choose what else goes in (header, empty rows, map picture, survey marks, bridges, Property Services). **Rows with nothing filled in** starts unticked; this browser remembers your choice.',
       '**“Copied as plain text only”** means the browser refused the formatted copy: click anywhere on the page and press Copy again.'
     ] },

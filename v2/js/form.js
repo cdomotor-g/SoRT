@@ -104,7 +104,10 @@
         e.src === 'auto' ? badge('auto') : null,
         chk ? h('span', { class: 'src src-checked', title: `Checked ${U().fmtWhen(chk.at)}${chk.from ? ` — it came from ${chk.from}` : ''}` }, `✓ checked${SRC_LABEL[chk.src] ? ' · ' + SRC_LABEL[chk.src] : ''}`) : null,
         h('button', { type: 'button', class: 'q-clear', title: 'Clear this answer', onclick: () => {
-          delete app.session.answers[q.code]; delete app.session.prefill[q.code]; app.changed();
+          const pics = (app.session.answers[q.code] || {}).pictures;   // its pictures stay (each has its own ✕)
+          delete app.session.answers[q.code]; delete app.session.prefill[q.code];
+          if (pics && pics.length) app.session.answers[q.code] = { value: null, fields: {}, pictures: pics };
+          app.changed();
         } }, 'Clear')));
     const side = h('div', { class: 'q-side' }, head);
     R().notesFor(ctx, q).forEach(n => side.appendChild(h('div', { class: 'q-note' + (n.level === 'info' ? ' info' : '') }, n.text)));
@@ -152,6 +155,8 @@
     if (hintEl) body.appendChild(hintEl);
     (q.fields || []).forEach(f => { if (f !== pf && R().fieldVisible(ctx, f)) body.appendChild(f.type === 'choice' ? choiceEl(q, f, e) : fieldEl(q, f, e)); });
     body.appendChild(noteEl(q, e));
+    const pics = S.pictures && S.pictures.block(app, q);   // pasted snips (js/pictures.js)
+    if (pics) body.appendChild(pics);
     card.appendChild(body);
     return card;
   }
@@ -285,13 +290,14 @@
 
   function noteEl(q, e) {
     const has = !!e.note.trim();
-    const wrap = h('div', { class: 'q-extra' });
+    const wrap = h('div', { class: 'q-extra q-extra-row' });
     if (!has) {
-      wrap.appendChild(h('button', { type: 'button', class: 'link', onclick: () => {
-        wrap.innerHTML = ''; wrap.appendChild(noteBox(q, ''));
-        const t = wrap.querySelector('textarea'); if (t) t.focus();
+      wrap.appendChild(h('button', { type: 'button', class: 'link', onclick: ev => {
+        const box = noteBox(q, ''); ev.currentTarget.replaceWith(box);
+        const t = box.querySelector('textarea'); if (t) t.focus();
       } }, '+ Add note'));
     } else wrap.appendChild(noteBox(q, e.note));
+    if (S.pictures) wrap.appendChild(S.pictures.button(app, q));
     return wrap;
   }
   function noteBox(q, v) {

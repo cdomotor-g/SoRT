@@ -103,6 +103,23 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   supply new ALERT IDs"; an ACMA licence transfer, vegetation management, an
   access track and a bridge attachment each raise their own follow-up, and the
   open ones go into the Word copy.
+- **Pictures on a question** (`js/pictures.js`): a Snipping Tool snip pasted
+  with Ctrl+V while the question is clicked into (its note box too; words
+  pasted are left alone), *📋 Add picture* beside *+ Add note* (the clipboard,
+  else a file), or an image file dropped on the card. Each is made at most
+  1600 px on its long edge — JPEG or PNG, whichever is smaller; one still over
+  700 KB is refused — and goes into Word under that row's answer and note,
+  sized to the answer column, its caption in italics under it. The session
+  keeps only references (`answers[code].pictures`: id, size, type, caption);
+  the pictures themselves are in the browser's IndexedDB (localStorage holds
+  about 5 MB for the whole site), shared with the forum as files of their own
+  (`stations/pic-<id>.json`, named by a hash of the picture, sent before the
+  session and never changed), fetched by any computer that opens the session,
+  and carried by *Download session*. A picture alone doesn't answer a
+  question, *Clear* leaves them (each has its own ✕), and they don't travel
+  as a precedent or with *Start from it*. The card says they are shared — no
+  landholder names, contact details or gate codes in them (the privacy check
+  reads text only, captions included).
 - **Shared sessions (the playbook)**: kept by Flood-Net's server
   (`floodwarning.net/api/sort/v1`, Flood-Net's `docs/sort-store.md`) for whoever
   has the **forum passphrase**, typed once per computer — no accounts, no tokens.
@@ -148,6 +165,7 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
 | `js/store.js` | Sessions saved in this browser (`sortv2.*` keys). |
 | `js/floodnet.js` | Flood-Net's read-only API: search, station facts, prefill, hints. |
 | `js/form.js` | The question cards and the Property Services block. |
+| `js/pictures.js` | Pictures pasted, picked or dropped onto a question: made small enough, kept in IndexedDB (the session holds only references), shared with the forum as files of their own, fetched when missing, and put into Word. |
 | `js/soil.js` | The Acid sulfate soil question's reading of Queensland's soil maps at the site, the risk it suggests, and its guide (the pop-up). |
 | `js/coast.js` | The Infrastructure options' distance to the sea, the corrosion category it suggests, and the corrosion guide (the pop-up). |
 | `data/surf-coast.json` | Queensland's ocean-facing surf beaches (Point Danger to Agnes Water), made from QSpatial's coastline by `tools/build-surf-coast.mjs`. |

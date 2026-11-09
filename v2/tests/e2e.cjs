@@ -4,12 +4,13 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, shared, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil. They use the live Flood-Net
+   Scenarios: station, copy, playbook, shared, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil, pictures. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    "coast" gives QSpatial's coastline a stand-in too: one straight shore, so the
    distances (and the corrosion category they suggest) are known.
    "soil" does the same for Queensland's acid sulfate soil maps.
+   "pictures" pastes made-up snips (drawn on a canvas) into question cards.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
    or have it resolvable. PW_CHROMIUM pins a browser binary. BASE overrides
    the page address (default http://127.0.0.1:8642/v2/). */
@@ -885,6 +886,119 @@ const scenarios = {
     const v = await p.evaluate(() => { const w = SoRT.mapView._M.view; return { lat: w.center.latitude, lon: w.center.longitude, zoom: w.zoom }; });
     ok(v.lat < -15 && v.lat > -24 && v.lon > 142 && v.lon < 150 && v.zoom < 7, `a new session puts the map back on Queensland (centre ${v.lat.toFixed(1)}, ${v.lon.toFixed(1)}, zoom ${v.zoom.toFixed(1)})`);
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
+  async pictures(b) {
+    // (Shared 0.8 s after a change: after the browser's own save, 0.4 s, which dates the change.)
+    const p = await page(b, { pass: true, autosaveMs: 800 });
+    await p.pick('41506');
+    await p.click('#q-stockFence .opt:has-text("Yes (standard")');
+    // A paste on an element: a made-up snip (a canvas) and/or words. → was it taken over?
+    const paste = (sel, o) => p.evaluate(async ([sel, o]) => {
+      const dt = new DataTransfer();
+      if (o.text) dt.setData('text/plain', o.text);
+      if (o.w) {
+        const c = document.createElement('canvas'); c.width = o.w; c.height = o.h; const g = c.getContext('2d');
+        if (o.noise) { const im = g.createImageData(o.w, o.h); for (let i = 0; i < im.data.length; i++) im.data[i] = i % 4 === 3 ? 255 : Math.random() * 256 | 0; g.putImageData(im, 0, 0); }
+        else { g.fillStyle = '#fff'; g.fillRect(0, 0, o.w, o.h); g.fillStyle = '#c00'; g.font = '28px sans-serif'; g.fillText(o.label || 'SNIP', 20, o.h / 2); }
+        dt.items.add(new File([await new Promise(r => c.toBlob(r, 'image/png'))], 'snip.png', { type: 'image/png' }));
+      }
+      // Found after the picture is made: the form may have been drawn afresh meanwhile.
+      const el = sel ? document.querySelector(sel) : document.body;
+      if (el.focus) el.focus();
+      const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+      el.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    }, [sel, o || {}]);
+    const toast = re => p.waitForFunction(r => new RegExp(r).test(document.querySelector('#toast').textContent), re.source, { timeout: 15000 }).then(() => true, () => false);
+    const refs = code => p.evaluate(c => ((SoRT.app.session.answers[c] || {}).pictures || []).map(x => Object.assign({}, x)), code);
+    const NOTES = '[data-fk="installNotes::f::notes"]';
+    // Each file sent to the store, and whether it names a picture (for the order they go in).
+    await p.evaluate(() => { const put = SoRT.shared.putFile; window.__sent = []; SoRT.shared.putFile = (path, text, ...r) => { window.__sent.push([path, /"pictures"/.test(text)]); return put(path, text, ...r); }; });
+    ok(await paste(NOTES, { w: 320, h: 180, label: 'GAUGE HUT' }), 'a snip pasted into a question’s text box is taken as a picture');
+    await p.waitForSelector('#q-installNotes .pic img', { timeout: 10000 }).catch(() => {});
+    const [pic] = await refs('installNotes'), id = pic && pic.id;
+    ok(/^[0-9a-f]{16}$/.test(id || '') && pic.w === 320 && pic.h === 180 && /^image\/(png|jpeg)$/.test(pic.type), `the session keeps a reference to it (${id}, ${pic && pic.type})`);
+    ok(await p.$eval('#q-installNotes .pic img', e => e.naturalWidth === 320).catch(() => false) && /no landholder names/.test(await p.innerText('#q-installNotes .pic-hint')), 'its thumbnail is on the card, with the reminder that pictures are shared');
+    await p.waitForTimeout(700);
+    ok(await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('sortv2.')).every(k => !/base64|data:image/.test(localStorage.getItem(k)))), 'the picture itself is not in localStorage');
+    ok(await p.evaluate(() => !!document.activeElement && document.activeElement.classList.contains('pic-cap')), 'the new picture’s caption box has the cursor');
+    await p.fill('#q-installNotes .pic-cap', 'Gauge hut from the north'); await p.press('#q-installNotes .pic-cap', 'Tab');
+    ok(!(await paste('#q-installNotes .pic-cap', { text: 'just words' })) && !(await paste(NOTES, { text: 'Words from Excel', w: 200, h: 60 })) && (await refs('installNotes')).length === 1, 'words pasted are left alone — even words that come with a picture of themselves');
+    await paste(NOTES, { w: 320, h: 180, label: 'GAUGE HUT' });
+    ok(await toast(/already on this question/) && (await refs('installNotes')).length === 1, 'the same picture twice on a question is added once');
+    await p.click('#station .sec-head h2');
+    await paste(null, { w: 100, h: 50 });
+    ok(await toast(/Click into the question the picture belongs to, then paste/), 'a picture pasted outside every question says where to paste it');
+    await paste('#q-complexity input', { w: 1600, h: 1600, noise: true });
+    ok(await toast(/too big/) && !(await refs('complexity')).length, 'a picture still too big once made smaller is refused, in plain words');
+    // 📋 Add picture: from the clipboard; and a picture file dropped on a card.
+    await p.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 400; c.height = 300; const g = c.getContext('2d'); g.fillStyle = '#0a6'; g.fillRect(0, 0, 400, 300);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': await new Promise(r => c.toBlob(r, 'image/png')) })]);
+    });
+    await p.click('#q-demolition .pic-add');
+    await p.waitForSelector('#q-demolition .pic img', { timeout: 10000 }).catch(() => {});
+    ok((await refs('demolition')).length === 1, '📋 Add picture takes the picture on the clipboard');
+    await p.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 240; c.height = 400; const g = c.getContext('2d'); g.fillStyle = '#36c'; g.fillRect(0, 0, 240, 400);
+      const dt = new DataTransfer(); dt.items.add(new File([await new Promise(r => c.toBlob(r, 'image/png'))], 'photo.png', { type: 'image/png' }));
+      document.querySelector('#q-accessibility .q-label').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    });
+    await p.waitForSelector('#q-accessibility .pic img', { timeout: 10000 }).catch(() => {});
+    ok((await refs('accessibility')).length === 1, 'a picture file dropped on a question is added to it');
+    await p.click('#q-accessibility .pic-del');
+    ok(!(await refs('accessibility')).length && !(await p.$('#q-accessibility .pic')), '✕ removes a picture (after asking)');
+    await p.click('#q-demolition .pic-view');
+    ok(await p.waitForSelector('#picDlg[open] img', { timeout: 5000 }).then(() => true, () => false) && (await p.innerText('#picDlg h2')) === await p.evaluate(() => SoRT.app.ctx.byCode.demolition.label) && !/null/.test(await p.innerText('#picDlg')), 'a thumbnail opens the picture larger (no caption: the question’s name only)');
+    await p.click('#picDlg .icon-btn');
+    await p.click('#q-demolition .opt >> nth=0'); await p.click('#q-demolition .q-clear');
+    ok((await refs('demolition')).length === 1 && !!(await p.$('#q-demolition .pic img')), 'Clear empties the answer and leaves its pictures');
+    // Word: under the row's answer, sized to fit the answer column, its caption in italics.
+    ok(await p.waitForSelector('#preview img[alt="Picture: Gauge hut from the north"]', { timeout: 8000 }).then(() => true, () => false), 'the preview shows it');
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 60000 });
+    const html = await p.clip();
+    ok(/<img src="data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]{200,}" width="320" height="180" alt="Picture: Gauge hut from the north"[^>]*><br><i>Gauge hut from the north<\/i>/.test(html), 'Copy for Word has the picture (a data: URL) at its own size, the caption in italics under it');
+    ok(/<img src="data:image\/[a-z]+;base64,[^"]+" width="379" height="284" alt="Picture"/.test(html), 'a wider one is scaled to fit the answer column, keeping its shape');
+    const text = await p.evaluate(async () => { for (const it of await navigator.clipboard.read()) if (it.types.includes('text/plain')) return (await it.getType('text/plain')).text(); return ''; });
+    ok(/\[Picture: Gauge hut from the north\]/.test(text) && /\[Picture: no caption\]/.test(text), 'and the plain-text copy says where each picture is');
+    // Shared with the forum: each picture its own file, sent before the station's file that names it.
+    ok(await until(() => p.store.files.has(`stations/pic-${id}.json`) && (p.store.files.get('stations/41506.json') || { text: '' }).text.includes('Gauge hut from the north')), 'the picture is shared with the forum, and the station’s file names it');
+    const f = p.store.files.has(`stations/pic-${id}.json`) ? JSON.parse(p.store.files.get(`stations/pic-${id}.json`).text) : {};
+    ok(f.schema === 'sort-picture/1' && f.id === id && f.w === 320 && f.h === 180 && String(f.data).length > 200 && !/data:/.test(f.data), 'as its own file: sort-picture/1, the bytes in base64');
+    const stFile = JSON.parse((p.store.files.get('stations/41506.json') || { text: '{"sessions":[]}' }).text);
+    const sent = await p.evaluate(() => window.__sent), picAt = sent.findIndex(x => x[0] === `stations/pic-${id}.json`);
+    ok(picAt >= 0 && picAt < sent.findIndex(x => x[0] === 'stations/41506.json' && x[1])
+      && ((((stFile.sessions.slice(-1)[0] || {}).session || {}).answers || {}).installNotes || {}).pictures[0].id === id, `sent before the station’s file, which carries the reference (${sent.map(x => x[0].replace('stations/', '') + (x[1] ? '+' : '')).join(', ')})`);
+    ok(!/pic-/.test((p.store.files.get('index.json') || { text: '' }).text), 'the shared list (index.json) doesn’t list pictures');
+    ok(await p.evaluate(i => SoRT.pictures.bundle(SoRT.app.session).then(x => !!(x && x[i] && x[i].data)), id), 'Download session carries the pictures');
+    // Reload: back from this browser (IndexedDB), nothing fetched.
+    const onSession = await p.evaluate(() => SoRT.pictures.idsOf(SoRT.app.session));
+    ok(onSession.length === 2 && await until(() => onSession.every(i => p.store.files.has(`stations/pic-${i}.json`)), 15000), 'both pictures still on the session are shared');
+    await p.waitForFunction(() => /✓ Shared/.test(document.querySelector('#shareChip').textContent), null, { timeout: 15000 }).catch(() => {});
+    let mark = p.store.log.length;
+    await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.station-card', { timeout: 40000 });
+    await p.waitForSelector('#q-installNotes .pic img', { timeout: 10000 }).catch(() => {});
+    const back = { img: !!(await p.$('#q-installNotes .pic img')), cap: await p.inputValue('#q-installNotes .pic-cap').catch(() => null), asked: p.store.log.slice(mark).filter(x => /pic-/.test(x)) };
+    ok(back.img && back.cap === 'Gauge hut from the north' && !back.asked.length, `after a reload the picture is still on the card, from this browser (${JSON.stringify(back)})`);
+    // This browser's copy gone: back from the forum's store.
+    ok(await p.evaluate(() => new Promise(r => { localStorage.removeItem('sortv2.pics.shared'); const d = indexedDB.deleteDatabase('sortv2'); d.onsuccess = () => r(true); d.onerror = () => r(false); setTimeout(() => r(false), 5000); })), 'this browser’s pictures deleted');
+    mark = p.store.log.length;
+    await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.station-card', { timeout: 40000 });
+    await p.waitForSelector('#q-installNotes .pic img', { timeout: 15000 }).catch(() => {});
+    ok(!!(await p.$('#q-installNotes .pic img')) && p.store.log.slice(mark).includes(`GET files/stations/pic-${id}.json`), 'and it comes back from the forum’s store');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    // Another computer, the same store: Sessions → Open fetches the session's pictures.
+    const q = await page(b, { pass: true });
+    for (const [k, v] of p.store.files) q.store.files.set(k, v);
+    await q.evaluate(() => SoRT.playbook.loadIndex());
+    await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'bengalla');
+    await q.click('.pb-panel .sess button:has-text("Open")');
+    await q.waitForSelector('#q-installNotes .pic img', { timeout: 20000 }).catch(() => {});
+    ok(!!(await q.$('#q-installNotes .pic img')) && (await q.inputValue('#q-installNotes .pic-cap')) === 'Gauge hut from the north' && !!(await q.$('#q-demolition .pic img')), 'another computer opening the shared session gets its pictures');
+    ok(!q.errors.length, `no page errors there ${q.errors.join('; ')}`);
+    await q.context().close();
     await p.context().close();
   }
 };

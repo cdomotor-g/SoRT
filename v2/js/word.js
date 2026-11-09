@@ -56,9 +56,24 @@
   // ---- the scope table -------------------------------------------------------
   function scopeRows(ctx) {
     const inc = ctx.session.include;
-    return R().visibleQuestions(ctx).filter(q => q.word !== false).map(q => ({ q, lines: R().outputLines(ctx, q) }))
-      .filter(r => r.lines.length || inc.empty);
+    return R().visibleQuestions(ctx).filter(q => q.word !== false)
+      .map(q => ({ q, lines: R().outputLines(ctx, q), pics: S.pictures ? S.pictures.of(ctx.session, q.code) : [] }))
+      .filter(r => r.lines.length || r.pics.length || inc.empty);
   }
+  // A row's pictures (js/pictures.js), under its answer and note: the in-memory
+  // copy only (Copy for Word waits for them), sized in pixels to fit the answer
+  // cell — Word honours width and height attributes — and never taller than
+  // most of a page. The caption in italics under each.
+  const PIC_MAX_W = w(1).px - 24, PIC_MAX_H = 680;
+  const picCaption = p => String(p.caption || '').trim();
+  function picHtml(p) {
+    const rec = S.pictures.get(p.id), cap = picCaption(p);
+    if (!rec) return `<i>[Picture not on this computer${cap ? `: ${esc(cap)}` : ''}]</i>`;
+    const pw = rec.w || p.w || PIC_MAX_W, ph = rec.h || p.h || PIC_MAX_W;
+    const k = Math.min(1, PIC_MAX_W / pw, PIC_MAX_H / ph);
+    return `<img src="${rec.dataUrl}" width="${Math.max(1, Math.round(pw * k))}" height="${Math.max(1, Math.round(ph * k))}" alt="${esc(cap ? `Picture: ${cap}` : 'Picture')}" style="border:1px solid #999;">${cap ? `<br><i>${esc(cap)}</i>` : ''}`;
+  }
+  const picText = p => `[Picture: ${picCaption(p) || 'no caption'}]`;
   function openFollowUps(ctx, table) {
     const list = R().followUps(ctx).filter(f => !f.done && f.table === table);
     // The forum's own tasks (tasks.js) are follow-up actions too.
@@ -79,7 +94,7 @@
     head += span(`<i><b>${esc(withStation(tpl.title || tpl.label || '', s))}</b></i>`);
     head += `<tr>${td0('Item', 'background:#e8e8e8;')}${td1('Details', 'background:#e8e8e8;font-weight:bold;')}</tr>`;
     let rows = '';
-    scopeRows(ctx).forEach(r => { rows += `<tr>${td0(esc(r.q.label))}${td1(r.lines.map(lineHtml).join('<br>'))}</tr>`; });
+    scopeRows(ctx).forEach(r => { rows += `<tr>${td0(esc(r.q.label))}${td1(r.lines.map(lineHtml).concat(r.pics.map(picHtml)).join('<br>'))}</tr>`; });
     if (inc.followUps) {
       const fu = openFollowUps(ctx, 'scope');
       if (fu.length) {
@@ -99,7 +114,7 @@
     }
     out += `${withStation(tpl.title || tpl.label || '', s)}\n\n`;
     out += 'Item\tDetails\n';
-    scopeRows(ctx).forEach(r => { out += `${r.q.label}\t${linesText(r.lines)}\n`; });
+    scopeRows(ctx).forEach(r => { out += `${r.q.label}\t${linesText(r.lines.concat(r.pics.map(picText)))}\n`; });
     if (inc.followUps) openFollowUps(ctx, 'scope').forEach(f => { out += `Follow-up\t${f.owner}: ${f.text}${f.link ? ' ' + f.link.url : ''}\n`; });
     return out;
   }

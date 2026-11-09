@@ -177,6 +177,26 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .bbm-desc { font-weight: 400; color: var(--ink); opacity: .85; }
 .bbm-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .q-extra { font-size: 13px; }
+/* Pictures pasted onto a question (js/pictures.js): "📋 Add picture" beside
+   "+ Add note", thumbnails with a caption and ✕ under them, a bigger view. */
+.q-extra-row { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+.q-extra-row > .fld-wide { flex: 1 1 100%; }
+.q-pics { display: grid; gap: 6px; }
+.pic-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.pic { margin: 0; width: 232px; display: grid; gap: 6px; padding: 6px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--card); }
+.pic-view { display: grid; place-items: center; height: 140px; padding: 0; border: 0; border-radius: 6px; background: var(--bg); cursor: zoom-in; overflow: hidden; }
+.pic-view img { display: block; max-width: 100%; max-height: 140px; }
+.pic-view:disabled { cursor: default; }
+.pic-ph { font-size: 13px; color: var(--muted); padding: 8px; text-align: center; }
+.pic figcaption { display: flex; gap: 6px; align-items: center; }
+.pic-cap { flex: 1; font-size: 13px; padding: 4px 8px; }
+.pic-del { flex: none; background: none; border: 1px solid var(--line-2); border-radius: 6px; padding: 2px 7px; cursor: pointer; color: var(--muted); }
+.pic-del:hover { color: var(--error); border-color: var(--error); }
+.q.pic-drop { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 6px; }
+.pic-dlg { width: fit-content; min-width: min(360px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
+.pic-big { padding: 12px 18px; display: grid; place-items: center; }
+.pic-big img { max-width: min(1600px, calc(100vw - 72px)); max-height: 75vh; background: #fff; }
+.pic-big-cap { margin: 0 18px 14px; font-style: italic; }
 .src { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 1px 4px 1px 8px; }
 .src-floodnet { background: var(--src-floodnet); color: var(--src-floodnet-ink); }
 .src-precedent { background: var(--src-precedent); color: var(--src-precedent-ink); }

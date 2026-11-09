@@ -129,6 +129,7 @@
       if (a.other) texts.push([c, a.other]);
       if (a.note) texts.push([c, a.note]);
       Object.entries(a.fields || {}).forEach(([f, v]) => texts.push([`${c}.${f}`, v]));
+      (Array.isArray(a.pictures) ? a.pictures : []).forEach(p => { if (p && p.caption) texts.push([`${c} picture caption`, p.caption]); });   // the pictures themselves can't be read
     });
     const p = session.ps || {};
     Object.entries(p.comments || {}).forEach(([k, v]) => texts.push([`Property Services ${k}`, v]));
@@ -260,6 +261,7 @@
     P.busy = session.id; refresh();
     try {
       const onScreen = !!(A.session && A.session.id === session.id);
+      if (S.pictures) await S.pictures.share(session);   // its pictures first, each its own file (js/pictures.js)
       const r = await putStation(key, st, rec, onScreen);
       if (r.newer) { markShared(session, Object.assign(pb(r.sha), { fp: null })); return 'newer'; }
       await upsertIndex(r.file, r.reread);
