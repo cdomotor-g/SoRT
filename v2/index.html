@@ -18,7 +18,7 @@
 </script>
 <!-- Every script and the stylesheet carry ?v=<stamp>; bump it (all of them at
      once) on any change, or browsers keep the old copy for up to 10 minutes. -->
-<link rel="stylesheet" href="app.css?v=20261109a">
+<link rel="stylesheet" href="app.css?v=20261109b">
 </head>
 <body>
 <header class="top">
@@ -37,7 +37,7 @@
     <div class="top-acts">
       <a class="v1-link" id="v1Link" href="../v1/" title="The old Scope Builder (version 1), kept as it was — anything saved there is still there">Version 1</a>
       <button type="button" class="btn btn-primary copy-btn" title="Copy the scope table, map and Property Services table, ready to paste into the report">Copy for Word</button>
-      <button type="button" class="btn" id="sessionsBtn" title="Sessions in this browser and shared with the forum — open, start new, forget">Sessions</button>
+      <button type="button" class="btn" id="sessionsBtn" title="Sessions Management — the sessions in this browser and shared with the forum: open, start new, delete">Sessions</button>
       <button type="button" class="btn" id="helpBtn" aria-haspopup="dialog" aria-label="Help" title="How to use this page: starting a new session, the basics, and the things that catch people out">❔<span class="btn-word"> Help</span></button>
       <button type="button" class="icon-btn" id="themeBtn" aria-label="Toggle dark mode">🌙</button>
     </div>
@@ -76,7 +76,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
 <dialog id="sessionsDlg" aria-labelledby="sessionsTitle">
-  <div class="dlg-head"><h2 id="sessionsTitle">Sessions in this browser</h2><button type="button" class="icon-btn" id="sessionsClose" aria-label="Close">✕</button></div>
+  <div class="dlg-head"><h2 id="sessionsTitle">Sessions Management</h2><button type="button" class="icon-btn" id="sessionsClose" aria-label="Close">✕</button></div>
   <div class="dlg-body" id="sessionsList"></div>
   <div class="dlg-foot">
     <button type="button" class="btn btn-primary" id="newSessionBtn">New session</button>
@@ -84,24 +84,24 @@
   </div>
 </dialog>
 
-<script src="js/util.js?v=20261109a"></script>
-<script src="js/schema.js?v=20261109a"></script>
-<script src="js/rules.js?v=20261109a"></script>
-<script src="js/store.js?v=20261109a"></script>
-<script src="js/pictures.js?v=20261109a"></script>
-<script src="js/github.js?v=20261109a"></script>
-<script src="js/floodnet.js?v=20261109a"></script>
-<script src="js/word.js?v=20261109a"></script>
-<script src="js/form.js?v=20261109a"></script>
-<script src="js/coast.js?v=20261109a"></script>
-<script src="js/soil.js?v=20261109a"></script>
-<script src="js/map.js?v=20261109a"></script>
-<script src="js/store-remote.js?v=20261109a"></script>
-<script src="js/playbook.js?v=20261109a"></script>
-<script src="js/tasks.js?v=20261109a"></script>
-<script src="js/editor.js?v=20261109a"></script>
-<script src="js/benchmarks.js?v=20261109a"></script>
-<script src="js/help.js?v=20261109a"></script>
-<script src="js/app.js?v=20261109a"></script>
+<script src="js/util.js?v=20261109b"></script>
+<script src="js/schema.js?v=20261109b"></script>
+<script src="js/rules.js?v=20261109b"></script>
+<script src="js/store.js?v=20261109b"></script>
+<script src="js/pictures.js?v=20261109b"></script>
+<script src="js/github.js?v=20261109b"></script>
+<script src="js/floodnet.js?v=20261109b"></script>
+<script src="js/word.js?v=20261109b"></script>
+<script src="js/form.js?v=20261109b"></script>
+<script src="js/coast.js?v=20261109b"></script>
+<script src="js/soil.js?v=20261109b"></script>
+<script src="js/map.js?v=20261109b"></script>
+<script src="js/store-remote.js?v=20261109b"></script>
+<script src="js/playbook.js?v=20261109b"></script>
+<script src="js/tasks.js?v=20261109b"></script>
+<script src="js/editor.js?v=20261109b"></script>
+<script src="js/benchmarks.js?v=20261109b"></script>
+<script src="js/help.js?v=20261109b"></script>
+<script src="js/app.js?v=20261109b"></script>
 </body>
 </html>

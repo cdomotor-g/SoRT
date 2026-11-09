@@ -18,7 +18,12 @@
    It keeps no landholder names or contact details and no gate, padlock or key
    codes: sharing checks the typed text for anything that looks like one first,
    and holds the session back until a person decides. There is no Share
-   button — see "sharing by itself" below. */
+   button — see "sharing by itself" below.
+
+   Deleting (Sessions → Delete → Confirm delete) takes a session out of its
+   station's file and leaves a note of it there (`deleted`: id and when), so
+   a computer that still has it open, or kept a copy, never shares it back
+   by itself — it says it was deleted, and offers to share it again. */
 (function (G) {
   'use strict';
   const S = G.SoRT = G.SoRT || {};
@@ -26,7 +31,9 @@
   const h = (...a) => U().h(...a);
   const REPO = { owner: 'cdomotor-g', repo: 'SoRT-playbook', branch: 'main' };
   const LS_INDEX = 'sortv2.pb.index';
-  const P = { A: null, index: null, indexSha: '', indexAt: 0, status: 'off', error: '', files: new Map(), busy: false, held: new Map(), failure: null };
+  const P = { A: null, index: null, indexSha: '', indexAt: 0, status: 'off', error: '', files: new Map(), busy: false, held: new Map(), failure: null, gone: new Set(), ask: null };
+  // P.gone: ids deleted from the shared sessions (here, or found deleted there) — never shared again by
+  // themselves. P.ask: the shared row whose Delete is waiting to be confirmed.
 
   /* ---------------- keys + loading ---------------- */
   const slug = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -161,13 +168,16 @@
   // saved it in between (412) is it read again and the session put in afresh.
   // A copy of the same session that was changed later elsewhere is never
   // replaced by an older one from here, unless this is the session on screen.
-  async function putStation(key, st, rec, onScreen) {
+  const deletedHere = (file, id) => (file.deleted || []).some(d => d.id === id);
+  async function putStation(key, st, rec, onScreen, again) {
     let cur = P.files.get(key) || await loadStation(key, true), reread = false;
     for (let attempt = 0; attempt < 3; attempt++) {
       const file = cur ? U().clone(cur.data) : { schema: 'sort-playbook-station/1', key, sessions: [], tags: [] };
       file.station = { number: st.number || '', name: st.name || '', floodnetId: st.source === 'floodnet' ? st.id : '', lat: st.lat, lon: st.lon,
         kinds: st.kinds || [], lga: st.lga || '', hub: st.hubName || '', owner: st.owner || '' };
       file.sessions = file.sessions || [];
+      // Deleted from the shared sessions: not put back unless a person asked to share it again.
+      if (deletedHere(file, rec.id)) { if (!again) return { file, sha: cur.sha, gone: true, reread }; file.deleted = file.deleted.filter(d => d.id !== rec.id); }
       const i = file.sessions.findIndex(x => x.id === rec.id);
       const theirs = i >= 0 ? ((file.sessions[i].session || {}).updatedAt || 0) : 0;
       if (!onScreen && theirs > (rec.session.updatedAt || 0)) return { file, sha: cur.sha, newer: true, reread };
@@ -208,21 +218,31 @@
       }
     }
   }
-  // A session whose station changed (a Bureau number corrected) leaves the old station's file.
-  async function moveOut(key, id) {
+  // Sessions out of a station's file (and its line in the index brought up to
+  // date). deleted: noted in the file as deleted, so they aren't shared back.
+  // → how many were taken out.
+  async function takeOut(key, ids, deleted) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const cur = await loadStation(key, true);
-      if (!cur || !(cur.data.sessions || []).some(x => x.id === id)) return;
+      if (!cur) {   // no file: at most a line in the index that shouldn't be there
+        if (deleted && (P.index || []).some(x => x.key === key)) await upsertIndex({ key, sessions: [] });
+        return 0;
+      }
       const file = U().clone(cur.data);
-      file.sessions = file.sessions.filter(x => x.id !== id);
+      const out = (file.sessions || []).filter(x => ids.includes(x.id));
+      if (!out.length) { if (deleted) await upsertIndex(file); return 0; }
+      file.sessions = file.sessions.filter(x => !ids.includes(x.id));
+      if (deleted) file.deleted = (file.deleted || []).filter(d => !ids.includes(d.id)).concat(out.map(x => ({ id: x.id, at: new Date().toISOString() })));
       try {
         const r = await putJson(`stations/${key}.json`, file, cur.sha);
         P.files.set(key, { data: file, sha: r.sha });
         await upsertIndex(file, true);
-        return;
+        return out.length;
       } catch (e) { if (e.status !== 409 || attempt === 2) throw e; }
     }
   }
+  // A session whose station changed (a Bureau number corrected) leaves the old station's file.
+  const moveOut = (key, id) => takeOut(key, [id], false);
   // Note on the session — on screen, in this browser's copy, or both — that it is shared.
   function markShared(session, pb) {
     session.playbook = pb;
@@ -235,9 +255,12 @@
   // Share one session with the forum. auto: by itself (never asks anything;
   // what looks private holds it until a person decides). → 'saved' (sent),
   // 'same' (nothing new to send), 'newer' (a later copy is already shared),
-  // 'held', 'off', 'none' (no station), 'no' (a person said no) or 'failed'.
-  async function save(A, session, quiet, auto) {
+  // 'held', 'off', 'none' (no station), 'no' (a person said no), 'gone'
+  // (deleted from the shared sessions) or 'failed'. again: a person asked to
+  // share a deleted session again.
+  async function save(A, session, quiet, auto, again) {
     session = session || A.session;
+    if (P.gone.has(session.id) && !again) return 'gone';
     if (!S.shared.has()) {
       if (!auto) S.shared.dialog({ why: 'Sharing with the forum needs the forum passphrase — once on this computer.', onDone: ok => { if (ok) loadIndex(); } });
       return 'off';
@@ -257,14 +280,16 @@
     P.held.delete(session.id);
     const rec = record(A.defs, session), fp = fingerprint(rec);
     const pb = (sha, savedAt) => ({ savedAt: savedAt || Date.now(), asOf: rec.session.updatedAt || Date.now(), key, sha: sha || '', fp, allowed: [...allowed] });
-    if (old.fp === fp && old.key === key && old.savedAt) { markShared(session, pb(old.sha, old.savedAt)); refresh(); return 'same'; }
+    if (old.fp === fp && old.key === key && old.savedAt && !again) { markShared(session, pb(old.sha, old.savedAt)); refresh(); return 'same'; }
     P.busy = session.id; refresh();
     try {
       const onScreen = !!(A.session && A.session.id === session.id);
       if (S.pictures) await S.pictures.share(session);   // its pictures first, each its own file (js/pictures.js)
-      const r = await putStation(key, st, rec, onScreen);
+      const r = await putStation(key, st, rec, onScreen, again);
+      if (r.gone) { P.gone.add(session.id); P.failure = null; return 'gone'; }
+      P.gone.delete(session.id);
       if (r.newer) { markShared(session, Object.assign(pb(r.sha), { fp: null })); return 'newer'; }
-      await upsertIndex(r.file, r.reread);
+      await upsertIndex(r.file, r.reread || again);   // shared again: its line may have left the index
       if (old.key && old.key !== key) await moveOut(old.key, session.id).catch(() => {});
       markShared(session, pb(r.sha));
       P.failure = null;
@@ -438,7 +463,7 @@
     || Object.values((s.ps || {}).answers || {}).some(v => String(v || '').trim()) || !!s.outcome;
   // Changed since it was last shared (asOf: the last change that save carried).
   function needsSave(s) {
-    if (!(s && s.station && stationKey(s.station) && answered(s))) return false;
+    if (!(s && s.station && stationKey(s.station) && answered(s)) || P.gone.has(s.id)) return false;
     const pb = s.playbook || {};
     if (!pb.savedAt) return true;
     return (s.updatedAt || 0) > (pb.asOf != null ? pb.asOf : pb.savedAt + 1000);
@@ -514,6 +539,7 @@
     if (P.status === 'loading') return { cls: '', short: 'Connecting…', text: 'Connecting to the shared sessions…' };
     if (P.status !== 'ready') return { cls: 'warn', short: '⚠ Only in this browser', text: `Saved only in this browser for now — the shared sessions can’t be reached (${P.error}). It is shared by itself once they can.` };
     if (P.held.has(s.id)) return { cls: 'warn', short: '⚠ Not shared', text: 'Not shared: its text looks like it holds something private — see the bar at the top.' };
+    if (P.gone.has(s.id)) return { cls: 'warn', short: '⚠ Deleted from the forum', text: 'Not shared: someone deleted this session from the forum’s shared sessions. It is still saved in this browser — see the bar at the top.' };
     if (!stationKey(s.station) || !answered(s)) return { cls: '', short: '', text: 'It is shared with the forum by itself once it has a station and an answer.' };
     if (P.busy === s.id) return { cls: '', short: 'Sharing…', text: 'Sharing with the forum…' };
     if (P.failure && needsSave(s)) return { cls: 'warn', short: '⚠ Not shared yet', text: `Not shared yet — ${P.failure.message}. ${retryAt ? `It tries again by itself at ${clock(retryAt)}.` : 'It tries again at the next change.'} Everything is saved in this browser meanwhile.` };
@@ -561,6 +587,11 @@
         link('save it anyway', () => save(A), 'Share it as it is — you won’t be asked again about this text'), document.createTextNode('.'));
       return;
     }
+    if (P.gone.has(A.session.id)) {
+      bar('warn', h('span', null, h('b', null, '⚠ Deleted from the forum’s shared sessions'), ' — someone deleted this session there, so it isn’t shared any more. It is still saved in this browser. '),
+        link('Share it again', () => save(A, A.session, false, false, true), 'Put it back in the shared sessions, as it is now'), document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
+      return;
+    }
     if (P.status === 'ready') {
       const f = P.failure;
       if (f && needsSave(A.session) && (fails >= 2 || !retry)) {
@@ -579,9 +610,62 @@
       document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
   }
 
+  /* ---------------- deleting ---------------- */
+  // Delete sessions from the shared sessions, and this browser's copies with
+  // them (a new session if one was on screen). Throws if it couldn't; then
+  // nothing has changed.
+  async function deleteShared(A, key, ids) {
+    ids.forEach(id => { P.gone.add(id); todo.delete(id); P.held.delete(id); });   // nothing shares them back meanwhile
+    try { await takeOut(key, ids, true); }
+    catch (e) { ids.forEach(id => P.gone.delete(id)); throw e; }
+    ids.forEach(id => A.dropLocal(id));
+    refresh();
+  }
+  // Out of this browser only. deleted: for good (it was never shared), so no save on its way shares it.
+  function dropQueued(id, deleted) { todo.delete(id); P.held.delete(id); if (deleted) P.gone.add(id); }
+  const recWhat = (A, r) => [r.forum && r.forum.date ? `forum ${U().dmy(r.forum.date)}` : '', r.outcome ? (OUTCOME(A)[r.outcome] || r.outcome) : 'not finished'].filter(Boolean).join(' · ');
+  // A shared row's Delete: its station's file read afresh, then the question.
+  async function askDelete(A, e) {
+    P.ask = { key: e.key, phase: 'loading' }; refresh();
+    try {
+      const f = await loadStation(e.key, true);
+      if (!P.ask || P.ask.key !== e.key) return;
+      Object.assign(P.ask, { phase: 'ready', recs: f ? (f.data.sessions || []).map(r => ({ id: r.id, what: recWhat(A, r) })) : [] });
+    } catch (err) { if (P.ask && P.ask.key === e.key) Object.assign(P.ask, { phase: 'error', error: err.message }); }
+    refresh();
+  }
+  async function confirmDelete(A, e, ids) {
+    const a = P.ask; if (!a) return;
+    a.phase = 'busy'; refresh();
+    try {
+      await deleteShared(A, e.key, ids);
+      P.ask = null;
+      A.toast(ids.length > 1 ? `Deleted all ${ids.length} of ${e.name}’s sessions from the forum.` : `Deleted ${e.name}’s session from the forum.`);
+    } catch (err) { if (P.ask === a) Object.assign(a, { phase: 'error', error: err.message }); }
+    refresh();
+  }
+  // The second step, under the row: what goes, and the buttons that do it.
+  function askRow(A, e) {
+    const a = P.ask, cancel = h('button', { type: 'button', class: 'btn', onclick: () => { P.ask = null; refresh(); } }, 'Cancel');
+    const strip = (text, ...btns) => h('div', { class: 'sess-confirm', role: 'group', 'aria-label': `Delete ${e.name}’s session` }, h('p', null, text), h('div', { class: 'sess-acts' }, btns, cancel));
+    if (a.phase === 'loading') return strip('Reading its sessions…');
+    if (a.phase === 'error' && !a.recs) return strip(`Couldn’t read its sessions (${a.error}).`, h('button', { type: 'button', class: 'btn', onclick: () => askDelete(A, e) }, 'Try again'));
+    const recs = a.recs || [], last = recs[recs.length - 1];
+    if (!last) return strip('It has no sessions left to delete.');
+    const busy = a.phase === 'busy';
+    const del = (label, ids, title) => h('button', { type: 'button', class: 'btn btn-danger', disabled: busy, title, onclick: () => confirmDelete(A, e, ids) }, label);
+    const here = recs.filter(r => S.store.load(r.id)).length;
+    const text = recs.length === 1
+      ? `Delete ${e.name}’s session (${last.what}) from the forum’s shared sessions, for everyone? Nobody will be able to open it again.`
+      : `Delete ${e.name}’s last session (${last.what}) from the forum’s shared sessions, for everyone? Its ${recs.length - 1} earlier session${recs.length > 2 ? 's stay' : ' stays'}.`;
+    return strip([text, here ? ` ${here === 1 ? 'Its copy in this browser goes too.' : 'The copies in this browser go too.'}` : '', busy ? ' Deleting…' : a.phase === 'error' ? ` Couldn’t delete it (${a.error}).` : ''].join(''),
+      del('Confirm delete', [last.id], recs.length === 1 ? 'Delete it for good' : 'Delete its last session for good; the earlier ones stay'),
+      recs.length > 1 ? del(`Delete all ${recs.length}`, recs.map(r => r.id), `Delete every one of ${e.name}’s ${recs.length} shared sessions for good`) : null);
+  }
+
   /* ---------------- the Sessions dialog: the shared playbook ---------------- */
   const matches = (q, ...xs) => !q || xs.some(x => String(x || '').toLowerCase().includes(q));
-  function panel(A, query, close) {
+  function panel(A, query, close, onAsk) {
     const q = String(query || '').trim().toLowerCase();
     const box = h('div', { class: 'pb-panel' }, h('h3', null, 'Shared with the forum'));
     if (P.status === 'off' || P.status === 'denied') { box.appendChild(h('p', { class: 'hint' }, P.status === 'off' ? 'Not connected — the sessions above are only in this browser. ' : 'The forum passphrase on this computer isn’t right any more. ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter the forum passphrase'))); return box; }
@@ -590,9 +674,10 @@
     const all = (P.index || []).slice().sort((a, b) => String(b.lastForum).localeCompare(String(a.lastForum)));
     const rows = all.filter(e => matches(q, e.name, e.number, e.lga, e.hub));
     if (!rows.length) { box.appendChild(h('p', { class: 'hint' }, q ? 'No shared session matches.' : 'Nothing shared yet.')); }
+    if (P.ask && !all.some(e => e.key === P.ask.key)) P.ask = null;
     (q ? rows : rows.slice(0, 12)).forEach(e => {
-      const other = curKey && e.key !== curKey;
-      box.appendChild(h('div', { class: 'sess' },
+      const other = curKey && e.key !== curKey, asking = P.ask && P.ask.key === e.key;
+      box.appendChild(h('div', { class: 'sess' + (asking ? ' asking' : '') },
         h('div', { class: 'sess-main' },
           h('div', { class: 'sess-name' }, e.name, e.number ? h('span', { class: 'res-num' }, e.number) : null),
           h('div', { class: 'res-meta' }, [`${e.sessions} session${e.sessions === 1 ? '' : 's'}`, e.lastForum && `last at the forum of ${U().dmy(e.lastForum)}`,
@@ -600,7 +685,9 @@
         h('div', { class: 'sess-acts' },
           h('button', { type: 'button', class: 'btn', title: 'Open its last session as it was saved, and carry on with it', onclick: () => { close(); openSaved(A, e.key); } }, 'Open'),
           h('button', { type: 'button', class: 'btn btn-quiet', title: 'A new session for today’s forum, starting from its last answers (each to check)', onclick: () => { close(); continueFrom(A, e.key); } }, 'Start from it'),
-          other ? h('button', { type: 'button', class: 'btn btn-quiet', title: `Fill ${A.session.station ? A.session.station.name : 'this session'}’s unanswered questions from this station’s last session — each one orange until you check it`, onclick: () => { close(); usePrecedent(A, e.key); } }, 'Use as a precedent') : null)));
+          other ? h('button', { type: 'button', class: 'btn btn-quiet', title: `Fill ${A.session.station ? A.session.station.name : 'this session'}’s unanswered questions from this station’s last session — each one orange until you check it`, onclick: () => { close(); usePrecedent(A, e.key); } }, 'Use as a precedent') : null,
+          asking ? null : h('button', { type: 'button', class: 'btn btn-quiet btn-del', title: 'Delete its last session from the forum’s shared sessions, for everyone — you are asked to confirm first', onclick: () => { if (onAsk) onAsk(); askDelete(A, e); } }, 'Delete')),
+        asking ? askRow(A, e) : null));
     });
     if (!q && rows.length > 12) box.appendChild(h('p', { class: 'hint' }, `${rows.length - 12} more — search to find them.`));
     const waiting = todo.size + (P.busy ? 1 : 0), held = P.held.size;
@@ -628,7 +715,7 @@
     G.addEventListener('online', () => { if (retry || P.status === 'error') tryNow(); });
   }
   // Sessions opening: the shared list as it is now, and anything left unshared.
-  function onSessionsOpen() { freshIndex(); catchUp(); }
+  function onSessionsOpen() { P.ask = null; freshIndex(); catchUp(); }
 
-  S.playbook = { REPO, init, stationStrip, renderActs, panel, existing, openSaved, autosaveSoon, flush, catchUp, onSessionsOpen, renderSaveBar, save, needsSave, shareState, usePrecedent, continueFrom, similar, summary, record, indexEntry, fingerprint, stationKey, privacyScan, loadIndex, state: P };
+  S.playbook = { REPO, init, stationStrip, renderActs, panel, existing, openSaved, autosaveSoon, flush, catchUp, onSessionsOpen, renderSaveBar, save, needsSave, shareState, usePrecedent, continueFrom, similar, summary, record, indexEntry, fingerprint, stationKey, privacyScan, loadIndex, deleteShared, dropQueued, state: P };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: station, copy, playbook, shared, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil, pictures. They use the live Flood-Net
+   Scenarios: station, copy, playbook, shared, delete, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil, pictures. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    "coast" gives QSpatial's coastline a stand-in too: one straight shore, so the
@@ -16,7 +16,8 @@
    the page address (default http://127.0.0.1:8642/v2/). STUB_IMAGERY=1 gives
    the State's imagery tiles a stand-in (random-coloured squares), for when the
    imagery server won't serve this computer and "map" fails with "the map
-   hadn't finished drawing" — everything else on the map stays live. */
+   hadn't finished drawing" — everything else on the map stays live.
+   E2E_STACK=1 prints where in the page's code a page error came from. */
 'use strict';
 const { chromium } = require(process.env.PLAYWRIGHT_PKG || 'playwright');
 const BASE = process.env.BASE || 'http://127.0.0.1:8642/v2/';
@@ -113,7 +114,7 @@ async function page(browser, opts) {
   if (o.defsPatch) { const d = JSON.parse(defsText); o.defsPatch(d); defsText = JSON.stringify(d); }
   const gh = fakeGithub(defsText);
   await ctx.route(/api\.github\.com/, gh.handler);
-  const store = fakeStore();
+  const store = o.store || fakeStore();   // o.store: another computer on the same shared sessions
   await ctx.route(/floodwarning\.net\/api\/sort\//, store.handler);
   if (o.pass) await ctx.addInitScript(() => { try { localStorage.setItem('sortv2.passphrase', 'TESTPASS'); } catch (e) { /* */ } });
   if (o.coast) await ctx.route(/CoastalWaters\/MapServer\/17\/query/, o.coast);
@@ -122,7 +123,7 @@ async function page(browser, opts) {
   if (process.env.STUB_IMAGERY) { const tile = standInTile(); await ctx.route(/spatial-img\.information\.qld\.gov\.au\/.*\/tile\//, r => r.fulfill({ status: 200, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: tile })); }
   const p = await ctx.newPage();
   p.errors = [];
-  p.on('pageerror', e => p.errors.push(e.message));
+  p.on('pageerror', e => p.errors.push(process.env.E2E_STACK ? e.stack : e.message));
   p.on('dialog', d => (d.type() === 'prompt' ? d.accept('Test change') : d.accept()));
   await p.goto(BASE, { waitUntil: 'load' });
   // A clean browser — but past the first-visit Help nudge, so its toast never
@@ -347,6 +348,80 @@ const scenarios = {
     const html = await p.clip();
     ok(/Corrosion category: C4 — stainless enclosure and orifice run/.test(html) && /Standard galvanised tower/.test(html) && /Stainless steel enclosure with stainless steel fixtures and fittings/.test(html) && /Stainless steel orifice run \(capillary conduit\) with stainless steel fixtures and fittings/.test(html), 'the category and every part go into Word');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
+  async delete(b) {
+    // Not connected: a session only in this browser — Delete, then Confirm delete.
+    const n = await page(b);
+    await n.pick('540601');
+    await n.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
+    const lone = await n.evaluate(() => SoRT.app.session.id);
+    await n.click('#sessionsBtn');
+    ok((await n.textContent('#sessionsTitle')) === 'Sessions Management', 'the window is called Sessions Management');
+    ok(!/Forget/.test(await n.innerText('#sessionsResults')), 'no Forget button any more');
+    await n.click('#sessionsResults .sess.current button:has-text("Delete")');
+    ok(/only in this browser, so it will be gone for good/.test(await n.innerText('.sess-confirm')) && await n.evaluate(() => document.activeElement.textContent === 'Cancel'), 'Delete asks first, says what goes, and the keyboard lands on Cancel');
+    await n.click('.sess-confirm button:has-text("Cancel")');
+    ok(!(await n.$('.sess-confirm')) && await n.evaluate(id => !!SoRT.store.load(id), lone), 'Cancel deletes nothing');
+    await n.click('#sessionsResults .sess.current button:has-text("Delete")');
+    await n.click('.sess-confirm button:has-text("Confirm delete")');
+    await n.waitForTimeout(400);
+    ok(await n.evaluate(id => !SoRT.store.load(id) && SoRT.app.session.id !== id && !SoRT.store.index().some(x => x.id === id), lone), 'Confirm delete: gone from this browser (not saved back on the way out), a new session on screen');
+    await n.context().close();
+
+    // Connected: two computers on the same shared sessions.
+    const p = await page(b, { pass: true, autosaveMs: 800, retryMs: 1000 });
+    await p.pick('540601');
+    await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
+    const file = k => p.store.files.has(`stations/${k}.json`) ? JSON.parse(p.store.files.get(`stations/${k}.json`).text) : null;
+    const index = () => JSON.parse(p.store.files.get('index.json').text).stations;
+    const first = await p.evaluate(() => SoRT.app.session.id);
+    ok(await until(() => (file('540601') || { sessions: [] }).sessions.some(z => z.id === first)), 'a session shared with the forum');
+    const q = await page(b, { pass: true, autosaveMs: 800, retryMs: 1000, store: p.store });
+    await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'fifteen');
+    await q.click('.pb-panel .sess button:has-text("Open")');
+    ok(await until(() => q.evaluate(id => SoRT.app.session.id === id, first)), 'the other computer has it open');
+    // This computer deletes it everywhere.
+    await p.click('#sessionsBtn');
+    await p.click('#sessionsResults .sess.current button:has-text("Delete")');
+    ok(/from this browser and from the forum’s shared sessions/.test(await p.innerText('.sess-confirm')) && await p.isVisible('.sess-confirm button:has-text("Only from this browser")'), 'shared: it says it goes from the forum too, and offers Only from this browser');
+    await p.click('.sess-confirm button:has-text("Confirm delete")');
+    ok(await until(() => !file('540601').sessions.some(z => z.id === first) && (file('540601').deleted || []).some(d => d.id === first) && !index().some(e => e.key === '540601')), 'Confirm delete: out of the station’s file (noted as deleted) and out of the shared list');
+    ok(await p.evaluate(id => !SoRT.store.load(id) && SoRT.app.session.id !== id, first), 'and out of this browser, with a new session on screen');
+    ok(!/Fifteen Mile AL/.test(await p.innerText('.pb-panel')), 'the shared list no longer shows it');
+    // The other computer, still on it: a change there doesn't share it back.
+    await q.keyboard.press('Escape').catch(() => {});
+    await q.click('#q-stockFence .opt:has-text("No")');
+    ok(await until(() => q.evaluate(() => /Deleted from the forum/.test(document.querySelector('#saveBar').textContent))), 'the other computer says it was deleted from the forum');
+    ok(!file('540601').sessions.some(z => z.id === first) && /Deleted from the forum/.test(await q.innerText('#shareChip')), 'and doesn’t share it back by itself');
+    await q.click('#saveBar button:has-text("Share it again")');
+    ok(await until(() => file('540601').sessions.some(z => z.id === first) && !(file('540601').deleted || []).some(d => d.id === first) && index().some(e => e.key === '540601')), 'Share it again puts it back, in the shared list too');
+    // A shared row: Delete reads the station's sessions, then asks.
+    p.store.files.set('stations/540601.json', { text: JSON.stringify(Object.assign(file('540601'), { sessions: [{ id: 'earlier-one', source: 'sort-v2', forum: { date: '2026-01-01' }, outcome: 'complete', summary: { answers: {} } }].concat(file('540601').sessions) })), etag: '"two"' });
+    await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'fifteen');
+    await q.click('.pb-panel .sess button:has-text("Delete")');
+    await q.waitForSelector('.pb-panel .sess-confirm button:has-text("Confirm delete")', { timeout: 8000 });
+    ok(/last session[\s\S]*1 earlier session stays/.test(await q.innerText('.pb-panel .sess-confirm')) && await q.isVisible('.pb-panel .sess-confirm button:has-text("Delete all 2")'), 'a station with two: Confirm delete takes its last one, or Delete all 2');
+    await q.click('.pb-panel .sess-confirm button:has-text("Confirm delete")');
+    ok(await until(() => file('540601').sessions.map(z => z.id).join() === 'earlier-one' && index().some(e => e.key === '540601' && e.sessions === 1)), 'its last session goes; the earlier one stays, and the list says 1');
+    ok(await q.evaluate(id => SoRT.app.session.id !== id && !SoRT.store.load(id), first), 'the session it had open was that one: a new session on screen');
+    await q.click('.pb-panel .sess button:has-text("Delete")');
+    await q.waitForSelector('.pb-panel .sess-confirm button:has-text("Confirm delete")', { timeout: 8000 });
+    await q.click('.pb-panel .sess-confirm button:has-text("Cancel")');
+    ok(!(await q.$('.sess-confirm')) && file('540601').sessions.length === 1, 'Cancel on a shared row deletes nothing');
+    // Only from this browser: the forum keeps it.
+    await p.keyboard.press('Escape').catch(() => {});
+    await p.pick('540335');
+    await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
+    const second = await p.evaluate(() => SoRT.app.session.id);
+    ok(await until(() => (file('540335') || { sessions: [] }).sessions.some(z => z.id === second)), 'another session shared');
+    await p.click('#sessionsBtn');
+    await p.click('#sessionsResults .sess.current button:has-text("Delete")');
+    await p.click('.sess-confirm button:has-text("Only from this browser")');
+    await p.waitForTimeout(1500);
+    ok(await p.evaluate(id => !SoRT.store.load(id) && SoRT.app.session.id !== id, second) && file('540335').sessions.some(z => z.id === second) && !(file('540335').deleted || []).length, 'Only from this browser: gone here, kept by the forum');
+    ok(!p.errors.length && !q.errors.length, `no page errors ${p.errors.concat(q.errors).join('; ')}`);
+    await q.context().close();
     await p.context().close();
   },
   async editor(b) {

@@ -21,7 +21,7 @@
     { id: 'session', title: 'Starting a new session', items: [
       'A **session** is one station at one forum sitting. To start one: **Sessions** (top right) → **New session**. The map goes back to the whole of Queensland until you choose the station.',
       'Choosing a different station on a session that already has answers starts a new session by itself; the earlier one stays under **Sessions**.',
-      'To go back to one: **Sessions** — type a station’s name or number in its search box — then **Open**. Under **Shared with the forum**, **Open** carries on with a station’s last session as it was saved (from any computer), **Start from it** begins today’s session from its answers, and **Use as a precedent** fills this session from it. **Forget** removes one from this browser only.',
+      'To go back to one: **Sessions** — type a station’s name or number in its search box — then **Open**. Under **Shared with the forum**, **Open** carries on with a station’s last session as it was saved (from any computer), **Start from it** begins today’s session from its answers, and **Use as a precedent** fills this session from it. **Delete** asks first — **Confirm delete** or **Cancel**: a session shared with the forum goes from the shared sessions for everyone (on a station with several, its last one, or **Delete all**), and **Only from this browser** keeps the forum’s copy.',
       'Choosing a station that already has a session (here or in the shared sessions) shows a **⚠ already has a session** note on its card: **Show its sessions** opens Sessions searched for it.',
       'To carry a session to another computer: **Download session** (bottom of the page), then on the other computer **Sessions** → **Open a session file…**.'
     ] },

@@ -107,9 +107,10 @@
     if (S.mapView) S.mapView.startDraw(code); else toast('The map isn’t available here.');
   }
 
-  function newSession(station) {
-    if (A.session) S.store.save(A.session);
-    if (S.playbook) S.playbook.flush(A);
+  // dropped: the session on screen was just deleted — not saved back on the way out.
+  function newSession(station, dropped) {
+    if (A.session && !dropped) S.store.save(A.session);
+    if (S.playbook) S.playbook.flush(dropped ? null : A);
     A.session = S.store.newSession(A.defs);
     if (station) A.session.station = station;
     A.picture = null;
@@ -711,11 +712,22 @@
     r.readAsText(file);
   }
 
-  /* ---------------- sessions dialog ---------------- */
-  /* Sessions: a search, this browser's sessions, then the shared playbook's. */
+  /* ---------------- Sessions Management ---------------- */
+  // A session out of this browser (a new one on screen if it was open — the
+  // deleted one isn't saved back on the way out, as switching would).
+  function dropLocal(id) {
+    const cur = A.session && A.session.id === id;
+    S.store.remove(id);
+    if (cur) newSession(null, true);
+  }
+  A.dropLocal = dropLocal;
+  /* Sessions Management: a search, this browser's sessions, then the shared
+     playbook's. Delete is two steps: Delete, then Confirm delete (or Cancel)
+     in a line under the row, saying what goes. */
   function openSessions(query) {
     const dlg = $('#sessionsDlg'), list = $('#sessionsList');
     list.innerHTML = '';
+    let ask = null;   // the session in this browser whose Delete is waiting to be confirmed: { id, phase, error }
     const search = h('input', { type: 'search', id: 'sessionsSearch', class: 'sess-search', placeholder: 'Find a station — name or number', autocomplete: 'off', value: query || '' });
     const results = h('div', { id: 'sessionsResults' });
     list.appendChild(search); list.appendChild(results);
@@ -727,23 +739,53 @@
       results.appendChild(h('h3', null, 'In this browser'));
       if (!idx.length) results.appendChild(h('p', { class: 'muted' }, q ? 'No session in this browser matches.' : 'No sessions saved in this browser yet.'));
       const outcomes = Object.fromEntries(((A.defs.session || {}).outcomes || []).map(o => [o.code, o.label]));
+      if (ask && !idx.some(x => x.id === ask.id)) ask = null;
       idx.forEach(x => {
-        const cur = A.session && x.id === A.session.id;
-        results.appendChild(h('div', { class: 'sess' + (cur ? ' current' : '') },
+        const cur = A.session && x.id === A.session.id, asking = ask && ask.id === x.id;
+        results.appendChild(h('div', { class: 'sess' + (cur ? ' current' : '') + (asking ? ' asking' : '') },
           h('div', { class: 'sess-main' },
             h('div', { class: 'sess-name' }, x.name || 'No station', x.number ? h('span', { class: 'res-num' }, x.number) : null, cur ? h('span', { class: 'tag' }, 'open') : null),
             h('div', { class: 'res-meta' }, [(S.schema.template(A.defs, x.template) || {}).label, x.forumDate && `forum ${U.dmy(x.forumDate)}`, x.outcome ? outcomes[x.outcome] : 'not finished',
               `changed ${U.fmtWhen(x.updatedAt)}`, x.playbookAt ? 'shared with the forum' : 'only in this browser'].filter(Boolean).join(' · '))),
           h('div', { class: 'sess-acts' },
             cur ? null : h('button', { type: 'button', class: 'btn', onclick: () => { close(); openSession(x.id); } }, 'Open'),
-            h('button', { type: 'button', class: 'btn btn-quiet', title: 'Forget this session in this browser', onclick: () => {
-              if (!confirm(`Forget the session for ${x.name || 'this station'} in this browser?${x.playbookAt ? ' It stays in the shared sessions.' : ' It isn’t shared, so it will be gone.'}`)) return;
-              S.store.remove(x.id);
-              if (cur) newSession();
+            asking ? null : h('button', { type: 'button', class: 'btn btn-quiet btn-del', title: 'Delete this session — you are asked to confirm first', onclick: () => {
+              ask = { id: x.id, phase: 'ready' };
+              if (S.playbook) S.playbook.state.ask = null;
               draw();
-            } }, 'Forget'))));
+            } }, 'Delete')),
+          asking ? askLocal(x, cur) : null));
       });
-      if (S.playbook) results.appendChild(S.playbook.panel(A, q, close));
+      if (S.playbook) results.appendChild(S.playbook.panel(A, q, close, () => { ask = null; }));
+      // Delete just pressed (its button is gone): the keyboard lands on Cancel, never on Confirm.
+      const cancel = results.querySelector('.sess-confirm .btn:last-child');
+      if (cancel && !dlg.contains(document.activeElement)) cancel.focus();
+    };
+    // The second step for a session in this browser. Shared with the forum and
+    // connected: deleted there too, unless "Only from this browser".
+    const askLocal = (x, cur) => {
+      const pb = S.playbook, shared = !!x.playbookAt, reach = shared && pb && pb.state.status === 'ready' && S.shared.has();
+      const name = x.name || 'this station', busy = ask.phase === 'busy';
+      const local = deleted => { if (pb) pb.dropQueued(x.id, deleted); dropLocal(x.id); ask = null; draw(); toast(deleted ? `Deleted the session for ${name}.` : `Deleted the session for ${name} from this browser — the forum’s copy stays.`); };
+      const everywhere = async () => {
+        ask.phase = 'busy'; draw();
+        const s = cur ? A.session : S.store.load(x.id);
+        const key = (s && s.playbook && s.playbook.key) || (s && pb.stationKey(s.station));
+        try {
+          if (key) await pb.deleteShared(A, key, [x.id]); else dropLocal(x.id);
+          ask = null; toast(`Deleted the session for ${name} — from this browser and from the forum.`);
+        } catch (e) { if (ask) Object.assign(ask, { phase: 'error', error: e.message }); }
+        draw();
+      };
+      const text = !shared ? `Delete the session for ${name}? It is only in this browser, so it will be gone for good.`
+        : reach ? `Delete the session for ${name} for good — from this browser and from the forum’s shared sessions? Nobody will be able to open it again. (Only from this browser keeps the forum’s copy.)`
+        : `Delete the session for ${name} from this browser? The forum’s shared copy stays — it can be deleted there once this computer is connected to the shared sessions.`;
+      return h('div', { class: 'sess-confirm', role: 'group', 'aria-label': `Delete the session for ${name}` },
+        h('p', null, text, busy ? ' Deleting…' : ask.phase === 'error' ? ` Couldn’t delete it from the forum (${ask.error}) — nothing was deleted.` : ''),
+        h('div', { class: 'sess-acts' },
+          h('button', { type: 'button', class: 'btn btn-danger', disabled: busy, onclick: () => (reach ? everywhere() : local(!shared)) }, 'Confirm delete'),
+          reach ? h('button', { type: 'button', class: 'btn', disabled: busy, onclick: () => local(false) }, 'Only from this browser') : null,
+          h('button', { type: 'button', class: 'btn', disabled: busy, onclick: () => { ask = null; draw(); } }, 'Cancel')));
     };
     search.addEventListener('input', draw);
     draw();
