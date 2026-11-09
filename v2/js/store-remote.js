@@ -43,21 +43,32 @@
       return res.status === 200 ? 'ok' : res.status === 401 ? 'wrong' : 'error';
     } catch (_) { return 'offline'; }
   }
+  // A file's version tag, as the server gave it. Cloudflare, in front of
+  // Flood-Net, turns the tag weak — W/"…" — whenever it compresses an answer
+  // (which it does for every browser), and the server refuses a save that
+  // quotes a weak tag. Until 9 Nov 2026 SoRT sent them back as they came, so
+  // every save after a read was refused as "someone else saved it", over and
+  // over: sessions stopped being shared. The tag under the W/ is the file's own.
+  const strong = t => String(t || '').trim().replace(/^W\//i, '');
   // → { text, sha } or null when the file doesn't exist yet.
   async function getFile(path) {
     const res = await call('GET', `/files/${path}`);
     if (res.status === 404) return null;
     if (!res.ok) { const e = new Error(`Flood-Net’s server answered ${res.status}`); e.status = res.status; throw e; }
-    return { text: await res.text(), sha: res.headers.get('ETag') || '' };
+    return { text: await res.text(), sha: strong(res.headers.get('ETag')) };
   }
+  // The server's refusals, in plain words.
+  const SAY = { 'too large': 'the session is too big for the shared store (over 4 MB)', 'slow down': 'too many saves from this office in the last minute — it waits a minute',
+    storage: 'Flood-Net’s storage didn’t answer', 'not JSON': 'the session didn’t go across whole', path: 'the station’s file name wasn’t accepted' };
   // Create (no sha) or replace (the sha from the last read). A file changed in
   // between comes back as status 409, which the playbook re-reads and retries.
   async function putFile(path, text, msg, sha) {
     const res = await call('PUT', `/files/${path}`, { body: text, headers: Object.assign({ 'Content-Type': 'application/json' }, sha ? { 'If-Match': sha } : { 'If-None-Match': '*' }) });
-    if (res.status === 412) { const e = new Error('someone else saved it a moment ago'); e.status = 409; throw e; }
-    if (!res.ok) { const out = await res.json().catch(() => ({})); const e = new Error(out.error || `Flood-Net’s server answered ${res.status}`); e.status = res.status; throw e; }
+    if (res.status === 412) { const e = new Error('another computer saved it at the same moment'); e.status = 409; throw e; }
+    if (!res.ok) { const out = await res.json().catch(() => ({})); const e = new Error(SAY[out.error] || out.error || `Flood-Net’s server answered ${res.status}`); e.status = res.status; throw e; }
     const out = await res.json().catch(() => ({}));
-    return { sha: res.headers.get('ETag') || out.etag || '' };
+    // The answer's own words first: Cloudflare can weaken the header, never the body.
+    return { sha: strong(out.etag || res.headers.get('ETag')) };
   }
 
   // Asking for the passphrase, once per computer.
@@ -124,5 +135,5 @@
     dlg.showModal(); a.focus();
   }
 
-  S.shared = { BASE, has, check, getFile, putFile, dialog, changeDialog, forget, passphrase, tidy };
+  S.shared = { BASE, has, check, getFile, putFile, dialog, changeDialog, forget, passphrase, tidy, strong };
 })(typeof window !== 'undefined' ? window : globalThis);

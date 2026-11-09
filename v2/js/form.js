@@ -19,6 +19,8 @@
     auto: 'Filled in by a rule from your other answers (e.g. NA for an IP logger). Choose another answer to override it.'
   };
   const LICENCE_RE = /^\d{4,9}\/\d{1,3}$/;
+  const NA_TITLE = 'NA — this scope uses a table that isn’t for a water level site (pick the Water Level or Co-located table above if it is one).';
+  const naBadge = () => h('span', { class: 'src src-auto', title: NA_TITLE }, 'Auto');
 
   let app = null;                 // { defs, session, ctx, changed(opts), hint(key), focusMapOn(code, field) }
   function bind(a) { app = a; }
@@ -331,7 +333,7 @@
     ps.rows.forEach(row => {
       if (!R().test(ctx, row.showIf)) return;
       const na = R().psNA(ctx, row);
-      if (row.kind === 'sectionHeader') { card.appendChild(h('div', { class: 'ps-sub' }, row.label, na ? ' (not a water level site — NA)' : '')); return; }
+      if (row.kind === 'sectionHeader') { card.appendChild(h('div', { class: 'ps-sub' }, row.label, na ? ' — NA: this is not a water level table, so these are answered NA for you' : '')); return; }
       const el = h('div', { class: 'q ps-row', dataset: { ps: row.id } });
       if (row.kind === 'coordGroup') {
         el.appendChild(h('div', { class: 'q-label' }, row.label));
@@ -348,7 +350,10 @@
         if (needs) el.classList.add('todo');
         if (v || na) el.classList.add('filled');
         el.appendChild(h('div', { class: 'q-label' }, row.label));
-        if (na) el.appendChild(h('div', { class: 'q-hint' }, 'NA — not a water level site'));
+        // Not a water level table: NA is chosen for it, and shows as chosen.
+        if (na) el.appendChild(h('div', { class: 'opts opts-pills ps-na', role: 'radiogroup', 'aria-label': row.label },
+          h('label', { class: 'opt on from-auto', title: NA_TITLE }, h('input', { type: 'radio', checked: true, disabled: true }), h('span', null, 'NA')),
+          naBadge()));
         else {
           const opts = h('div', { class: 'opts opts-pills', role: 'radiogroup', 'aria-label': row.label });
           (row.options || []).forEach(o => {
@@ -370,10 +375,13 @@
       } else if (row.kind === 'text' || row.kind === 'date') {
         const v = row.kind === 'date' ? R().psText(ctx, row.id, null, U().dmy(app.session.forum.date)) : (na ? 'NA' : R().psText(ctx, row.id, row.source, ''));
         el.appendChild(h('div', { class: 'q-label' }, row.label));
-        const input = h('input', { type: 'text', value: v, disabled: na, 'data-fk': `ps::${row.id}`, placeholder: row.placeholder || '' });
-        input.addEventListener('input', ev => { setText(row.id, ev.target.value); app.changed({ light: true }); });
-        input.addEventListener('change', () => app.changed());
-        el.appendChild(h('div', { class: 'fld' }, h('div', { class: 'fld-line' }, input)));
+        const input = h('input', { type: 'text', value: v, readonly: na, class: na ? 'ps-na-text' : null, title: na ? NA_TITLE : null, 'data-fk': `ps::${row.id}`, placeholder: row.placeholder || '' });
+        if (!na) {
+          input.addEventListener('input', ev => { setText(row.id, ev.target.value); app.changed({ light: true }); });
+          input.addEventListener('change', () => app.changed());
+        }
+        el.appendChild(h('div', { class: 'fld' }, h('div', { class: 'fld-line' }, input, na ? naBadge() : null)));
+        if (row.hint) el.appendChild(h('div', { class: 'q-hint ps-hint' }, row.hint));
       }
       if (!na) el.appendChild(commentEl(row));
       card.appendChild(el);

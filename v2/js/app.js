@@ -71,7 +71,14 @@
   }
 
   /* ---------------- session plumbing ---------------- */
-  const saveSoon = U.debounce(() => { if (A.session) S.store.save(A.session); renderSavedChip(); }, 400);
+  // A.localOk: false when this browser refused the last save (its storage full or blocked).
+  const saveSoon = U.debounce(() => { if (A.session) keepLocal(); renderSavedChip(); }, 400);
+  function keepLocal() {
+    const was = A.localOk;
+    A.localOk = S.store.save(A.session);
+    if (!A.localOk && was !== false) toast('This browser wouldn’t save the session (its storage is full or blocked) — use Download session to keep a copy.');
+    return A.localOk;
+  }
   const previewSoon = U.debounce(renderPreview, 350);
   function rebuild() { A.ctx = R.context(A.defs, A.session); }
 
@@ -153,7 +160,7 @@
   function renderSavedChip() {
     const s = A.session; if (!s) return;
     const pb = s.playbook && s.playbook.savedAt;
-    $('#savedChip').textContent = `Saved in this browser ${U.fmtClock(s.updatedAt)}${pb ? ' · shared with the forum ' + U.fmtClock(pb) : ''}`;
+    $('#savedChip').textContent = `${A.localOk === false ? '⚠ Not saved in this browser (its storage is full or blocked)' : 'Saved in this browser ' + U.fmtClock(s.updatedAt)}${pb ? ' · shared with the forum ' + U.fmtClock(pb) : ''}`;
   }
 
   /* ---------------- forum bar ---------------- */
@@ -492,12 +499,7 @@
     if (st.commsGuess) add('Comms now', `${({ errts: 'ERRTS / ALERT VHF', cellular: 'IP logger – cellular (probably)', satellite: 'IP logger – satellite', unknown: 'not known' })[st.commsGuess]} — ${st.commsWhy}`, 'Flood-Net’s best guess at what is on site now; the Current Comms question starts from it');
     if (st.repeater) add('Repeater radio', `RX ${fn.freqText(st.repeater.rx)} · TX ${fn.freqText(st.repeater.tx)}${st.repeater.passRanges ? ' · passes ' + st.repeater.passRanges : ''}`);
     else if (st.txFrequency) add('Frequency', `${fn.freqText(st.txFrequency.mhz)} — inferred from ${st.txFrequency.from.join(', ')}`, 'Flood-Net records frequencies on repeaters; a field station transmits on what the repeaters passing its ALERT IDs listen on');
-    const rp = st.radioPath;
-    if (rp && rp.status === 'ok' && rp.best && rp.best.hops.length) {
-      const stale = rp.best.hops.some(x => x.stale);
-      add('Radio path', `${fn.pathText(rp, st.name).replace(/^[^→]*→ /, '→ ')}${stale ? ' · saved figures stale' : ''}`,
-        'Flood-Net’s best route to a base station, with the fade margin it saved for each hop. Stale figures were worked out with an older model or before a station changed, so they are a rough guide only. The Fade Margin question has the detail.');
-    }
+    // (The radio path to base is on the Fade Margin question, not here.)
     if (st.acma) {
       const own = st.acma.recorded.concat(st.acma.register).slice(0, 3);
       add('ACMA licence', own.length ? own.map(a => `${a.licence}${a.holder ? ' — ' + a.holder : ''}${a.expired ? ' (expired)' : ''}`).join('; ')
@@ -550,7 +552,7 @@
     if (inc.bridges == null) inc.bridges = true;
     const tick = (key, label, title) => {
       const i = h('input', { type: 'checkbox', checked: inc[key] });
-      i.addEventListener('change', ev => { inc[key] = ev.target.checked; changed({ light: true }); });
+      i.addEventListener('change', ev => { inc[key] = ev.target.checked; if (key === 'empty') S.store.rememberEmpty(ev.target.checked); changed({ light: true }); });
       return h('label', { class: 'inline-check', title: title || null }, i, ' ', label);
     };
     const oc = h('select', { id: 'outcome' }, h('option', { value: '' }, '— not decided —'),
@@ -562,7 +564,7 @@
       h('label', { class: 'fld' }, h('span', { class: 'fld-label' }, 'Forum outcome'), oc),
       h('label', { class: 'fld fld-grow' }, h('span', { class: 'fld-label' }, 'Outcome note'), ocn)));
     root.appendChild(h('div', { class: 'ticks' },
-      tick('header', 'Title, date and attendees', 'The station’s name and number are on every table’s heading either way'), tick('empty', 'Rows with nothing filled in'),
+      tick('header', 'Title, date and attendees', 'The station’s name and number are on every table’s heading either way'), tick('empty', 'Rows with nothing filled in', 'Unticked, the questions nobody answered are left out of Word. This browser remembers your choice for new sessions.'),
       tick('followUps', 'Follow-up actions'), tick('map', 'Map picture'), tick('marks', 'State survey marks table', 'Queensland’s survey marks near the station (S1–S5 on the map)'),
       tick('bridges', 'Bridges table', 'The bridges on the map (BR1, BR2…) and who manages each, with who to contact'),
       tick('bureauBM', 'Bureau benchmarks table', 'The station’s own benchmarks from HDB, once fetched from Flood-Net on the Local TBM question'), tick('ps', 'Property Services table')));
@@ -767,7 +769,7 @@
     $('#downloadBtn').addEventListener('click', downloadSession);
     $('#importInput').addEventListener('change', ev => { if (ev.target.files[0]) importSession(ev.target.files[0]); ev.target.value = ''; });
     $('#sessionsClose').addEventListener('click', () => $('#sessionsDlg').close());
-    G.addEventListener('beforeunload', () => { saveSoon.flush(); if (A.session) S.store.save(A.session); });
+    G.addEventListener('beforeunload', () => { saveSoon.flush(); if (A.session) keepLocal(); });
     // Leaving the tab (or closing it): keep it here, and share it now rather than in a moment.
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { saveSoon.flush(); if (S.playbook) S.playbook.flush(A); } });
     if (S.mapView) S.mapView.mount($('#mapMount'), A);

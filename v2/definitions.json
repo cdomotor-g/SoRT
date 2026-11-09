@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 11,
+  "version": 12,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-11-05",
@@ -538,7 +538,7 @@
     "accessibility": {
       "label": "Accessibility",
       "section": "works",
-      "hint": "(Delete irrelevant options)",
+      "hint": "(Tick only where relevant)",
       "icon": "🚚",
       "type": "multi",
       "options": [
@@ -596,7 +596,7 @@
     "remediation": {
       "label": "Remediation / Additional Works",
       "section": "works",
-      "hint": "(Delete irrelevant options)",
+      "hint": "(Tick only where relevant)",
       "icon": "👷",
       "type": "multi",
       "options": [
@@ -2004,7 +2004,7 @@
       "questions": [
         {
           "q": "stationType",
-          "hint": "(Delete irrelevant options)",
+          "hint": "(Tick only where relevant)",
           "icon": "🗼",
           "options": [
             {
@@ -2246,7 +2246,7 @@
       {
         "id": "turnSoil",
         "kind": "question",
-        "label": "Does the work require the turning of soil?",
+        "label": "Does the work require the turning of new/undisturbed soil?",
         "required": true,
         "options": [
           {
@@ -2336,7 +2336,8 @@
         "id": "date",
         "kind": "date",
         "label": "Date",
-        "auto": "forumDate"
+        "auto": "forumDate",
+        "hint": "Should not normally need changing"
       },
       {
         "id": "psSection",

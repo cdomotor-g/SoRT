@@ -71,12 +71,16 @@ function fakeStore() {
     const m = path.match(/^files\/(index\.json|stations\/[a-z0-9][a-z0-9-]*\.json)$/);
     if (!m) return reply(route, 400, { error: 'path' });
     const cur = files.get(m[1]);
-    if (req.method() === 'GET') return cur ? reply(route, 200, cur.text, { ETag: cur.etag }) : reply(route, 404, { error: 'not found' });
+    // Like the real thing behind Cloudflare: the ETag header comes back weak
+    // (W/"…") on a compressed answer, and a save that quotes a weak tag is
+    // refused — the tag under the W/ (quoted or bare) is the one to send.
+    const given = String(H['if-match'] || '').replace(/^"(.*)"$/, '$1');
+    if (req.method() === 'GET') return cur ? reply(route, 200, cur.text, { ETag: `W/${cur.etag}` }) : reply(route, 404, { error: 'not found' });
     if (req.method() === 'PUT') {
-      if (cur ? H['if-match'] !== cur.etag : H['if-none-match'] !== '*') return reply(route, 412, { error: 'changed' });
+      if (cur ? (H['if-match'] == null || given !== cur.etag.replace(/"/g, '')) : H['if-none-match'] !== '*') return reply(route, 412, { error: 'changed' });
       const etag = `"e${++n}"`; puts++;
       files.set(m[1], { text: req.postData(), etag });
-      return reply(route, 200, { etag }, { ETag: etag });
+      return reply(route, 200, { etag }, { ETag: `W/${etag}` });
     }
     return reply(route, 405, { error: 'method' });
   };

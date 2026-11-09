@@ -79,7 +79,7 @@
       {
         "id": "turnSoil",
         "kind": "question",
-        "label": "Does the work require the turning of soil?",
+        "label": "Does the work require the turning of new/undisturbed soil?",
         "required": true,
         "options": [
           "Yes",
@@ -304,7 +304,7 @@
     {
       "id": "accessibility",
       "item": "Accessibility",
-      "instruction": "(Delete irrelevant options)",
+      "instruction": "(Tick only where relevant)",
       "type": "multi",
       "icon": "🚚",
       "options": [
@@ -335,7 +335,7 @@
     {
       "id": "remediation",
       "item": "Remediation / Additional Works",
-      "instruction": "(Delete irrelevant options)",
+      "instruction": "(Tick only where relevant)",
       "type": "multi",
       "icon": "👷",
       "options": [
@@ -1046,7 +1046,7 @@
         {
           "id": "stationType",
           "item": "Station Type",
-          "instruction": "(Delete irrelevant options)",
+          "instruction": "(Tick only where relevant)",
           "type": "single",
           "icon": "🗼",
           "options": [

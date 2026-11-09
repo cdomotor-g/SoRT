@@ -28,7 +28,14 @@
   const P = 'sortv2.';
   const MAX_KEPT = 80;
 
-  const DEFAULT_INCLUDE = { header: true, station: true, empty: true, followUps: true, ps: true, map: true, marks: true, bridges: true, bureauBM: true };
+  const DEFAULT_INCLUDE = { header: true, station: true, empty: false, followUps: true, ps: true, map: true, marks: true, bridges: true, bureauBM: true };
+  // "Rows with nothing filled in" is this browser's choice, not the session's:
+  // off until someone here ticks it (sortv2.pref.empty), then as they left it
+  // for every session opened here.
+  const LS_EMPTY = P + 'pref.empty';
+  function includeEmpty() { return U().LS.get(LS_EMPTY) === '1'; }
+  function rememberEmpty(on) { U().LS.set(LS_EMPTY, on ? '1' : '0'); }
+  const startInclude = () => Object.assign({}, DEFAULT_INCLUDE, { empty: includeEmpty() });
 
   function forumDay() {
     const f = U().LS.json(P + 'forum', null);
@@ -53,7 +60,7 @@
       ps: { answers: {}, dirty: {}, comments: {}, general: '' },
       map: { features: [], hiddenMarks: [], marks: [], bridges: [] },
       followUpState: {},
-      include: Object.assign({}, DEFAULT_INCLUDE),
+      include: startInclude(),
       playbook: null
     };
   }
@@ -64,7 +71,7 @@
     s.ps = Object.assign({ answers: {}, dirty: {}, comments: {}, general: '' }, s.ps || {});
     s.map = Object.assign({ features: [], hiddenMarks: [], marks: [], bridges: [] }, s.map || {});
     s.followUpState = s.followUpState || {};
-    s.include = Object.assign({}, DEFAULT_INCLUDE, s.include || {});
+    s.include = Object.assign({}, DEFAULT_INCLUDE, s.include || {}, { empty: includeEmpty() });
     s.forum = Object.assign({ date: U().todayIso(), attendees: [], outOfSession: false }, s.forum || {});
     return s;
   }
@@ -81,7 +88,18 @@
   // keepTime: a copy brought in as it was (from the playbook) keeps its own time.
   function save(s, keepTime) {
     if (!keepTime || !s.updatedAt) s.updatedAt = Date.now();
-    const ok = U().LS.set(P + 's.' + s.id, JSON.stringify(s));
+    const key = P + 's.' + s.id, text = JSON.stringify(s);
+    let ok = U().LS.set(key, text);
+    // The browser's storage is full (it is shared with every cdomotor-g.github.io
+    // page): make room by forgetting the oldest sessions the forum already holds
+    // unchanged, then try again. Never one that exists only here.
+    if (!ok) {
+      const spare = index().filter(x => x.id !== s.id && x.playbookAt && (x.updatedAt || 0) <= x.playbookAt);
+      for (let k = spare.length - 1; k >= 0 && !ok; k--) {
+        U().LS.del(P + 's.' + spare[k].id); writeIndex(index().filter(x => x.id !== spare[k].id));
+        ok = U().LS.set(key, text);
+      }
+    }
     const list = index().filter(x => x.id !== s.id);
     list.unshift(summary(s));
     // Keep the newest MAX_KEPT; past that, forget the oldest that the playbook
@@ -114,5 +132,5 @@
     if (U().LS.get(P + 'current') === id) U().LS.del(P + 'current');
   }
 
-  S.store = { newSession, upgrade, save, update, load, current, remove, index, forumDay, rememberForum, DEFAULT_INCLUDE, PREFIX: P };
+  S.store = { newSession, upgrade, save, update, load, current, remove, index, forumDay, rememberForum, rememberEmpty, includeEmpty, DEFAULT_INCLUDE, PREFIX: P };
 })(typeof window !== 'undefined' ? window : globalThis);
