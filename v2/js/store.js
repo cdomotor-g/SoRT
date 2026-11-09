@@ -85,19 +85,12 @@
       playbookAt: (s.playbook && s.playbook.savedAt) || null };
   }
 
-  // A session with no station and nothing filled in is not worth keeping:
-  // it is what "New session" or opening the page leaves behind before anyone
-  // has picked a station. It is not saved (and an old saved one is dropped).
-  const filled = v => v != null && v !== '' && !(Array.isArray(v) && !v.length) && !(typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
+  // A session with no station is not kept: it is what "New session" or opening
+  // the page leaves behind before a station is picked (one shared with the
+  // forum is always kept). It is not saved, and an old saved one is dropped.
   function blank(s) {
-    if (!s || (s.station && (s.station.name || s.station.number || s.station.id))) return false;
-    if (s.outcome || String(s.outcomeNote || '').trim() || (s.playbook && s.playbook.savedAt)) return false;
-    if (Object.values(s.answers || {}).some(a => a && (filled(a.value) || Object.values(a.fields || {}).some(v => String(v || '').trim())))) return false;
-    const ps = s.ps || {};
-    if (Object.values(ps.answers || {}).some(v => String(v || '').trim()) || Object.values(ps.comments || {}).some(v => String(v || '').trim()) || String(ps.general || '').trim()) return false;
-    const m = s.map || {};
-    if ((m.features || []).length || (m.marks || []).length || (m.bridges || []).length) return false;
-    return true;
+    if (!s || (s.playbook && s.playbook.savedAt)) return false;
+    return !(s.station && (s.station.name || s.station.number || s.station.id));
   }
   // Forget blank sessions an earlier version saved.
   function pruneBlank() {
