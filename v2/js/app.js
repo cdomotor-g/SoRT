@@ -226,8 +226,10 @@
     const date = h('input', { type: 'date', id: 'forumDate', value: f.date });
     date.addEventListener('change', ev => { f.date = ev.target.value; changed(); });
     const chips = h('div', { class: 'chips', id: 'attendeeChips' });
+    const clear = h('button', { type: 'button', class: 'chips-clear', title: 'Remove every attendee from the list', onclick: () => { const was = f.attendees.slice(); f.attendees = []; renderForum(); changed({ light: true }); toast('Attendees cleared.', { label: 'Undo', run: () => { f.attendees = was; renderForum(); changed({ light: true }); } }); } }, 'Clear all');
     const drawChips = () => {
       chips.innerHTML = '';
+      clear.hidden = !f.attendees.length;
       f.attendees.forEach((a, i) => chips.appendChild(h('span', { class: 'chip' }, a,
         h('button', { type: 'button', 'aria-label': `Remove ${a}`, onclick: () => { f.attendees.splice(i, 1); drawChips(); changed({ light: true }); } }, '×'))));
     };
@@ -246,7 +248,7 @@
     oos.addEventListener('change', ev => { f.outOfSession = ev.target.checked; changed({ light: true }); });
     root.appendChild(h('div', { class: 'forum-grid' },
       h('label', { class: 'fld' }, h('span', { class: 'fld-label' }, 'SoRT Forum date'), date),
-      h('div', { class: 'fld fld-grow' }, h('label', { class: 'fld-label', for: 'attendeeInput' }, 'Attendees'), h('div', { class: 'chips-box' }, chips, add), reuse),
+      h('div', { class: 'fld fld-grow' }, h('label', { class: 'fld-label', for: 'attendeeInput' }, 'Attendees'), h('div', { class: 'chips-box' }, chips, add, clear), reuse),
       h('label', { class: 'inline-check', title: 'Adds “(out of session – scope builder only)” after the attendees, as the reports have it' }, oos, ' Out of session')));
   }
 
