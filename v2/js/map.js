@@ -55,7 +55,14 @@
     // other sites, but not a published interface (Flood-Net's docs/road-owners.md).
     roadLookup: 'https://r8s97t2t19.execute-api.ap-southeast-2.amazonaws.com/prod/lookuproad',
     nearby: { radiusKm: 3, max: 30 },
-    dynamicMinScale: 20000,                           // contours and road reserve stop at ~1:20,000
+    dynamicMinScale: 20000,                           // contours stop at ~1:20,000
+    // The road reserve is drawn out to ~1:100,000, so a map zoomed out to show a
+    // relocation kilometres away still shows it (the State's parcels go to 1:1,000,000).
+    roadMinScale: 100000,
+    // Close-ups: once the relocation site is this far from the current location,
+    // the map has to zoom out past local detail to show both, so each gets a
+    // close-up of its own beside the map and in Word.
+    closeups: { minM: 500, zoom: 18 },
     siteZoom: 17,
     qld: { xmin: 137.6, ymin: -29.4, xmax: 154.0, ymax: -9.0 },   // the map's home: all of Queensland, Torres Strait included
     order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, pins: 10 },
@@ -181,7 +188,7 @@
     M.els.measureBtn = h('button', { type: 'button', class: 'btn-mini', 'aria-pressed': 'false', title: 'Measure a distance on the map', onclick: () => setMeasure(!M.measure) }, '📏 Measure');
     const tools = h('div', { class: 'map-tools' },
       contourSel, tog('road', 'Road reserve', 'The cadastre’s road parcels, as on QLD Globe'), tog('rail', 'Rail'),
-      tog('marks', 'State survey marks', 'Queensland’s permanent survey marks and benchmarks (QSpatial) within 2 km, nearest 5 — not the Bureau’s own station benchmarks, which are on the Local TBM question'),
+      M.els.marksTog = tog('marks', 'State survey marks', 'Queensland’s permanent survey marks and benchmarks (QSpatial) within 2 km, nearest 5, for tying a water level station to AHD — not the Bureau’s own station benchmarks, which are on the Local TBM question. Water level tables only.'),
       tog('bridges', 'Bridges', 'Road bridges within 1 km, and who manages them'),
       tog('nearby', 'Flood-Net stations', 'Other Flood-Net stations within 3 km — shown for the forum, left out of the Word picture'),
       tog('ghost', 'Flood-Net position', 'Tick to see where Flood-Net has the station, once its pin has been moved away from it — a working aid on this map only, never in the Word picture'),
@@ -192,6 +199,7 @@
     M.els.view = h('div', { class: 'map-view', id: 'mapView', role: 'region', 'aria-label': 'Map' });
     M.els.status = h('div', { class: 'map-status' }, 'Loading the map…');
     M.els.legend = h('div', { class: 'map-legend', title: 'The key, as it is under the map in the Word picture' });
+    M.els.closeups = h('div', { class: 'map-closeups', hidden: true, 'aria-label': 'Close-ups of the current location and the relocation site' });
     M.els.edges = h('div', { class: 'map-edges', 'aria-hidden': 'true' });
     M.els.progress = h('div', { class: 'map-progress', hidden: true }, h('div'));
     M.els.placeHint = h('div', { class: 'map-place', hidden: true });
@@ -208,7 +216,7 @@
       h('div', { class: 'map-grid' },
         h('div', { class: 'map-main' }, tools,
           M.els.frame = h('div', { class: 'map-frame' }, M.els.view, M.els.edges, M.els.placeHint, M.els.drawActs, M.els.lockHint, M.els.status, M.els.progress),
-          M.els.legend, M.els.banners),
+          M.els.legend, M.els.closeups, M.els.banners),
         M.els.side),
       h('details', { class: 'map-details' }, h('summary', null, 'Map details (for troubleshooting)'),
         h('button', { type: 'button', class: 'btn-mini', onclick: () => { navigator.clipboard.writeText(M.els.diag.textContent).then(() => M.app.toast('Map details copied.')); } }, 'Copy map details'),
@@ -403,7 +411,7 @@
       if (!road) { diag('road', 'withheld', 'road parcels could not be resolved'); banner('Road reserve hidden: the cadastre’s road parcels couldn’t be resolved here.', 'warn'); return; }
       const url = `${CFG.cadastre}/${road.sublayer}`, o = CFG.roadOutline;
       const fill = (color, outline) => ({ type: 'simple', symbol: { type: 'simple-fill', color, outline: outline || null } });
-      const pass = (renderer, extra) => new E.FeatureLayer(Object.assign({ url, definitionExpression: road.where, minScale: CFG.dynamicMinScale, maxScale: 0, renderer }, extra || {}));
+      const pass = (renderer, extra) => new E.FeatureLayer(Object.assign({ url, definitionExpression: road.where, minScale: CFG.roadMinScale, maxScale: 0, renderer }, extra || {}));
       // Three passes in a group outline the reserve as ONE shape (v1's A8): no
       // seams across the road at every intersection.
       const sandy = pass(fill(CFG.roadFill, null));
@@ -444,6 +452,11 @@
   }
 
   /* ---------------- things near the station: survey marks, bridges, stations ---------------- */
+  // State survey marks tie a water level station's gauge to AHD: a rainfall or
+  // repeater table has no use for them, so it neither asks for them, shows
+  // them, nor tables them in Word.
+  const marksWanted = () => !!(M.app && M.app.ctx && M.app.ctx.waterLevel);
+  const marksOn = () => M.on.marks && marksWanted();
   const key = a => a ? `${a.lat.toFixed(4)},${a.lon.toFixed(4)}` : '';
   function boxM(a, m) {
     const dLat = m / 111320, dLon = m / (111320 * Math.max(0.2, Math.cos(a.lat * Math.PI / 180)));
@@ -736,8 +749,10 @@
     if (!force && M.fetchedAt && near(M.fetchedAt, a) < 100) return;
     M.fetchedAt = { lat: a.lat, lon: a.lon };
     M.looking = true; renderSide();
-    const [marks, bridges, nearby] = await Promise.all([fetchMarks(a), fetchBridges(a), fetchNearby(a)]);
+    const wantMarks = marksWanted();
+    const [marks, bridges, nearby] = await Promise.all([wantMarks ? fetchMarks(a) : Promise.resolve([]), fetchBridges(a), fetchNearby(a)]);
     M.looking = false;
+    M.marksAsked = wantMarks;
     if (marks) M.marks = marks;
     if (bridges) M.bridges = bridges;
     M.nearby = nearby;
@@ -759,7 +774,7 @@
   // Keep what the Word copy and the playbook need in the session.
   function storeNear() {
     const s = M.app.session;
-    s.map.marks = M.on.marks ? M.marks.map(m => ({ id: m.id, ref: m.ref, name: m.name, lat: m.lat, lon: m.lon, ahd: m.ahd, condition: m.condition, lastVisit: m.lastVisit, report: m.report, away: m.away })) : [];
+    s.map.marks = marksOn() ? M.marks.map(m => ({ id: m.id, ref: m.ref, name: m.name, lat: m.lat, lon: m.lon, ahd: m.ahd, condition: m.condition, lastVisit: m.lastVisit, report: m.report, away: m.away })) : [];
     // Only the bridges on the map (BR1…), as the picture shows them.
     s.map.bridges = M.shown.map(b => { const o = ownerOf(b), c = contactOf(b); return { ref: b.ref, kind: b.kind, title: bridgeTitle(b), what: bridgeWhat(b),
       who: o.who, why: o.why, contact: c ? { name: c.name, phone: c.phone, email: c.email } : null, lat: b.lat, lon: b.lon, away: b.away }; });
@@ -804,7 +819,7 @@
     if (!M.ready) return;
     changedPicture();
     const L = M.gl.marks; L.removeAll();
-    if (!M.on.marks) return;
+    if (!marksOn()) return;
     const hidden = new Set(M.app.session.map.hiddenMarks || []);
     M.marks.forEach(m => {
       if (hidden.has(m.id)) return;
@@ -1123,7 +1138,8 @@
         el.appendChild(row);
       });
     }
-    // Survey marks.
+    // Survey marks (water level tables only).
+    if (marksWanted()) {
     el.appendChild(h('h4', null, 'State survey marks ', h('span', { class: 'hint', title: 'Queensland’s survey control (QSpatial). The station’s own Bureau benchmarks are on the Local TBM question.' }, `QSpatial, within ${U().fmtDist(CFG.marks.radiusM)}, nearest ${CFG.marks.max}`)));
     if (!M.on.marks) el.appendChild(h('p', { class: 'hint' }, 'Switched off.'));
     else if (!M.anchor) el.appendChild(h('p', { class: 'hint' }, 'Shown once the station has a location.'));
@@ -1144,6 +1160,7 @@
           m.ahd != null ? `benchmark ${m.ahd} m AHD` : 'no AHD height', h('br'),
           h('span', { class: 'hint' }, [m.condition, m.lastVisit && `last visited ${m.lastVisit}`, m.away].filter(Boolean).join(' · ')))));
     });
+    }
     // Bridges: the ones on the map, and who manages each.
     el.appendChild(h('h4', { title: 'Road bridges on the map (from those within 1 km), numbered BR1… by distance, and who manages each: Transport and Main Roads for a bridge on its register of State-controlled bridges, otherwise whoever manages the road it carries. A bridge over a creek often sits outside the road reserve — the creek’s bed is a parcel of its own, so the reserve stops at each bank — but it is still the road’s.' },
       'Bridges ', h('span', { class: 'hint' }, 'on the map — who manages them')));
@@ -1180,7 +1197,7 @@
     const line = fs.find(f => f.kind === 'line');
     if (line) items.push({ kind: 'line', colour: [255, 170, 0], label: `Access track (${line.lengthM} m)` });
     const hidden = new Set(M.app.session.map.hiddenMarks || []);
-    const marks = M.on.marks ? M.marks.filter(m => !hidden.has(m.id)) : [];
+    const marks = marksOn() ? M.marks.filter(m => !hidden.has(m.id)) : [];
     if (marks.length) items.push({ kind: 'mark', colour: [27, 79, 114], label: `State survey marks ${marks.map(m => m.ref).join(', ')} — table below the map` });
     if (M.on.bridges && M.shown.length) items.push({ kind: 'bridge', colour: M.shown.some(b => b.kind === 'tmr') ? [128, 0, 32] : [110, 76, 60],
       label: `${M.shown.length > 1 ? 'Bridges' : 'Bridge'} ${M.shown.map(b => b.ref).join(', ')} — who manages ${M.shown.length > 1 ? 'them' : 'it'}: table below the map` });
@@ -1202,7 +1219,7 @@
   function renderStamp() { const t = stampText(); if (t !== lastStamp) { lastStamp = t; renderLegend(); } }
   // Survey marks outside the current view: an arrow at the edge, pointing at them.
   function offscreenMarks() {
-    if (!M.ready || !M.on.marks) return [];
+    if (!M.ready || !marksOn()) return [];
     const hidden = new Set(M.app.session.map.hiddenMarks || []);
     const W = M.view.width, H = M.view.height, out = [];
     M.marks.forEach(m => {
@@ -1274,8 +1291,119 @@
     } catch (_) { return null; }
   }
   function roundRect(c, x, y, w, hh, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + hh, r); c.arcTo(x + w, y + hh, x, y + hh, r); c.arcTo(x, y + hh, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
-  async function whenReady() {
-    const E = M.esri, v = M.view, budget = CFG.timeouts.layer;
+  /* ---------------- close-ups: a long relocation's two ends, up close ----------------
+     A relocation a kilometre or more away makes the map zoom out until neither
+     end shows any local detail. So, once the relocation site is CFG.closeups.minM
+     or more from the current location, each gets a small map of its own under
+     the main one — the same map (imagery, road reserve, contours, pins,
+     drawings), held centred on its pin as close in as the imagery allows. They
+     go into Word side by side under the map picture. +/− zoom them (or Ctrl +
+     scroll); they don't pan, so each stays on its pin. */
+  function closeTargets() {
+    if (!M.ready) return [];
+    const a = M.pins.find(p => p.anchor && p.shown && p.ok);
+    const r = M.pins.find(p => p.code === 'relocation' && !p.anchor && p.shown && p.ok);
+    if (!a || !r) return [];
+    const d = near(a, r);
+    return d >= CFG.closeups.minM ? [{ id: 'current', pin: a, d }, { id: 'relocation', pin: r, d }] : [];
+  }
+  M.close = [];
+  function dropCloseups() {
+    M.close.forEach(c => { try { c.view.destroy(); } catch (_) { /* gone already */ } });
+    M.close = [];
+    if (M.els.closeups) { M.els.closeups.innerHTML = ''; M.els.closeups.hidden = true; }
+  }
+  function syncCloseups() {
+    const el = M.els.closeups; if (!el) return;
+    const t = closeTargets();
+    if (!t.length) { if (M.close.length) { dropCloseups(); changedPicture(); } return; }
+    const E = M.esri;
+    if (!M.close.length) {
+      el.innerHTML = ''; el.hidden = false;
+      M.els.closeWhy = h('span', { class: 'hint' });
+      el.appendChild(h('div', { class: 'mc-head' }, h('b', null, 'Close-ups'), ' ', M.els.closeWhy));
+      const grid = h('div', { class: 'mc-grid' });
+      t.forEach(x => {
+        const box = h('div', { class: 'mc-view' }), title = h('div', { class: 'mc-title' });
+        const fr = h('div', { class: 'mc-frame' }, box, title);
+        // The wheel scrolls the page (Ctrl + wheel zooms), as on the main map.
+        fr.addEventListener('wheel', ev => { if (!(ev.ctrlKey || ev.metaKey)) ev.stopPropagation(); }, { capture: true, passive: true });
+        grid.appendChild(fr);
+        const v = new E.MapView({ container: box, map: M.map, center: [x.pin.lon, x.pin.lat], zoom: CFG.closeups.zoom, spatialReference: { wkid: 3857 },
+          constraints: { rotationEnabled: false, snapToZoom: false, minZoom: 12 }, ui: { components: ['zoom'] }, popupEnabled: false });
+        const c = { id: x.id, view: v, title, at: '' };
+        // No panning: it stays on its pin. A zoom (button or Ctrl + wheel) keeps the pin in the middle.
+        v.on('drag', ev => ev.stopPropagation());
+        v.on('double-click', ev => ev.stopPropagation());
+        v.on('mouse-wheel', ev => { ev.stopPropagation(); v.goTo({ center: c.center, zoom: v.zoom + (ev.deltaY < 0 ? 1 : -1) }, { animate: false }).catch(() => {}); });
+        E.reactiveUtils.watch(() => v.stationary, still => {
+          if (!still || !c.center) return;
+          const m = v.center; if (m && near({ lat: m.latitude, lon: m.longitude }, { lat: c.center[1], lon: c.center[0] }) > 2) v.goTo({ center: c.center }, { animate: false }).catch(() => {});
+          changedPicture();
+        });
+        M.close.push(c);
+      });
+      el.appendChild(grid);
+      changedPicture();
+    }
+    t.forEach((x, i) => {
+      const c = M.close[i]; if (!c) return;
+      c.label = `${x.pin.label} — close-up`;
+      c.title.textContent = c.label;
+      const k = key(x.pin);
+      if (c.at !== k) { c.at = k; c.center = [x.pin.lon, x.pin.lat]; c.view.goTo({ center: c.center }, { animate: false }).catch(() => {}); changedPicture(); }
+    });
+    M.els.closeWhy.textContent = `The relocation site is ${U().fmtDist(t[0].d)} from the current location, so the map above can’t show either up close. Both go into Word under the map.`;
+  }
+  // A close-up's picture: the view as it is, the working aids left out, with its
+  // name across the top, a scale bar and the copyright line.
+  async function closeShot(c) {
+    const v = c.view, aids = [M.gl.ghost, M.gl.nearby];
+    await whenReady(v);
+    const shot = await v.takeScreenshot({ layers: M.map.layers.toArray().filter(l => !aids.includes(l)) });
+    const img = new Image(); img.src = shot.dataUrl;
+    await (img.decode ? img.decode().catch(() => new Promise(r => { img.onload = r; })) : new Promise(r => { img.onload = r; }));
+    const W = img.naturalWidth, H = img.naturalHeight;
+    if (!W || !H) throw new Error('the close-up came back empty');
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const x = cv.getContext('2d');
+    x.drawImage(img, 0, 0, W, H);
+    const st = rasterStats(x, W, H);
+    if (st && (st.coverage < 0.5 || st.distinct <= 4)) throw new Error('the close-up hadn’t finished drawing');
+    x.globalCompositeOperation = 'destination-over'; x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.globalCompositeOperation = 'source-over';
+    const sc = W / v.width, pad = Math.round(6 * sc), fs = Math.round(12 * sc), fs2 = Math.round(9 * sc);
+    const font = (bold, size) => `${bold ? 'bold ' : ''}${size}px Segoe UI, Arial, sans-serif`;
+    x.textBaseline = 'top';
+    // Its name, top left.
+    x.font = font(true, fs);
+    const tw = x.measureText(c.label).width;
+    x.fillStyle = 'rgba(255,255,255,0.88)'; roundRect(x, pad, pad, tw + pad * 2, fs + pad * 1.4, 4 * sc); x.fill();
+    x.fillStyle = '#152531'; x.fillText(c.label, pad * 2, pad * 1.7);
+    // The copyright line along the bottom.
+    const band = fs2 + pad;
+    x.fillStyle = 'rgba(0,0,0,0.55)'; x.fillRect(0, H - band, W, band);
+    x.font = font(false, fs2);
+    const credit = '© State of Queensland — CC BY 4.0';
+    x.fillStyle = '#fff'; x.fillText(credit, pad, H - band + (band - fs2) / 2);
+    // A scale bar, bottom right: the longest round length that fits ~110 px.
+    const lat = v.center ? v.center.latitude : 0;
+    const mpp = v.resolution * Math.cos(lat * Math.PI / 180);   // ground metres per CSS pixel
+    if (mpp > 0) {
+      const len = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].filter(n => n / mpp <= 110).pop() || 1;
+      const bw = (len / mpp) * sc, bx = W - pad * 2 - bw, by = H - band - pad * 2.2;
+      const lbl = len >= 1000 ? `${len / 1000} km` : `${len} m`;
+      x.font = font(true, fs2);
+      const lw = x.measureText(lbl).width;
+      x.fillStyle = 'rgba(255,255,255,0.88)'; roundRect(x, bx - pad, by - fs2 - pad * 1.2, Math.max(bw, lw) + pad * 2, fs2 + pad * 2.6, 3 * sc); x.fill();
+      x.strokeStyle = '#152531'; x.lineWidth = 2 * sc;
+      x.beginPath(); x.moveTo(bx, by - 4 * sc); x.lineTo(bx, by); x.lineTo(bx + bw, by); x.lineTo(bx + bw, by - 4 * sc); x.stroke();
+      x.fillStyle = '#152531'; x.fillText(lbl, bx, by - fs2 - pad * 0.6);
+    }
+    return { label: c.label, dataUrl: cv.toDataURL('image/png') };
+  }
+
+  async function whenReady(view) {
+    const E = M.esri, v = view || M.view, budget = CFG.timeouts.layer;
     const settle = pred => Promise.race([E.reactiveUtils.whenOnce(pred), new Promise(r => setTimeout(r, budget))]).catch(() => {});
     await settle(() => !v.suspended && v.ready && v.width > 0 && v.height > 0);
     await new Promise(r => setTimeout(r, 60));
@@ -1383,7 +1511,14 @@
     }
     const ext = M.view.extent;
     const outside = shownPins().filter(p => ext && !ext.contains(G_(pt(p.lon, p.lat)).geometry)).length;
-    return { dataUrl: out.toDataURL('image/png'), outside, mapHeight: H, at: Date.now() };
+    // The close-ups of a long relocation, when there are any (beside the map, so drawn).
+    syncCloseups();
+    const closeups = [];
+    for (const cu of M.close) {
+      try { closeups.push(await closeShot(cu)); }
+      catch (e) { log(`Close-up “${cu.label}” left out of the picture: ${e.message}`); }
+    }
+    return { dataUrl: out.toDataURL('image/png'), outside, mapHeight: H, closeups, at: Date.now() };
   }
 
   /* ---------------- what app.js calls ---------------- */
@@ -1411,6 +1546,12 @@
     M.app = app;
     resolvePins();
     if (suggestDistances()) { M.app.changed(); return; }
+    if (M.els.marksTog) M.els.marksTog.hidden = !marksWanted();
+    // The table changed to one that uses survey marks (ask for them now) or to one that doesn't (drop them).
+    if (M.fetchedAt && !M.looking && marksWanted() !== !!M.marksAsked) {
+      if (marksWanted()) refreshNear(true);
+      else { M.marks = []; M.marksAsked = false; storeNear(); }
+    }
     renderCheck(); renderSide(); renderLegend();
     const k = key(M.anchor);
     if (k && k !== lastAnchor) { lastAnchor = k; refreshNearSoon(); }
@@ -1421,6 +1562,7 @@
     if (M.anchor && M.view.center && near(M.anchor, { lat: M.view.center.latitude, lon: M.view.center.longitude }) > 5000 && M.framedFor !== key(M.anchor)) { M.framedFor = key(M.anchor); frame(false); }
     drawPins(); drawMarks(); drawBridges(); drawFeatures(); renderEdges();
     refreshShown();
+    syncCloseups();
   }
   const refreshNearSoon = (() => { let t = null; return () => { clearTimeout(t); t = setTimeout(() => refreshNear(false), 600); }; })();
   // A (new) station: frame it, and fetch what is near it.
@@ -1434,7 +1576,7 @@
     const k = key(M.anchor);
     if (k && M.framedFor !== k) { M.framedFor = k; M.homeNext = false; frame(false); }
   }
-  function reset() { M.marks = []; M.bridges = []; M.shown = []; M.shownSig = ''; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); }
+  function reset() { M.marks = []; M.marksAsked = false; M.bridges = []; M.shown = []; M.shownSig = ''; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); dropCloseups(); }
   /* A small map of its own, in the corrosion guide (js/coast.js): the imagery and
      its place names, the shoreline the distances were measured to (surf beaches
      orange, other shore blue), and a dashed line from the site to each nearest
@@ -1484,13 +1626,13 @@
   function hint(k) {
     if (k === 'map.nearestBenchmark') {
       const b = M.marks.find(m => m.ahd != null);
-      if (!M.anchor) return null;
+      if (!M.anchor || !marksWanted()) return null;
       if (!b) return M.marks.length || M.fetchedAt ? `No State survey mark with an AHD height within ${U().fmtDist(CFG.marks.radiusM)} of the station.` : null;
       return `Nearest State survey mark with an AHD height: ${b.name} (${b.ref}), ${b.away}, ${b.ahd} m AHD${b.condition ? ', ' + b.condition.toLowerCase() : ''}${b.lastVisit ? ', last visited ' + b.lastVisit : ''}.`;
     }
     return null;
   }
 
-  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, miniMap, CFG, _M: M,
+  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, miniMap, marksWanted, CFG, _M: M,
     ready: () => M.ready && !M.failed, version: () => M.version };
 })(window);

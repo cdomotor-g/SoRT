@@ -432,3 +432,28 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
   body.layout-side .map-side { max-height: none; }
 }
 @media print { .top, .toast, #map-card, .out-acts { display: none; } }
+
+/* "N to confirm": the list under the progress bar */
+.top-progress { position: relative; }
+.confirm-panel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; width: min(520px, 92vw); max-height: 60vh; overflow: auto;
+  background: var(--card, #fff); color: inherit; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, .18); padding: 10px 12px; text-align: left; }
+.confirm-panel .cp-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.confirm-panel .cp-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.confirm-panel .cp-list li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.confirm-panel .cp-what { min-width: 0; }
+.confirm-panel .cp-what .src { margin-left: 6px; }
+.confirm-panel .cp-val { font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.confirm-panel .cp-acts { display: flex; gap: 6px; align-items: flex-start; flex: 0 0 auto; }
+.confirm-panel .cp-foot { border-top: 1px solid var(--line); padding-top: 8px; text-align: right; }
+.btn-keep { font-weight: 700; }
+.q.flash { outline: 3px solid #e07a10; outline-offset: 2px; }
+
+/* Close-ups of a long relocation's two ends, under the map */
+.map-closeups { display: grid; gap: 6px; }
+.map-closeups[hidden] { display: none; }
+.map-closeups .mc-head { font-size: 13px; }
+.map-closeups .mc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.map-closeups .mc-frame { position: relative; height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line-2); background: #d9dfe5; }
+.map-closeups .mc-view { position: absolute; inset: 0; }
+.map-closeups .mc-title { position: absolute; left: 6px; top: 6px; background: rgba(255, 255, 255, .88); color: #152531; font-weight: 700; font-size: 12px; padding: 2px 7px; border-radius: 4px; pointer-events: none; }
+@media (max-width: 560px) { .map-closeups .mc-grid { grid-template-columns: 1fr; } }

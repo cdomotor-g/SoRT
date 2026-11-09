@@ -84,7 +84,7 @@
     if (!src || src === 'user' || src === 'default') return null;
     const b = h('span', { class: `src src-${src}`, title: (SRC_TITLE[src] || '') + (from ? ` (From ${from}.)` : '') }, SRC_LABEL[src] || src);
     if (onConfirm && src !== 'auto') {
-      b.appendChild(h('button', { type: 'button', class: 'src-ok', title: 'Keep this answer', 'aria-label': 'Keep this answer', onclick: onConfirm }, '✓'));
+      b.appendChild(h('button', { type: 'button', class: 'src-ok', title: 'This answer is right — keep it (it turns green)', 'aria-label': 'Keep this answer', onclick: onConfirm }, '✓ Keep'));
     }
     return b;
   }

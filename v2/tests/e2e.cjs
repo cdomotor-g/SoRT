@@ -146,8 +146,17 @@ const scenarios = {
     await p.pick('540601');
     ok(/151\.525 MHz/.test(await p.innerText('.station-card')), 'frequency inferred from the listening repeaters');
     ok((await p.$$eval('#q-frequency .opt.on', e => e.map(x => x.textContent))).join() === '151.525 MHz', 'frequency filled in');
-    // The radio path: every saved figure is stale today, so it's shown, flagged, and not used as an answer.
-    ok(/Radio path\s*→ Toowoomba AL \([+−]?\d/.test(await p.innerText('.station-card')), 'radio path on the station card');
+    // The radio path: on the Fade Margin question only (off the station card since 9 Nov 2026).
+    // Every saved figure is stale today, so it's shown, flagged, and not used as an answer.
+    ok(!/Radio path/.test(await p.innerText('.station-card')), 'no radio path on the station card');
+    // A rainfall table: no State survey marks (they tie a water level gauge to AHD), and Property Services' water level rows are NA, shown as chosen.
+    ok(await p.evaluate(() => !SoRT.mapView._M.marks.length && !SoRT.app.session.map.marks.length) && !/State survey marks table/.test(await p.innerText('#outputControls')), 'a rainfall table asks for no survey marks, and offers no marks table');
+    ok((await p.innerText('[data-ps="orificeReplace"] .opt.on')).trim() === 'NA' && await p.$eval('[data-ps="orificeDirection"] input', e => e.value) === 'NA', 'Property Services: the water level rows are NA, chosen for you');
+    ok(/Should not normally need changing/.test(await p.innerText('[data-ps="date"]')), 'Property Services: the date says it should not normally need changing');
+    ok(!(await p.isChecked('#outputControls label:has-text("Rows with nothing filled in") input')), 'rows with nothing filled in: unticked by default');
+    await p.click('#outputControls label:has-text("Rows with nothing filled in") input');
+    ok(await p.evaluate(() => localStorage.getItem('sortv2.pref.empty') === '1' && SoRT.store.newSession(SoRT.app.defs).include.empty === true), 'ticked: this browser remembers it for new sessions');
+    await p.click('#outputControls label:has-text("Rows with nothing filled in") input');
     const fm = await p.innerText('#q-fadeMargin [data-hint="station.fadeMargin"]').catch(() => '');
     ok(/Fifteen Mile AL → Toowoomba AL \([+−]?[\d.]+ dB\) → /.test(fm), 'fade margin question shows the path to base, hop by hop');
     ok(/Stale/.test(fm) ? /not a pass or fail/.test(fm) : true, 'stale figures are flagged as a rough guide');
@@ -830,6 +839,20 @@ const scenarios = {
     const mid = await p.evaluate(() => { const c = b => b.left + b.width / 2; return [c(document.querySelector('#preview img[alt="Site map"]').getBoundingClientRect()), c(document.querySelector('#preview table').getBoundingClientRect())]; });
     ok(Math.abs(mid[0] - mid[1]) < 2, `the preview's map picture is centred like the tables (${mid.map(Math.round).join(' vs ')})`);
     ok(/State survey marks near Abergowrie Bridge AL \(532028\)/.test(html), 'State survey marks table copied, headed with the station');
+    ok(!/close-up/.test(html) && await p.evaluate(() => document.querySelector('.map-closeups').hidden), 'a relocation close by: no close-ups');
+    ok(await p.evaluate(() => SoRT.mapView._M.layers.road.layers.getItemAt(0).minScale) >= 100000, 'the road reserve is drawn out to 1:100,000, not only close in');
+    // A relocation over a kilometre away: a close-up of each end beside the map, and in Word.
+    const far = await p.evaluate(() => { const st = SoRT.app.session.station; return `${(st.lat - 0.01).toFixed(6)}, ${(st.lon + 0.002).toFixed(6)}`; });
+    await p.fill('.loc[data-pin="relocation.newLocation"] input', far); await p.press('.loc[data-pin="relocation.newLocation"] input', 'Enter');
+    ok(await p.waitForFunction(() => document.querySelectorAll('.map-closeups:not([hidden]) .mc-frame').length === 2, null, { timeout: 20000 }).then(() => true).catch(() => false), 'a relocation 1 km away: two close-ups under the map');
+    ok(/Current location — close-up/.test(await p.innerText('.map-closeups')) && /Relocation site — close-up/.test(await p.innerText('.map-closeups')) && /1\.\d km from the current location/.test(await p.innerText('.map-closeups')), 'each named, and why they are there');
+    await p.waitForTimeout(4000);
+    await p.click('.top .copy-btn');
+    await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 90000 });
+    const html2 = await p.clip();
+    ok(/alt="Current location — close-up"/.test(html2) && /alt="Relocation site — close-up"/.test(html2), 'both close-ups copied into Word under the map');
+    await p.fill('.loc[data-pin="relocation.newLocation"] input', moved); await p.press('.loc[data-pin="relocation.newLocation"] input', 'Enter');
+    ok(await p.waitForFunction(() => document.querySelector('.map-closeups').hidden, null, { timeout: 10000 }).then(() => true).catch(() => false), 'the relocation brought close again: the close-ups go');
     // Zoom lock: on by default; the wheel scrolls past the map instead of zooming it.
     await p.evaluate(() => { document.querySelector('#map-card').scrollTop = 0; scrollTo(0, 0); });
     await p.waitForTimeout(400);

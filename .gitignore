@@ -9,3 +9,6 @@ v2/playbook/stations/
 v2/playbook/index.json
 v2/playbook/export/
 *.docx
+
+# Claude Code helpers' own working copies
+.claude/worktrees/

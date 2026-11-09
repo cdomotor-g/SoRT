@@ -255,8 +255,16 @@
       // Centred, like the tables: align= for Word's paste, text-align for the preview.
       html += GAP + `<div align="center" style="text-align:center;"><img src="${picture.dataUrl}" alt="Site map" style="width:16cm;max-width:100%;height:auto;border:1px solid #999;"></div>`;
       text += '\n\n[Site map image included]\n';
+      // A long relocation's close-ups: side by side under the map, the same 16 cm across.
+      const cu = picture.closeups || [];
+      if (cu.length) {
+        html += `<table align="center" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px auto 0;"><tr>${cu.map(c =>
+          `<td style="padding:0 3px;border:none;vertical-align:top;"><img src="${c.dataUrl}" alt="${esc(c.label)}" style="width:${(16 / cu.length - 0.2).toFixed(1)}cm;height:auto;border:1px solid #999;"></td>`).join('')}</tr></table>`;
+        text += `[Close-up maps included: ${cu.map(c => c.label).join('; ')}]\n`;
+      }
     }
-    if (inc.map && inc.marks) {
+    // State survey marks: a water level table's only (they tie its gauge to AHD).
+    if (inc.map && inc.marks && ctx.waterLevel) {
       const mh = marksHtml(s);
       if (mh) { html += GAP + mh; text += '\n' + marksText(s); }
     }

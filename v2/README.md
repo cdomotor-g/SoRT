@@ -27,7 +27,9 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   site — shown under Fade Margin; it fills Fade Margin in only from fresh
   figures). Anything filled in for you is marked
   (Flood-Net / Map / Precedent / Earlier session / Auto) until you confirm or
-  change it.
+  change it; the top bar's *N to confirm* lists them — what each says and where
+  it came from — with *✓ Keep*, *Show* and *✓ Keep all*. The radio path is on
+  the Fade Margin question, not the station card (since 9 Nov 2026).
 - **Corrections to a station's particulars** (name, number, hub, council, owner —
   e.g. a name Radio Mobile's export cut short): *Edit details* on the station
   card. The Word tables use them and Flood-Net is not changed; the card lists what
@@ -47,18 +49,26 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   until 6 Nov 2026, when the bridges were B1… too).
 - **Side by side, each pane scrolls on its own**: the questions on the left,
   the map pane on the right, and neither starts the other at its end.
-- **The map is on the page**: v1's imagery, contours, road reserve and rail; the
+- **The map is on the page**: v1's imagery, contours, road reserve (drawn out to
+  ~1:100,000 since 9 Nov 2026, so a map zoomed out for a relocation still shows
+  it; contours stop at ~1:20,000) and rail; the
   station's locations as pins you can type, place or drag; a *Position checked*
   step against Flood-Net's often-rounded position; a vegetation clearance
-  circle, trees and an access track drawn for the scope; the nearest 5 survey
-  marks within 2 km (S1–S5, linked to their reports, tabled under the map in
-  Word); the bridges on the map (BR1, BR2…, nearest first, from those within
+  circle, trees and an access track drawn for the scope; on a water level table
+  (they tie its gauge to AHD — a rainfall or repeater table has none), the
+  nearest 5 survey marks within 2 km (S1–S5, linked to their reports, tabled
+  under the map in Word); the bridges on the map (BR1, BR2…, nearest first, from those within
   1 km; a bridge's span is drawn), each with who manages it — Transport and
   Main Roads for a bridge on its register, otherwise whoever manages the road
   it carries, from Queensland Roads and Tracks — and who to contact, from
   QLDTraffic's road lookup (Flood-Net's `docs/road-owners.md` sources, ported),
   tabled under the map in Word. The picture in Word is the map you are looking
   at, with its key below the map and the copyright line, covering none of it.
+  **Close-ups**: once the relocation site is 500 m or more from the current
+  location, the map can't show either end up close, so each gets a close-up of
+  its own under the map (the same map, held on its pin at zoom 18; + / − zoom
+  it), and both go into Word side by side under the map picture, each with its
+  name, a scale bar and the copyright line.
 - **Infrastructure options and corrosion (Water Level table)**: a *Corrosion
   category* — C3 and below (standard), C4 (stainless enclosure and orifice
   run), C5 and CX (all stainless) or Custom — sets the three stainless-steel
@@ -103,7 +113,11 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   small: four seconds after the last change (at least every half minute while
   changes keep coming), nothing is sent when a fingerprint says nothing stored
   has changed, the station's file is written straight over the copy last seen
-  (read again only when another computer saved in between), and the index only
+  (read again only when another computer saved in between; the version tag it
+  sends back is the file's own — Cloudflare, in front of Flood-Net, turns it
+  weak, `W/"…"`, when it compresses an answer, and the store refuses a weak one:
+  until 9 Nov 2026 that made every save after a read fail, so sessions stopped
+  being shared), and the index only
   when the station's line in it changed — one request instead of four. A failed
   save is tried again by itself, and sessions left unshared (made offline, or
   closed straight after a change) go once the server answers. Text that looks like a phone

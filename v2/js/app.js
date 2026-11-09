@@ -86,7 +86,7 @@
   // the caret stays put), just the things that read the answers.
   function changed(opts) {
     rebuild();
-    if (!(opts && opts.light)) { S.form.render($('#form')); S.form.renderPS($('#ps')); renderStation(); }
+    if (!(opts && opts.light)) { S.form.render($('#form')); S.form.renderPS($('#ps')); renderStation(); renderOutputControls(); }
     renderProgress(); renderFollowUps(); previewSoon(); saveSoon();
     if (S.playbook) { S.playbook.autosaveSoon(A); S.playbook.renderActs(A); }
     if (S.mapView) S.mapView.sync(A);
@@ -150,13 +150,68 @@
     txt.appendChild(document.createTextNode(`${p.filled} of ${p.total} answered`));
     if (p.toConfirm) {
       txt.appendChild(document.createTextNode(' · '));
-      txt.appendChild(h('button', { type: 'button', class: 'link', title: 'Answers filled in from Flood-Net, the map or a precedent that nobody has checked yet', onclick: () => {
-        const el = document.querySelector('.q.waiting'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1200); }
-      } }, `${p.toConfirm} to confirm`));
+      txt.appendChild(h('button', { type: 'button', class: 'link confirm-link', id: 'confirmLink', 'aria-haspopup': 'true', 'aria-expanded': String(!!confirmOpen),
+        title: 'Answers filled in for you — from Flood-Net, the map, a precedent or an earlier session — that nobody has checked yet. Click to see them.',
+        onclick: ev => { ev.stopPropagation(); toggleConfirm(); } }, `${p.toConfirm} to confirm`));
     }
+    if (confirmOpen) { if (p.toConfirm) drawConfirm(); else toggleConfirm(false); }
     const st = A.session.station;
     $('#stationChip').textContent = st && st.name ? `${st.name}${st.number ? ' · ' + st.number : ''}` : 'No station yet';
   }
+  /* "N to confirm": a list under the progress bar of each answer filled in for
+     you and not yet checked — what it says, where it came from — with Keep
+     (it's right) and Show (scroll to its card), and Keep all. An answer
+     changed on its card counts as checked too. */
+  let confirmOpen = false;
+  const SRC_WORDS = { floodnet: 'from Flood-Net', map: 'from the map', precedent: 'from a precedent station', earlier: 'from the earlier session' };
+  function waitingList() {
+    return R.visibleQuestions(A.ctx).filter(q => R.awaitingConfirm(A.ctx, q)).map(q => {
+      const e = R.eff(A.ctx, q.code);
+      const src = e.src && e.src !== 'user' && e.src !== 'auto' && !R.emptyVal(e.value) ? e.src : Object.values(e.fieldSrc || {}).find(x => R.PREFILL_SRCS.includes(x));
+      const bits = [];
+      if (e.src === src && !R.emptyVal(e.value)) bits.push([].concat(e.value).map(v => S.schema.optionLabel(q, v)).join(', '));
+      (q.fields || []).forEach(f => { if (R.fieldVisible(A.ctx, f) && e.fieldSrc[f.code] === src && String(e.fields[f.code] || '').trim()) bits.push(`${f.label}: ${R.fieldText(f, e.fields[f.code])}`); });
+      return { q, src, what: bits.join(' · '), from: (A.session.prefill[q.code] || {}).from || '' };
+    });
+  }
+  function showQuestion(code) {
+    const el = document.getElementById(`q-${code}`); if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 1600);
+  }
+  function drawConfirm() {
+    let box = $('#confirmPanel');
+    if (!box) {
+      box = h('div', { id: 'confirmPanel', class: 'confirm-panel', role: 'dialog', 'aria-label': 'Answers to confirm' });
+      box.addEventListener('click', ev => ev.stopPropagation());
+      $('.top-progress').appendChild(box);
+    }
+    box.innerHTML = '';
+    const list = waitingList();
+    box.appendChild(h('div', { class: 'cp-head' },
+      h('b', null, `${list.length} answer${list.length === 1 ? '' : 's'} filled in for you, not checked yet`),
+      h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close', onclick: () => toggleConfirm(false) }, '✕')));
+    box.appendChild(h('p', { class: 'hint' }, 'Each is orange on its card. Keep it if it’s right, or change it on its card — either way it turns green and leaves this list.'));
+    const ul = h('ul', { class: 'cp-list' });
+    list.forEach(x => ul.appendChild(h('li', null,
+      h('div', { class: 'cp-what' }, h('b', null, x.q.label), h('span', { class: `src src-${x.src}` }, SRC_WORDS[x.src] || x.src),
+        x.what ? h('div', { class: 'cp-val' }, x.what) : null, x.from ? h('div', { class: 'hint' }, `(${x.from})`) : null),
+      h('div', { class: 'cp-acts' },
+        h('button', { type: 'button', class: 'btn-mini btn-keep', title: 'This answer is right — keep it', onclick: () => { S.form.confirmQuestion(x.q); changed(); } }, '✓ Keep'),
+        h('button', { type: 'button', class: 'btn-mini', title: 'Scroll to its card', onclick: () => showQuestion(x.q.code) }, 'Show')))));
+    box.appendChild(ul);
+    if (list.length > 1) box.appendChild(h('div', { class: 'cp-foot' },
+      h('button', { type: 'button', class: 'btn btn-quiet', title: 'Keep every answer in this list as it is', onclick: () => { list.forEach(x => S.form.confirmQuestion(x.q)); changed(); toast(`${list.length} answers kept.`); } }, `✓ Keep all ${list.length}`)));
+  }
+  function toggleConfirm(on) {
+    confirmOpen = on == null ? !confirmOpen : on;
+    const l = $('#confirmLink'); if (l) l.setAttribute('aria-expanded', String(confirmOpen));
+    if (confirmOpen) drawConfirm(); else { const b = $('#confirmPanel'); if (b) b.remove(); }
+  }
+  document.addEventListener('click', () => { if (confirmOpen) toggleConfirm(false); });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && confirmOpen) toggleConfirm(false); });
+
   function renderSavedChip() {
     const s = A.session; if (!s) return;
     const pb = s.playbook && s.playbook.savedAt;
@@ -565,7 +620,7 @@
       h('label', { class: 'fld fld-grow' }, h('span', { class: 'fld-label' }, 'Outcome note'), ocn)));
     root.appendChild(h('div', { class: 'ticks' },
       tick('header', 'Title, date and attendees', 'The station’s name and number are on every table’s heading either way'), tick('empty', 'Rows with nothing filled in', 'Unticked, the questions nobody answered are left out of Word. This browser remembers your choice for new sessions.'),
-      tick('followUps', 'Follow-up actions'), tick('map', 'Map picture'), tick('marks', 'State survey marks table', 'Queensland’s survey marks near the station (S1–S5 on the map)'),
+      tick('followUps', 'Follow-up actions'), tick('map', 'Map picture'), A.ctx.waterLevel ? tick('marks', 'State survey marks table', 'Queensland’s survey marks near the station (S1–S5 on the map) — water level tables only') : null,
       tick('bridges', 'Bridges table', 'The bridges on the map (BR1, BR2…) and who manages each, with who to contact'),
       tick('bureauBM', 'Bureau benchmarks table', 'The station’s own benchmarks from HDB, once fetched from Flood-Net on the Local TBM question'), tick('ps', 'Property Services table')));
   }

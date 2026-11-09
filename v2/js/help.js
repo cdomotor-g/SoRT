@@ -14,7 +14,7 @@
       '**Forum details** (top of the page): the date is today’s; type attendees’ initials and press Enter after each. They are remembered for the rest of the day, so the next station starts with them.',
       '**Station**: search Flood-Net by name, Bureau number or ALERT ID and pick it. Check the **Scope table** it suggests (Rainfall, Water Level, Co-located or Repeater) — change it if it’s wrong.',
       '**Map**: check the station’s position against the imagery (Flood-Net’s can be rounded), then press **✓ Position checked**. Mark any other locations (relocation site, river line…).',
-      '**Questions**: work down the sections. Anything filled in for you has a coloured badge — press its **✓** to keep it, or just choose something else.',
+      '**Questions**: work down the sections. Anything filled in for you has a coloured badge — press its **✓ Keep** to keep it, or just choose something else.',
       '**Property Services**, then **Follow-ups and output**: choose the **Forum outcome** and what goes into Word. The **Preview** at the bottom shows exactly what will paste.',
       '**Copy for Word** (top right), then paste into the report with Ctrl+V. With the forum passphrase on this computer, the session is shared with the whole forum by itself.'
     ] },
@@ -33,7 +33,7 @@
       'If a session’s text looks like it holds a phone number, email or gate code, it is **not** shared by itself — the bar says what it found; remove it, or **save it anyway** (it won’t ask again about the same text).'
     ] },
     { id: 'badges', title: 'Answers filled in for you (the coloured badges)', items: [
-      '**Flood-Net**, **Map**, **Precedent** and **Earlier session** mark answers suggested from Flood-Net, the map, a similar station or this station’s last forum. They count as answered but **not checked**: the question has an **orange** bar until you press the badge’s **✓** (or change it), then a **green** bar and **✓ checked**. The header’s **“N to confirm”** jumps to the next one.',
+      '**Flood-Net**, **Map**, **Precedent** and **Earlier session** mark answers suggested from Flood-Net, the map, a similar station or this station’s last forum. They count as answered but **not checked**: the question has an **orange** bar until you press the badge’s **✓ Keep** (or change it), then a **green** bar and **✓ checked**. The header’s **“N to confirm”** lists them all — what each says and where it came from — with **✓ Keep**, **Show** (scrolls to its card) and **✓ Keep all**.',
       'They paste into Word exactly as they show, confirmed or not — so look them over before you copy.',
       '**Auto** answers come from a rule — e.g. the radio rows become **NA** for an IP logger, and **Comms Change** is worked out from Current Comms and the Comms Option. Choose another answer to override one.',
       '**Clear** empties a question, suggestions included. **+ Add note** adds a line under that answer in Word.'
@@ -43,8 +43,10 @@
       '**Flood-Net’s position can be rounded** (older records are often only good to 10–100 m). Always check it: turn on **✥ Move pins** and drag the red pin onto the equipment, or type the position in **Locations**, then **✓ Position checked**. Once the pin has moved, tick **Flood-Net position** (above the map) to see where Flood-Net has it — a dashed red ring, on this map only, never in the Word picture.',
       '**Locations** (beside or below the map) lists every location the table asks for. Type a coordinate (decimal or degrees-minutes-seconds), or press **Place** and click the map. Placing the relocation site answers **Relocation: Yes** and measures the distance.',
       '**Drawn for the scope**: the vegetation clearance circle (its radius comes from the Vegetation Management question), trees to remove (**T1, T2…**), and the access track — click along the route, then double-click, press Enter or **✓ Finish route**. **Esc** cancels placing or drawing.',
-      '**State survey marks** (Queensland’s, from QSpatial): the nearest 5 within 2 km (**S1–S5**). An arrow at the edge points to one that’s off the map. Untick one to leave it out of Word; the mark’s number opens its State survey report. They are not the station’s own **Bureau benchmarks** — those are on the Local TBM question.',
+      '**State survey marks** (Queensland’s, from QSpatial) — **water level tables only**, to tie the gauge to AHD; a rainfall or repeater table doesn’t show them or table them: the nearest 5 within 2 km (**S1–S5**). An arrow at the edge points to one that’s off the map. Untick one to leave it out of Word; the mark’s number opens its State survey report. They are not the station’s own **Bureau benchmarks** — those are on the Local TBM question.',
       '**Bridges** (diamonds; a bridge’s span is drawn too): only the ones **on the map** are numbered — **BR1, BR2…**, nearest first — and go in the key and in Word’s bridges table; zoom out to bring in others within 1 km. Each says **who manages it**: Transport and Main Roads for a bridge on its register of State-controlled bridges, otherwise whoever manages the road it carries (from Queensland’s road data), with **who to contact** from QLDTraffic’s road lookup. A bridge over a creek often sits outside the road reserve — the creek’s bed is a parcel of its own, so the reserve stops at each bank — but it is still the road’s.',
+      'The **road reserve** (the cadastre’s road parcels, outlined pink) is drawn out to about 1:100,000, so it still shows on a map zoomed out to take in a relocation.',
+      '**Close-ups**: once the relocation site is 500 m or more from the current location, the map can’t show either end up close, so a close-up of each appears under the map — held on its pin; **+ / −** (or Ctrl + scroll) zoom it. Both go into Word, side by side under the map picture.',
       '**The key is under the map**, in the picture too (below the copyright line), so it covers none of the map.',
       '**The picture in Word is the map as you see it** — frame it first (**⤢ Fit locations**, zoom). Copy warns if a location falls outside the picture. Flood-Net’s ring and its other stations are left out of the picture.',
       '**⇅ Map above / ⇆ beside the questions** (on the map card) switches the layout; your choice is remembered.',
@@ -60,7 +62,7 @@
     { id: 'word', title: 'Copying into Word', items: [
       '**Copy for Word** puts the scope table, the map picture, the survey marks and bridges tables and the Property Services table on the clipboard. Wait a few seconds for **“Copied — paste into Word”** while the map picture is made, then paste with Ctrl+V.',
       'Every table’s heading carries the **station name and number** — check it matches the report you’re pasting into.',
-      'A follow-up you **tick as done** is left out of the Word tables; untick it to put it back. The ticks under **Follow-ups and output** choose what else goes in (header, empty rows, map picture, survey marks, bridges, Property Services).',
+      'A follow-up you **tick as done** is left out of the Word tables; untick it to put it back. The ticks under **Follow-ups and output** choose what else goes in (header, empty rows, map picture, survey marks, bridges, Property Services). **Rows with nothing filled in** starts unticked; this browser remembers your choice.',
       '**“Copied as plain text only”** means the browser refused the formatted copy: click anywhere on the page and press Copy again.'
     ] },
     { id: 'tasks', title: 'Handing tasks to teams (Flood-Net)', items: [
@@ -90,7 +92,8 @@
     ] },
     { id: 'ps', title: 'Property Services', items: [
       'It copies the coordinates and the relocation answer from the scope questions **until you change one there** — then it says **Overridden**, with a link back to the scope answer.',
-      'On a rainfall table the water-level rows read **NA** by themselves.',
+      'On a table that isn’t for a water level site (rainfall, repeater) the water-level rows are answered **NA** for you, marked **Auto**.',
+      'The **Date** is the forum’s and should not normally need changing.',
       'Untick **Include in the Word copy** (on its heading) to copy the scope table without it.'
     ] },
     { id: 'playbook', title: 'Shared sessions and precedents', items: [
