@@ -85,8 +85,28 @@
       playbookAt: (s.playbook && s.playbook.savedAt) || null };
   }
 
+  // A session with no station and nothing filled in is not worth keeping:
+  // it is what "New session" or opening the page leaves behind before anyone
+  // has picked a station. It is not saved (and an old saved one is dropped).
+  const filled = v => v != null && v !== '' && !(Array.isArray(v) && !v.length) && !(typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
+  function blank(s) {
+    if (!s || (s.station && (s.station.name || s.station.number || s.station.id))) return false;
+    if (s.outcome || String(s.outcomeNote || '').trim() || (s.playbook && s.playbook.savedAt)) return false;
+    if (Object.values(s.answers || {}).some(a => a && (filled(a.value) || Object.values(a.fields || {}).some(v => String(v || '').trim())))) return false;
+    const ps = s.ps || {};
+    if (Object.values(ps.answers || {}).some(v => String(v || '').trim()) || Object.values(ps.comments || {}).some(v => String(v || '').trim()) || String(ps.general || '').trim()) return false;
+    const m = s.map || {};
+    if ((m.features || []).length || (m.marks || []).length || (m.bridges || []).length) return false;
+    return true;
+  }
+  // Forget blank sessions an earlier version saved.
+  function pruneBlank() {
+    index().forEach(x => { if (!x.name && !x.number && !x.stationId && !x.playbookAt) { const s = load(x.id); if (!s || blank(s)) remove(x.id); } });
+  }
+
   // keepTime: a copy brought in as it was (from the playbook) keeps its own time.
   function save(s, keepTime) {
+    if (blank(s)) { if (!s.playbook) remove(s.id); return true; }
     if (!keepTime || !s.updatedAt) s.updatedAt = Date.now();
     const key = P + 's.' + s.id, text = JSON.stringify(s);
     let ok = U().LS.set(key, text);
@@ -132,5 +152,5 @@
     if (U().LS.get(P + 'current') === id) U().LS.del(P + 'current');
   }
 
-  S.store = { newSession, upgrade, save, update, load, current, remove, index, forumDay, rememberForum, rememberEmpty, includeEmpty, DEFAULT_INCLUDE, PREFIX: P };
+  S.store = { newSession, upgrade, save, update, load, current, remove, blank, pruneBlank, index, forumDay, rememberForum, rememberEmpty, includeEmpty, DEFAULT_INCLUDE, PREFIX: P };
 })(typeof window !== 'undefined' ? window : globalThis);

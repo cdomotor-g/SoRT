@@ -865,6 +865,7 @@
     catch (e) { $('#bootMsg').textContent = e.message; $('#bootMsg').classList.add('error'); return; }
     $('#bootMsg').remove();
     renderDefsChip();
+    S.store.pruneBlank();
     A.session = S.store.current() || S.store.newSession(A.defs);
     if (!S.schema.template(A.defs, A.session.template)) A.session.template = A.defs.templates[0].id;
     rebuild();
