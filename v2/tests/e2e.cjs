@@ -939,12 +939,12 @@ const scenarios = {
     ok(await p.waitForFunction(() => document.querySelectorAll('.map-closeups:not([hidden]) .mc-frame').length === 2, null, { timeout: 20000 }).then(() => true).catch(() => false), 'a relocation 1 km away: two close-ups under the map');
     // Auto-fit: typing the far relocation re-framed the map so both pins are in view.
     ok(await p.waitForFunction(() => { const M = SoRT.mapView._M, W = M.view.width, H = M.view.height; return M.pins.filter(x => x.shown && x.ok).every(x => { const s = M.view.toScreen(new M.esri.Graphic({ geometry: { type: 'point', longitude: x.lon, latitude: x.lat } }).geometry); return !!s && s.x >= 0 && s.x <= W && s.y >= 0 && s.y <= H; }); }, null, { timeout: 10000 }).then(() => true).catch(() => false), 'a relocation pin put in far away: the map re-fits so every pin is in view');
-    ok(/Current location — close-up/.test(await p.innerText('.map-closeups')) && /Relocation site — close-up/.test(await p.innerText('.map-closeups')) && /1\.\d km from the current location/.test(await p.innerText('.map-closeups')), 'each named, and why they are there');
+    ok(/Close-up A/.test(await p.innerText('.map-closeups')) && /Close-up B/.test(await p.innerText('.map-closeups')) && /1\.\d km from the current location/.test(await p.innerText('.map-closeups')), 'each named, and why they are there');
     await p.waitForTimeout(4000);
     await p.click('.top .copy-btn');
     await p.waitForFunction(() => /Copied|failed/i.test(document.querySelector('#toast').textContent), null, { timeout: 90000 });
     const html2 = await p.clip();
-    ok(/alt="Current location — close-up"/.test(html2) && /alt="Relocation site — close-up"/.test(html2), 'both close-ups copied into Word under the map');
+    ok(/alt="Close-up A"/.test(html2) && /alt="Close-up B"/.test(html2), 'both close-ups copied into Word under the map');
     await p.fill('.loc[data-pin="relocation.newLocation"] input', moved); await p.press('.loc[data-pin="relocation.newLocation"] input', 'Enter');
     ok(await p.waitForFunction(() => document.querySelector('.map-closeups').hidden, null, { timeout: 10000 }).then(() => true).catch(() => false), 'the relocation brought close again: the close-ups go');
     // Zoom lock: on by default; the wheel scrolls past the map instead of zooming it.

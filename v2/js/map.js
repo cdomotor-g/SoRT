@@ -62,7 +62,7 @@
     // Close-ups: once the relocation site is this far from the current location,
     // the map has to zoom out past local detail to show both, so each gets a
     // close-up of its own beside the map and in Word.
-    closeups: { minM: 500, zoom: 18 },
+    closeups: { minM: 500, zoom: 18, w: 360, h: 240 },
     siteZoom: 17,
     qld: { xmin: 137.6, ymin: -29.4, xmax: 154.0, ymax: -9.0 },   // the map's home: all of Queensland, Torres Strait included
     order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, pins: 10 },
@@ -209,7 +209,7 @@
     M.els.view = h('div', { class: 'map-view', id: 'mapView', role: 'region', 'aria-label': 'Map' });
     M.els.status = h('div', { class: 'map-status' }, 'Loading the map…');
     M.els.legend = h('div', { class: 'map-legend', title: 'The key, as it is under the map in the Word picture' });
-    M.els.closeups = h('div', { class: 'map-closeups', hidden: true, 'aria-label': 'Close-ups of the current location and the relocation site' });
+    M.els.closeups = h('div', { class: 'map-closeups', hidden: true, 'aria-label': 'Close-ups of the pins, up close' });
     M.els.edges = h('div', { class: 'map-edges', 'aria-hidden': 'true' });
     M.els.progress = h('div', { class: 'map-progress', hidden: true }, h('div'));
     M.els.placeHint = h('div', { class: 'map-place', hidden: true });
@@ -1309,13 +1309,30 @@
      drawings), held centred on its pin as close in as the imagery allows. They
      go into Word side by side under the map picture. +/− zoom them (or Ctrl +
      scroll); they don't pan, so each stays on its pin. */
+  // Which pins one close-up shows: those inside its frame (about 85% of the way to
+  // the edge, so a pin's label isn't cut off), at the first zoom.
+  function inFrame(centre, p) {
+    const mpp = 156543.03 * Math.cos(centre.lat * Math.PI / 180) / Math.pow(2, CFG.closeups.zoom);
+    const dy = Math.abs(p.lat - centre.lat) * 111320, dx = Math.abs(p.lon - centre.lon) * 111320 * Math.cos(centre.lat * Math.PI / 180);
+    return dx <= 0.85 * mpp * CFG.closeups.w / 2 && dy <= 0.85 * mpp * CFG.closeups.h / 2;
+  }
+  // Close-up A is held on the current location, B on the relocation site; then one
+  // more, lettered on, for each other pin that no earlier close-up already shows.
   function closeTargets() {
     if (!M.ready) return [];
     const a = M.pins.find(p => p.anchor && p.shown && p.ok);
     const r = M.pins.find(p => p.code === 'relocation' && !p.anchor && p.shown && p.ok);
     if (!a || !r) return [];
     const d = near(a, r);
-    return d >= CFG.closeups.minM ? [{ id: 'current', pin: a, d }, { id: 'relocation', pin: r, d }] : [];
+    if (d < CFG.closeups.minM) return [];
+    const out = [];
+    [a, r, ...M.pins.filter(p => p !== a && p !== r && p.shown && p.ok)].forEach(p => {
+      if (out.some(t => t.pins.includes(p))) return;
+      const t = { id: p.key || key(p), pin: p, d, pins: [p], name: 'Close-up ' + String.fromCharCode(65 + out.length) };
+      out.push(t);
+      M.pins.forEach(q => { if (q !== p && q.shown && q.ok && !out.some(o => o.pins.includes(q)) && inFrame(p, q)) t.pins.push(q); });
+    });
+    return out;
   }
   M.close = [];
   function dropCloseups() {
@@ -1328,7 +1345,10 @@
     const t = closeTargets();
     if (!t.length) { if (M.close.length) { dropCloseups(); changedPicture(); } return; }
     const E = M.esri;
+    const sig = t.map(x => x.id).join('|');
+    if (M.close.length && M.closeSig !== sig) dropCloseups();
     if (!M.close.length) {
+      M.closeSig = sig;
       el.innerHTML = ''; el.hidden = false;
       M.els.closeWhy = h('span', { class: 'hint' });
       el.appendChild(h('div', { class: 'mc-head' }, h('b', null, 'Close-ups'), ' ', M.els.closeWhy));
@@ -1358,12 +1378,12 @@
     }
     t.forEach((x, i) => {
       const c = M.close[i]; if (!c) return;
-      c.label = `${x.pin.label} — close-up`;
+      c.label = x.name; c.pins = x.pins.map(q => q.label).join(', ');
       c.title.textContent = c.label;
       const k = key(x.pin);
       if (c.at !== k) { c.at = k; c.center = [x.pin.lon, x.pin.lat]; c.view.goTo({ center: c.center }, { animate: false }).catch(() => {}); changedPicture(); }
     });
-    M.els.closeWhy.textContent = `The relocation site is ${U().fmtDist(t[0].d)} from the current location, so the map above can’t show either up close. Both go into Word under the map.`;
+    M.els.closeWhy.textContent = `The relocation site is ${U().fmtDist(t[0].d)} from the current location, so the map above can’t show either up close. ` + t.map(x => `${x.name}: ${x.pins.map(q => q.label).join(', ')}`).join(' · ') + '. All go into Word under the map.';
   }
   // A close-up's picture: the view as it is, the working aids left out, with its
   // name across the top, a scale bar and the copyright line.

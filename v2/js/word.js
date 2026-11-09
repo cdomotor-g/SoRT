@@ -273,9 +273,13 @@
       // A long relocation's close-ups: side by side under the map, the same 16 cm across.
       const cu = picture.closeups || [];
       if (cu.length) {
-        html += `<table align="center" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px auto 0;"><tr>${cu.map(c =>
-          `<td style="padding:0 3px;border:none;vertical-align:top;"><img src="${c.dataUrl}" alt="${esc(c.label)}" style="width:${(16 / cu.length - 0.2).toFixed(1)}cm;height:auto;border:1px solid #999;"></td>`).join('')}</tr></table>`;
-        text += `[Close-up maps included: ${cu.map(c => c.label).join('; ')}]\n`;
+        // Two to a row, so three or four stay big enough to read.
+        const per = cu.length === 1 ? 1 : 2, wcm = (16 / per - 0.2).toFixed(1);
+        let rows = '';
+        for (let i = 0; i < cu.length; i += per) rows += '<tr>' + cu.slice(i, i + per).map(c =>
+          `<td style="padding:3px;border:none;vertical-align:top;"><img src="${c.dataUrl}" alt="${esc(c.label)}" style="width:${wcm}cm;height:auto;border:1px solid #999;"></td>`).join('') + '</tr>';
+        html += `<table align="center" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px auto 0;">${rows}</table>`;
+        text += `[Close-up maps included: ${cu.map(c => c.label + (c.pins ? ' (' + c.pins + ')' : '')).join('; ')}]\n`;
       }
     }
     // State survey marks: a water level table's only (they tie its gauge to AHD).
