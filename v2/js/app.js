@@ -224,7 +224,7 @@
     const f = A.session.forum;
     const root = $('#forum'); root.innerHTML = '';
     const date = h('input', { type: 'date', id: 'forumDate', value: f.date });
-    date.addEventListener('change', ev => { f.date = ev.target.value; changed(); });
+    date.addEventListener('change', ev => { f.date = ev.target.value; S.store.rememberForum(f, { dateChosen: true }); changed(); });
     const chips = h('div', { class: 'chips', id: 'attendeeChips' });
     const clear = h('button', { type: 'button', class: 'chips-clear', title: 'Remove every attendee from the list', onclick: () => { const was = f.attendees.slice(); f.attendees = []; renderForum(); changed({ light: true }); toast('Attendees cleared.', { label: 'Undo', run: () => { f.attendees = was; renderForum(); changed({ light: true }); } }); } }, 'Clear all');
     const drawChips = () => {

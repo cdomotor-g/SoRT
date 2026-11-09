@@ -40,11 +40,18 @@
   function forumDay() {
     const f = U().LS.json(P + 'forum', null);
     const today = U().todayIso();
-    if (f && f.savedOn === today) return { date: f.date || today, attendees: f.attendees || [], outOfSession: !!f.outOfSession, last: f.attendees || [] };
+    // A new session takes today's date, unless someone picked another date in
+    // the forum bar today (dateChosen). Saving or opening an older session never
+    // moves it: that once dated every new session to an older forum's day.
+    if (f && f.savedOn === today) return { date: (f.dateChosen && f.date) || today, attendees: f.attendees || [], outOfSession: !!f.outOfSession, last: f.attendees || [] };
     return { date: today, attendees: [], outOfSession: false, last: (f && f.attendees) || [] };
   }
-  function rememberForum(forum) {
-    U().LS.set(P + 'forum', JSON.stringify({ date: forum.date, attendees: forum.attendees, outOfSession: forum.outOfSession, savedOn: U().todayIso() }));
+  function rememberForum(forum, opts) {
+    const today = U().todayIso(), was = U().LS.json(P + 'forum', null) || {};
+    const keep = was.savedOn === today && was.dateChosen;
+    const chosen = opts && opts.dateChosen ? forum.date !== today : keep;
+    U().LS.set(P + 'forum', JSON.stringify({ date: chosen ? (opts && opts.dateChosen ? forum.date : was.date) : today, dateChosen: !!chosen,
+      attendees: forum.attendees, outOfSession: forum.outOfSession, savedOn: today }));
   }
 
   function newSession(defs) {
@@ -125,7 +132,8 @@
     }
     writeIndex(list);
     U().LS.set(P + 'current', s.id);
-    rememberForum(s.forum);
+    // Only a session started today speaks for today's forum (its attendees).
+    if (U().dmy(U().todayIso()) === U().fmtWhen(s.createdAt).slice(0, 10)) rememberForum(s.forum);
     return ok;
   }
   // Write a session back exactly as it is — its time, its place in the list and
