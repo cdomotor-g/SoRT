@@ -18,7 +18,7 @@
 </script>
 <!-- Every script and the stylesheet carry ?v=<stamp>; bump it (all of them at
      once) on any change, or browsers keep the old copy for up to 10 minutes. -->
-<link rel="stylesheet" href="app.css?v=20261109h">
+<link rel="stylesheet" href="app.css?v=20261109i">
 </head>
 <body>
 <header class="top">
@@ -73,6 +73,11 @@
   <footer class="foot"><span id="savedChip"></span> · <span id="defsChip"></span> · <a href="../v1/">Version 1</a></footer>
 </main>
 
+<div class="jump-btns" id="jumpBtns" aria-label="Move around the questions" hidden>
+  <button type="button" class="btn jump-btn" id="jumpTop" title="Back to the top of the questions" aria-label="Back to the top" hidden>↑ Top</button>
+  <button type="button" class="btn btn-primary jump-btn" id="jumpNext" title="Go to where you are up to: the first question still to answer after the last one you answered" aria-label="Go to the current question">↓ Current question</button>
+</div>
+
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
 <dialog id="sessionsDlg" aria-labelledby="sessionsTitle">
@@ -84,24 +89,24 @@
   </div>
 </dialog>
 
-<script src="js/util.js?v=20261109h"></script>
-<script src="js/schema.js?v=20261109h"></script>
-<script src="js/rules.js?v=20261109h"></script>
-<script src="js/store.js?v=20261109h"></script>
-<script src="js/pictures.js?v=20261109h"></script>
-<script src="js/github.js?v=20261109h"></script>
-<script src="js/floodnet.js?v=20261109h"></script>
-<script src="js/word.js?v=20261109h"></script>
-<script src="js/form.js?v=20261109h"></script>
-<script src="js/coast.js?v=20261109h"></script>
-<script src="js/soil.js?v=20261109h"></script>
-<script src="js/map.js?v=20261109h"></script>
-<script src="js/store-remote.js?v=20261109h"></script>
-<script src="js/playbook.js?v=20261109h"></script>
-<script src="js/tasks.js?v=20261109h"></script>
-<script src="js/editor.js?v=20261109h"></script>
-<script src="js/benchmarks.js?v=20261109h"></script>
-<script src="js/help.js?v=20261109h"></script>
-<script src="js/app.js?v=20261109h"></script>
+<script src="js/util.js?v=20261109i"></script>
+<script src="js/schema.js?v=20261109i"></script>
+<script src="js/rules.js?v=20261109i"></script>
+<script src="js/store.js?v=20261109i"></script>
+<script src="js/pictures.js?v=20261109i"></script>
+<script src="js/github.js?v=20261109i"></script>
+<script src="js/floodnet.js?v=20261109i"></script>
+<script src="js/word.js?v=20261109i"></script>
+<script src="js/form.js?v=20261109i"></script>
+<script src="js/coast.js?v=20261109i"></script>
+<script src="js/soil.js?v=20261109i"></script>
+<script src="js/map.js?v=20261109i"></script>
+<script src="js/store-remote.js?v=20261109i"></script>
+<script src="js/playbook.js?v=20261109i"></script>
+<script src="js/tasks.js?v=20261109i"></script>
+<script src="js/editor.js?v=20261109i"></script>
+<script src="js/benchmarks.js?v=20261109i"></script>
+<script src="js/help.js?v=20261109i"></script>
+<script src="js/app.js?v=20261109i"></script>
 </body>
 </html>

@@ -463,7 +463,13 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
   body.layout-side .map-frame { height: max(340px, calc(100vh - var(--top-h, 60px) - 330px)); }
   body.layout-side .map-side { max-height: none; }
 }
-@media print { .top, .toast, #map-card, .out-acts { display: none; } }
+/* Jump buttons: back to the top, and on to the question you are up to (bottom left, over the questions). */
+.jump-btns { position: fixed; left: 16px; bottom: 16px; z-index: 40; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.jump-btns[hidden], .jump-btn[hidden] { display: none; }
+.jump-btn { box-shadow: 0 4px 16px rgba(0, 0, 0, .25); }
+.q.jump-flash { outline: 3px solid var(--accent, #2b6cb0); outline-offset: 2px; }
+@media (max-width: 640px) { .jump-btns { left: 10px; bottom: 10px; } }
+@media print { .top, .toast, #map-card, .out-acts, .jump-btns { display: none; } }
 
 /* "N to confirm": the list under the progress bar */
 .top-progress { position: relative; }

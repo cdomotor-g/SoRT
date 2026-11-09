@@ -1121,6 +1121,31 @@ const scenarios = {
     ok(!q.errors.length, `no page errors there ${q.errors.join('; ')}`);
     await q.context().close();
     await p.context().close();
+  },
+  // The two jump buttons: back to the top, and on to the question you are up to.
+  async jump(b) {
+    for (const [label, vp] of [['map beside (two panes)', { width: 1360, height: 900 }], ['narrow (one page)', { width: 800, height: 900 }]]) {
+      const p = await page(b, { viewport: vp });
+      await p.pick('41506');
+      const pos = () => p.evaluate(() => { const w = document.querySelector('.wrap'); const sc = /auto|scroll/.test(getComputedStyle(w).overflowY) ? w : null; return sc ? sc.scrollTop : window.scrollY; });
+      ok(await p.$eval('#jumpTop', e => e.hidden), `${label}: no "Top" button at the top`);
+      ok(!(await p.$eval('#jumpNext', e => e.hidden)), `${label}: "Current question" shown while questions are unanswered`);
+      await p.waitForTimeout(2500);   // let the late suggestions land, so the answers stop changing
+      const current = () => p.evaluate(() => { const qs = [...document.querySelectorAll('#form .q')]; let last = -1; qs.forEach((q, i) => { if (q.classList.contains('filled')) last = i; }); const n = qs.slice(last + 1).find(q => !q.classList.contains('filled')) || qs.find(q => !q.classList.contains('filled')); return n.dataset.q; });
+      const code = await current();
+      await p.click('#jumpNext');
+      await p.waitForTimeout(3500);
+      const target = await p.evaluate(c => { const r = document.querySelector('#q-' + c).getBoundingClientRect(); return { code: c, top: r.top, bottom: r.bottom, onScreen: r.top >= 60 && r.bottom <= innerHeight + 2 }; }, code);
+      ok(target.onScreen, `${label}: "Current question" brings ${target.code} on screen ${JSON.stringify(target)}`);
+      await p.evaluate(() => { const w = document.querySelector('.wrap'); (/auto|scroll/.test(getComputedStyle(w).overflowY) ? w : window).scrollTo(0, 3000); });
+      await p.waitForTimeout(400);
+      ok(!(await p.$eval('#jumpTop', e => e.hidden)), `${label}: "Top" shown once scrolled down`);
+      await p.click('#jumpTop');
+      await p.waitForTimeout(1200);
+      ok((await pos()) < 5, `${label}: "Top" goes back to the top`);
+      ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+      await p.context().close();
+    }
   }
 };
 

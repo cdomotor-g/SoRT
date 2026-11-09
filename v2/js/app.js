@@ -853,6 +853,51 @@
     setLayout(saved ? saved === 'side' : true);
   }
 
+  /* ---------------- jump buttons: to the top, and to the question you are up to ---------------- */
+  // The questions scroll inside the left pane when the map sits beside them, else the whole page scrolls.
+  function scroller() {
+    const w = $('.wrap');
+    return w && /auto|scroll/.test(G.getComputedStyle(w).overflowY) ? w : null;
+  }
+  // Where you are up to: the first question still to answer after the last one you answered
+  // (the first unanswered one if nothing is left after it, or if you have answered none yet).
+  function currentQuestion() {
+    const qs = U.$$('#form .q');
+    let last = -1;
+    qs.forEach((q, i) => { if (q.classList.contains('filled')) last = i; });
+    return qs.slice(last + 1).find(q => !q.classList.contains('filled')) || qs.find(q => !q.classList.contains('filled')) || null;
+  }
+  function updateJump() {
+    const box = $('#jumpBtns'); if (!box) return;
+    const sc = scroller();
+    const y = sc ? sc.scrollTop : (G.scrollY || 0);
+    const top = $('#jumpTop'), next = $('#jumpNext');
+    top.hidden = y < 400;
+    next.hidden = !currentQuestion();
+    box.hidden = top.hidden && next.hidden;
+  }
+  function initJump() {
+    const top = $('#jumpTop'), next = $('#jumpNext'); if (!top || !next) return;
+    top.addEventListener('click', () => { (scroller() || G).scrollTo({ top: 0, behavior: 'smooth' }); });
+    next.addEventListener('click', () => {
+      const q = currentQuestion(); if (!q) return;
+      q.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Things above it can still be loading and push it about: look again a few times and put it back in view.
+      [500, 1300, 2600].forEach(ms => setTimeout(() => {
+        const r = q.getBoundingClientRect(), sc = scroller(), box = sc ? sc.getBoundingClientRect() : { top: 0, bottom: G.innerHeight };
+        if (q.isConnected && (r.top < box.top || r.bottom > box.bottom)) q.scrollIntoView({ behavior: 'auto', block: 'center' });
+      }, ms));
+      q.classList.add('jump-flash'); setTimeout(() => q.classList.remove('jump-flash'), 1600);
+    });
+    let pending = false;
+    const later = () => { if (pending) return; pending = true; G.requestAnimationFrame(() => { pending = false; updateJump(); }); };
+    G.addEventListener('scroll', later, { passive: true });
+    const wrap = $('.wrap'); if (wrap) wrap.addEventListener('scroll', later, { passive: true });
+    G.addEventListener('resize', later);
+    new MutationObserver(later).observe($('#form'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    updateJump();
+  }
+
   /* ---------------- theme ---------------- */
   function initTheme() {
     const btn = $('#themeBtn');
@@ -899,6 +944,7 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { saveSoon.flush(); if (S.playbook) S.playbook.flush(A); } });
     if (S.mapView) S.mapView.mount($('#mapMount'), A);
     watchPreview();
+    initJump();
     if (S.playbook) S.playbook.init(A);
     if (S.bureauBM) S.bureauBM.init(A);
     renderAll();
