@@ -16,21 +16,21 @@
       '**Map**: check the station’s position against the imagery (Flood-Net’s can be rounded), then press **✓ Position checked**. Mark any other locations (relocation site, river line…).',
       '**Questions**: work down the sections. Anything filled in for you has a coloured badge — press its **✓ Keep** to keep it, or just choose something else.',
       '**Property Services**, then **Follow-ups and output**: choose the **Forum outcome** and what goes into Word. The **Preview** at the bottom shows exactly what will paste.',
-      '**Copy for Word** (top right), then paste into the report with Ctrl+V. With the forum passphrase on this computer, the session is shared with the whole forum by itself.'
+      '**Copy for Word** (top right), then paste into the report with Ctrl+V. With the forum passphrase on this computer, the session is saved for the whole forum by itself.'
     ] },
     { id: 'session', title: 'Starting a new session', items: [
       'A **session** is one station at one forum sitting. To start one: **Sessions** (top right) → **New session**. The map goes back to the whole of Queensland until you choose the station.',
       'Choosing a different station on a session that already has answers starts a new session by itself; the earlier one stays under **Sessions**.',
-      'To go back to one: **Sessions** — type a station’s name or number in its search box — then **Open**. Under **Shared with the forum**, **Open** carries on with a station’s last session as it was saved (from any computer), **Start from it** begins today’s session from its answers, and **Use as a precedent** fills this session from it. **Delete** asks first — **Confirm delete** or **Cancel**: a session shared with the forum goes from the shared sessions for everyone (on a station with several, its last one, or **Delete all**), and **Only from this browser** keeps the forum’s copy.',
-      'Choosing a station that already has a session (here or in the shared sessions) shows a **⚠ already has a session** note on its card: **Show its sessions** opens Sessions searched for it.',
+      'To go back to one: **Sessions** — type a station’s name or number in its search box — then **Open**. Under **Saved to the forum**, **Open** carries on with a station’s last session as it was saved (from any computer), **Start from it** begins today’s session from its answers, and **Use as a precedent** fills this session from it. **Delete** asks first — **Confirm delete** or **Cancel**: a session saved to the forum goes from the saved sessions for everyone (on a station with several, its last one, or **Delete all**), and **Only from this browser** keeps the forum’s copy.',
+      'Choosing a station that already has a session (here or in the saved sessions) shows a **⚠ already has a session** note on its card: **Show its sessions** opens Sessions searched for it.',
       'To carry a session to another computer: **Download session** (bottom of the page), then on the other computer **Sessions** → **Open a session file…**.'
     ] },
     { id: 'saved', title: 'Where your work is kept', items: [
       'Every change is saved **in this browser** as you go — the footer shows the time of the last save. A reload or a crashed tab loses nothing.',
-      'Once this computer has the **forum passphrase** (typed once: **Enter the forum passphrase** on the warning bar — the forum chair has it), each session is also **shared with the forum** by itself a few seconds after each change, so every forum computer can open it. There is nothing to press: the top bar says **✓ Shared** and the time. Until then a **⚠ Saved only in this browser** bar says so: nobody else can open it, and clearing the browser loses it.',
-      'No internet for a while, or the tab closed straight after a change? Nothing is lost: it is kept in this browser and shared by itself as soon as Flood-Net’s server answers — or the next time SoRT opens on this computer.',
+      'Once this computer has the **forum passphrase** (typed once: **Enter the forum passphrase** on the warning bar — the forum chair has it), each session is also **saved to the forum** by itself a few seconds after each change, so every forum computer can open it. There is nothing to press: the top bar says **✓ Saved** and the time. Until then a **⚠ Saved only in this browser** bar says so: nobody else can open it, and clearing the browser loses it.',
+      'No internet for a while, or the tab closed straight after a change? Nothing is lost: it is kept in this browser and saved by itself as soon as Flood-Net’s server answers — or the next time SoRT opens on this computer.',
       '**Download a copy** (on that bar, or **Download session** at the foot of the page) saves the session as a file — the fallback if anything is ever wrong.',
-      'If a session’s text looks like it holds a phone number, email or gate code, it is **not** shared by itself — the bar says what it found; remove it, or **save it anyway** (it won’t ask again about the same text).'
+      'If a session’s text looks like it holds a phone number, email or gate code, it is **not** saved by itself — the bar says what it found; remove it, or **save it anyway** (it won’t ask again about the same text).'
     ] },
     { id: 'badges', title: 'Answers filled in for you (the coloured badges)', items: [
       '**Flood-Net**, **Map**, **Precedent** and **Earlier session** mark answers suggested from Flood-Net, the map, a similar station or this station’s last forum. They count as answered but **not checked**: the question has an **orange** bar until you press the badge’s **✓ Keep** (or change it), then a **green** bar and **✓ checked**. The header’s **“N to confirm”** lists them all — what each says and where it came from — with **✓ Keep**, **Show** (scrolls to its card) and **✓ Keep all**.',
@@ -62,7 +62,7 @@
     { id: 'word', title: 'Copying into Word', items: [
       '**Copy for Word** puts the scope table, the map picture, the survey marks and bridges tables and the Property Services table on the clipboard. Wait a few seconds for **“Copied — paste into Word”** while the map picture is made, then paste with Ctrl+V.',
       'Every table’s heading carries the **station name and number** — check it matches the report you’re pasting into.',
-      '**Paste a picture** (a Snipping Tool snip, a photo): click into the question it belongs to, then **Ctrl+V** — or **📋 Add picture** under it, or drop an image file on it. It goes into Word under that row, with its caption; click it to see it larger, **✕** to remove it. Pictures are shared with the forum like the rest: no landholder names, contact details or gate codes in them.',
+      '**Paste a picture** (a Snipping Tool snip, a photo): click into the question it belongs to, then **Ctrl+V** — or **📋 Add picture** under it, or drop an image file on it. It goes into Word under that row, with its caption; click it to see it larger, **✕** to remove it. Pictures are saved to the forum like the rest: no landholder names, contact details or gate codes in them.',
       'A follow-up you **tick as done** is left out of the Word tables; untick it to put it back. The ticks under **Follow-ups and output** choose what else goes in (header, empty rows, map picture, survey marks, bridges, Property Services). **Rows with nothing filled in** starts unticked; this browser remembers your choice.',
       '**“Copied as plain text only”** means the browser refused the formatted copy: click anywhere on the page and press Copy again.'
     ] },
@@ -97,12 +97,12 @@
       'The **Date** is the forum’s and should not normally need changing.',
       'Untick **Include in the Word copy** (on its heading) to copy the scope table without it.'
     ] },
-    { id: 'playbook', title: 'Shared sessions and precedents', items: [
-      'The shared sessions keep every forum’s session under its station, for whoever has the forum passphrase — typed once per computer.',
+    { id: 'playbook', title: 'Saved sessions and precedents', items: [
+      'The saved sessions keep every forum’s session under its station, for whoever has the forum passphrase — typed once per computer.',
       'The passphrase is a sentence: capitals, spaces and punctuation don’t matter. Anyone who has it can change it — **Sessions** → **Change the forum passphrase** — and every other computer then asks for the new one.',
       'A station that has been to SoRT before offers **Continue from it** — its last answers come back marked **Earlier session**.',
       '**A precedent**: when this station is best handled like one done before, **Sessions** → find that station → **Use as a precedent** (or **Similar stations** → **Use** on the card). Its answers fill the questions still empty here — never coordinates, licence numbers, the TBM or notes — each **orange** until you check it.',
-      'Keep it clean: no landholder names, phone numbers or emails, and no gate, padlock or key codes. Before sharing, SoRT checks the text for them, and holds the session back if it finds one.'
+      'Keep it clean: no landholder names, phone numbers or emails, and no gate, padlock or key codes. Before saving, SoRT checks the text for them, and holds the session back if it finds one.'
     ] },
     { id: 'questions', title: 'Changing the questions', items: [
       'For a quick change mid-forum: **Edit questions** (footer). It stays a draft **in your browser only** (a banner says so) until **Publish to GitHub** — then everyone gets it the next time they open the page.',

@@ -1,5 +1,5 @@
 /* SoRT v2 — store-remote.js
-   The shared sessions: kept by Flood-Net's server (floodwarning.net/api/sort/v1)
+   The saved sessions: kept by Flood-Net's server (floodwarning.net/api/sort/v1)
    for whoever has the forum passphrase — typed once per computer, no accounts,
    no tokens. The playbook (playbook.js) reads and writes its two kinds of file
    through here: index.json and stations/<key>.json, each with an ETag so two
@@ -58,7 +58,7 @@
     return { text: await res.text(), sha: strong(res.headers.get('ETag')) };
   }
   // The server's refusals, in plain words.
-  const SAY = { 'too large': 'the session is too big for the shared store (over 4 MB)', 'slow down': 'too many saves from this office in the last minute — it waits a minute',
+  const SAY = { 'too large': 'the session is too big for the forum’s saved sessions (over 4 MB)', 'slow down': 'too many saves from this office in the last minute — it waits a minute',
     storage: 'Flood-Net’s storage didn’t answer', 'not JSON': 'the session didn’t go across whole', path: 'the station’s file name wasn’t accepted' };
   // Create (no sha) or replace (the sha from the last read). A file changed in
   // between comes back as status 409, which the playbook re-reads and retries.

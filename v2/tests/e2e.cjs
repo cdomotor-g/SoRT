@@ -114,7 +114,7 @@ async function page(browser, opts) {
   if (o.defsPatch) { const d = JSON.parse(defsText); o.defsPatch(d); defsText = JSON.stringify(d); }
   const gh = fakeGithub(defsText);
   await ctx.route(/api\.github\.com/, gh.handler);
-  const store = o.store || fakeStore();   // o.store: another computer on the same shared sessions
+  const store = o.store || fakeStore();   // o.store: another computer on the same saved sessions
   await ctx.route(/floodwarning\.net\/api\/sort\//, store.handler);
   if (o.pass) await ctx.addInitScript(() => { try { localStorage.setItem('sortv2.passphrase', 'TESTPASS'); } catch (e) { /* */ } });
   if (o.coast) await ctx.route(/CoastalWaters\/MapServer\/17\/query/, o.coast);
@@ -208,12 +208,12 @@ const scenarios = {
     await p.click('#q-stockFence .opt:has-text("Yes (standard")');
     await p.selectOption('#outcome', 'complete');
     await p.fill('[data-fk="installNotes::f::notes"]', 'Ring 0459 123 456'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
-    ok(!(await p.$('#playbookActs button')), 'no Share button: it is shared by itself');
+    ok(!(await p.$('#playbookActs button')), 'no Share button: it is saved by itself');
     await p.waitForSelector('#saveBar button:has-text("save it anyway")', { timeout: 15000 });
-    ok(/phone number/.test(await p.innerText('#saveBar')) && /Not shared/.test(await p.innerText('#shareChip')), 'the phone number holds it back, and the top bar says it isn’t shared');
+    ok(/phone number/.test(await p.innerText('#saveBar')) && /Not saved/.test(await p.innerText('#shareChip')), 'the phone number holds it back, and the top bar says it isn’t shared');
     let warned = false; p.once('dialog', d => { warned = /phone number/.test(d.message()); });
     await p.click('#saveBar button:has-text("save it anyway")');
-    await p.waitForFunction(() => /Shared with the forum|Couldn/.test(document.querySelector('#toast').textContent), null, { timeout: 20000 });
+    await p.waitForFunction(() => /Saved to the forum|Couldn/.test(document.querySelector('#toast').textContent), null, { timeout: 20000 });
     ok(warned, 'save it anyway asks first');
     ok(p.store.files.has('stations/540601.json') && p.store.files.has('index.json'), 'station file and index written to the shared store');
     await p.fill('[data-fk="installNotes::f::notes"]', 'Ring 0459 123 456 after 5pm'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
@@ -245,7 +245,7 @@ const scenarios = {
     await n.fill('#passInput', ' test-pass '); await n.press('#passInput', 'Enter');
     await n.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 8000 }).catch(() => {});
     ok(await n.evaluate(() => localStorage.getItem('sortv2.passphrase')) === 'TESTPASS' && await n.$eval('#saveBar', e => e.hidden), 'the right one (typed loosely) is remembered and the warning goes');
-    ok(await until(() => n.store.files.has('stations/540601.json')), 'the session answered before the passphrase is shared by itself once it is typed');
+    ok(await until(() => n.store.files.has('stations/540601.json')), 'the session answered before the passphrase is saved by itself once it is typed');
     // Changing it: only its fingerprint leaves, and the old one stops working.
     await n.click('#sessionsBtn'); await n.click('#changePass');
     await n.fill('#passNew', 'short'); await n.fill('#passNew2', 'short'); await n.click('.pass-dlg .btn-primary');
@@ -265,16 +265,16 @@ const scenarios = {
     await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
     await p.click('#q-stockFence .opt:has-text("Yes (standard")');
     await p.waitForFunction(() => /playbook/.test(document.querySelector('#savedChip').textContent), null, { timeout: 15000 }).catch(() => {});
-    ok(p.store.files.has('stations/540601.json') && p.store.files.has('index.json'), 'shared with the forum by itself, with no button');
-    await p.waitForFunction(() => /✓ Shared/.test(document.querySelector('#shareChip').textContent), null, { timeout: 8000 }).catch(() => {});
-    ok(!(await p.$('#playbookActs button')) && /Shared with the forum by itself/.test(await p.innerText('#shareState')) && /✓ Shared/.test(await p.innerText('#shareChip')), 'no Share button; it says it is shared, at the top and under Copy for Word');
+    ok(p.store.files.has('stations/540601.json') && p.store.files.has('index.json'), 'saved to the forum by itself, with no button');
+    await p.waitForFunction(() => /✓ Saved/.test(document.querySelector('#shareChip').textContent), null, { timeout: 8000 }).catch(() => {});
+    ok(!(await p.$('#playbookActs button')) && /Saved to the forum by itself/.test(await p.innerText('#shareState')) && /✓ Saved/.test(await p.innerText('#shareChip')), 'no Share button; it says it is shared, at the top and under Copy for Word');
     const first = JSON.parse(p.store.files.get('stations/540601.json').text).sessions[0].id;
     const station = () => JSON.parse(p.store.files.get('stations/540601.json').text);
     const answer = (c, f) => { const x = (station().sessions.find(z => z.id === first) || {}).session; return x && x.answers[c] ? x.answers[c].value : undefined; };
     // A change that leaves the index line alone: one request — the station's file, nothing read first.
     let mark = p.store.log.length;
     await p.click('#q-stockFence .opt:has-text("No")');
-    ok(await until(() => answer('stockFence') === 'no'), 'a change is shared by itself');
+    ok(await until(() => answer('stockFence') === 'no'), 'a change is saved by itself');
     await p.waitForTimeout(400);
     ok(p.store.log.slice(mark).join() === 'PUT files/stations/540601.json', `one request for it: the station’s file, not read first, index untouched (${p.store.log.slice(mark).join(', ')})`);
     // Nothing really changed: nothing is sent.
@@ -307,8 +307,8 @@ const scenarios = {
     await p.evaluate(() => { SoRT.app.session.station.number = '540601'; SoRT.app.changed({ light: true }); });
     ok(await until(() => station().sessions.some(z => z.id === first) && !JSON.parse(p.store.files.get('index.json').text).stations.some(e => e.key === '540699')), 'and back, leaving nothing in the shared list under the wrong number');
     await p.fill('[data-fk="installNotes::f::notes"]', 'Ring 0459 123 456'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
-    await p.waitForFunction(() => /Not shared with the forum:/.test(document.querySelector('#saveBar').textContent), null, { timeout: 8000 }).catch(() => {});
-    ok(/Not shared with the forum:/.test(await p.innerText('#saveBar')) && /phone number/.test(await p.innerText('#saveBar')), 'a phone number holds it, and the bar says why');
+    await p.waitForFunction(() => /Not saved to the forum:/.test(document.querySelector('#saveBar').textContent), null, { timeout: 8000 }).catch(() => {});
+    ok(/Not saved to the forum:/.test(await p.innerText('#saveBar')) && /phone number/.test(await p.innerText('#saveBar')), 'a phone number holds it, and the bar says why');
     ok(!/0459/.test(p.store.files.get('stations/540601.json').text), 'nothing private was shared');
     await p.fill('[data-fk="installNotes::f::notes"]', 'Ring the hub before visiting'); await p.press('[data-fk="installNotes::f::notes"]', 'Tab');
     await p.waitForFunction(() => document.querySelector('#saveBar').hidden, null, { timeout: 8000 }).catch(() => {});
@@ -316,11 +316,11 @@ const scenarios = {
     // The same station again: the card says it already has a session, and Sessions finds it.
     await p.newSession(); await p.pick('540601');
     await p.waitForSelector('#dupNote:not([hidden])', { timeout: 8000 });
-    ok(/already has (a session|sessions)/.test(await p.innerText('#dupNote')) && /shared with the forum/.test(await p.innerText('#dupNote')), 'picking it again warns that a session already exists');
+    ok(/already has (a session|sessions)/.test(await p.innerText('#dupNote')) && /saved to the forum/.test(await p.innerText('#dupNote')), 'picking it again warns that a session already exists');
     await p.click('#dupNote button:has-text("Show its sessions")');
     ok(await p.evaluate(() => document.querySelector('#sessionsDlg').open) && (await p.inputValue('#sessionsSearch')) === '540601', 'which opens Sessions, searched for the station');
     const res = await p.innerText('#sessionsResults');
-    ok(/In this browser[\s\S]*Fifteen Mile AL[\s\S]*Shared with the forum[\s\S]*Fifteen Mile AL/.test(res), 'its sessions are listed, here and shared with the forum');
+    ok(/In this browser[\s\S]*Fifteen Mile AL[\s\S]*Saved to the forum[\s\S]*Fifteen Mile AL/.test(res), 'its sessions are listed, here and saved to the forum');
     await p.fill('#sessionsSearch', 'zzz');
     ok(!/Fifteen Mile AL/.test(await p.innerText('#sessionsResults')), 'the search narrows the list');
     await p.fill('#sessionsSearch', 'fifteen');
@@ -369,14 +369,14 @@ const scenarios = {
     ok(await n.evaluate(id => !SoRT.store.load(id) && SoRT.app.session.id !== id && !SoRT.store.index().some(x => x.id === id), lone), 'Confirm delete: gone from this browser (not saved back on the way out), a new session on screen');
     await n.context().close();
 
-    // Connected: two computers on the same shared sessions.
+    // Connected: two computers on the same saved sessions.
     const p = await page(b, { pass: true, autosaveMs: 800, retryMs: 1000 });
     await p.pick('540601');
     await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
     const file = k => p.store.files.has(`stations/${k}.json`) ? JSON.parse(p.store.files.get(`stations/${k}.json`).text) : null;
     const index = () => JSON.parse(p.store.files.get('index.json').text).stations;
     const first = await p.evaluate(() => SoRT.app.session.id);
-    ok(await until(() => (file('540601') || { sessions: [] }).sessions.some(z => z.id === first)), 'a session shared with the forum');
+    ok(await until(() => (file('540601') || { sessions: [] }).sessions.some(z => z.id === first)), 'a session saved to the forum');
     const q = await page(b, { pass: true, autosaveMs: 800, retryMs: 1000, store: p.store });
     await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'fifteen');
     await q.click('.pb-panel .sess button:has-text("Open")');
@@ -384,7 +384,7 @@ const scenarios = {
     // This computer deletes it everywhere.
     await p.click('#sessionsBtn');
     await p.click('#sessionsResults .sess.current button:has-text("Delete")');
-    ok(/from this browser and from the forum’s shared sessions/.test(await p.innerText('.sess-confirm')) && await p.isVisible('.sess-confirm button:has-text("Only from this browser")'), 'shared: it says it goes from the forum too, and offers Only from this browser');
+    ok(/from this browser and from the forum’s saved sessions/.test(await p.innerText('.sess-confirm')) && await p.isVisible('.sess-confirm button:has-text("Only from this browser")'), 'shared: it says it goes from the forum too, and offers Only from this browser');
     await p.click('.sess-confirm button:has-text("Confirm delete")');
     ok(await until(() => !file('540601').sessions.some(z => z.id === first) && (file('540601').deleted || []).some(d => d.id === first) && !index().some(e => e.key === '540601')), 'Confirm delete: out of the station’s file (noted as deleted) and out of the shared list');
     ok(await p.evaluate(id => !SoRT.store.load(id) && SoRT.app.session.id !== id, first), 'and out of this browser, with a new session on screen');
@@ -394,8 +394,8 @@ const scenarios = {
     await q.click('#q-stockFence .opt:has-text("No")');
     ok(await until(() => q.evaluate(() => /Deleted from the forum/.test(document.querySelector('#saveBar').textContent))), 'the other computer says it was deleted from the forum');
     ok(!file('540601').sessions.some(z => z.id === first) && /Deleted from the forum/.test(await q.innerText('#shareChip')), 'and doesn’t share it back by itself');
-    await q.click('#saveBar button:has-text("Share it again")');
-    ok(await until(() => file('540601').sessions.some(z => z.id === first) && !(file('540601').deleted || []).some(d => d.id === first) && index().some(e => e.key === '540601')), 'Share it again puts it back, in the shared list too');
+    await q.click('#saveBar button:has-text("Save it again")');
+    ok(await until(() => file('540601').sessions.some(z => z.id === first) && !(file('540601').deleted || []).some(d => d.id === first) && index().some(e => e.key === '540601')), 'Save it again puts it back, in the shared list too');
     // A shared row: Delete reads the station's sessions, then asks.
     p.store.files.set('stations/540601.json', { text: JSON.stringify(Object.assign(file('540601'), { sessions: [{ id: 'earlier-one', source: 'sort-v2', forum: { date: '2026-01-01' }, outcome: 'complete', summary: { answers: {} } }].concat(file('540601').sessions) })), etag: '"two"' });
     await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'fifteen');
@@ -1054,8 +1054,8 @@ const scenarios = {
     ok(/<img src="data:image\/[a-z]+;base64,[^"]+" width="379" height="284" alt="Picture"/.test(html), 'a wider one is scaled to fit the answer column, keeping its shape');
     const text = await p.evaluate(async () => { for (const it of await navigator.clipboard.read()) if (it.types.includes('text/plain')) return (await it.getType('text/plain')).text(); return ''; });
     ok(/\[Picture: Gauge hut from the north\]/.test(text) && /\[Picture: no caption\]/.test(text), 'and the plain-text copy says where each picture is');
-    // Shared with the forum: each picture its own file, sent before the station's file that names it.
-    ok(await until(() => p.store.files.has(`stations/pic-${id}.json`) && (p.store.files.get('stations/41506.json') || { text: '' }).text.includes('Gauge hut from the north')), 'the picture is shared with the forum, and the station’s file names it');
+    // Saved to the forum: each picture its own file, sent before the station's file that names it.
+    ok(await until(() => p.store.files.has(`stations/pic-${id}.json`) && (p.store.files.get('stations/41506.json') || { text: '' }).text.includes('Gauge hut from the north')), 'the picture is saved to the forum, and the station’s file names it');
     const f = p.store.files.has(`stations/pic-${id}.json`) ? JSON.parse(p.store.files.get(`stations/pic-${id}.json`).text) : {};
     ok(f.schema === 'sort-picture/1' && f.id === id && f.w === 320 && f.h === 180 && String(f.data).length > 200 && !/data:/.test(f.data), 'as its own file: sort-picture/1, the bytes in base64');
     const stFile = JSON.parse((p.store.files.get('stations/41506.json') || { text: '{"sessions":[]}' }).text);
@@ -1067,7 +1067,7 @@ const scenarios = {
     // Reload: back from this browser (IndexedDB), nothing fetched.
     const onSession = await p.evaluate(() => SoRT.pictures.idsOf(SoRT.app.session));
     ok(onSession.length === 2 && await until(() => onSession.every(i => p.store.files.has(`stations/pic-${i}.json`)), 15000), 'both pictures still on the session are shared');
-    await p.waitForFunction(() => /✓ Shared/.test(document.querySelector('#shareChip').textContent), null, { timeout: 15000 }).catch(() => {});
+    await p.waitForFunction(() => /✓ Saved/.test(document.querySelector('#shareChip').textContent), null, { timeout: 15000 }).catch(() => {});
     let mark = p.store.log.length;
     await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.station-card', { timeout: 40000 });
     await p.waitForSelector('#q-installNotes .pic img', { timeout: 10000 }).catch(() => {});

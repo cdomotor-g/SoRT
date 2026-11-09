@@ -12,7 +12,7 @@
    for this tab only, and the page says so.
 
    id = the first 16 hex characters of the SHA-256 of the encoded picture, so a
-   picture is the same file wherever it goes. Shared with the forum (Flood-Net's
+   picture is the same file wherever it goes. Saved to the forum (Flood-Net's
    store, store-remote.js) as its own file that never changes,
    stations/pic-<id>.json = {"schema":"sort-picture/1","id","type","w","h","data":"<base64>"}:
    created, never replaced (already there = done). The playbook shares a
@@ -35,7 +35,7 @@
   const ID_RE = /^[0-9a-f]{16}$/;
   const LS_SHARED = 'sortv2.pics.shared';
   const RETRY_MS = 30000;             // a picture not found is looked for again after this
-  const HINT = 'Pictures go into Word under this row and are shared with the forum — no landholder names, contact details or gate codes in them.';
+  const HINT = 'Pictures go into Word under this row and are saved to the forum — no landholder names, contact details or gate codes in them.';
 
   const mem = new Map();              // id → { id, type, w, h, dataUrl, at }
   const want = new Map();             // id → { p: Promise|null, failedAt }
@@ -224,7 +224,7 @@
     if (added.length) msgs.push(`${added.length > 1 ? `${added.length} pictures` : 'Picture'} added to “${q.label}”.`);
     if (problems.length) msgs.push(`${added.length ? 'One wasn’t' : blobs.length > 1 ? 'They weren’t' : 'That picture wasn’t'} added: ${problems[0]}.`);
     if (added.length && total > MAX_COUNT) msgs.push(`This session has ${total} pictures now — Word copies get heavy past ${MAX_COUNT}; keep the ones that matter.`);
-    if (added.length && noIdb) msgs.push('This browser isn’t keeping pictures (a private window?): they last until this tab is closed — unless shared with the forum first.');
+    if (added.length && noIdb) msgs.push('This browser isn’t keeping pictures (a private window?): they last until this tab is closed — unless saved to the forum first.');
     A.toast(msgs.join(' '));
   }
   function remove(A, code, id) {
@@ -299,7 +299,7 @@
     }
     const gone = w && !w.p;
     view.disabled = true;
-    view.title = gone ? 'It was added on another computer and hasn’t reached this one: it comes once that computer has shared it with the forum and this one has the forum passphrase.' : '';
+    view.title = gone ? 'It was added on another computer and hasn’t reached this one: it comes once that computer has saved it to the forum and this one has the forum passphrase.' : '';
     view.appendChild(h('span', { class: 'pic-ph' }, gone ? 'Picture not on this computer yet' : 'Loading the picture…'));
     ensure(id);
   }

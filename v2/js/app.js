@@ -216,7 +216,7 @@
   function renderSavedChip() {
     const s = A.session; if (!s) return;
     const pb = s.playbook && s.playbook.savedAt;
-    $('#savedChip').textContent = `${A.localOk === false ? '⚠ Not saved in this browser (its storage is full or blocked)' : 'Saved in this browser ' + U.fmtClock(s.updatedAt)}${pb ? ' · shared with the forum ' + U.fmtClock(pb) : ''}`;
+    $('#savedChip').textContent = `${A.localOk === false ? '⚠ Not saved in this browser (its storage is full or blocked)' : 'Saved in this browser ' + U.fmtClock(s.updatedAt)}${pb ? ' · saved to the forum ' + U.fmtClock(pb) : ''}`;
   }
 
   /* ---------------- forum bar ---------------- */
@@ -748,7 +748,7 @@
           h('div', { class: 'sess-main' },
             h('div', { class: 'sess-name' }, x.name || 'No station', x.number ? h('span', { class: 'res-num' }, x.number) : null, cur ? h('span', { class: 'tag' }, 'open') : null),
             h('div', { class: 'res-meta' }, [(S.schema.template(A.defs, x.template) || {}).label, x.forumDate && `forum ${U.dmy(x.forumDate)}`, x.outcome ? outcomes[x.outcome] : 'not finished',
-              `changed ${U.fmtWhen(x.updatedAt)}`, x.playbookAt ? 'shared with the forum' : 'only in this browser'].filter(Boolean).join(' · '))),
+              `changed ${U.fmtWhen(x.updatedAt)}`, x.playbookAt ? 'saved to the forum' : 'only in this browser'].filter(Boolean).join(' · '))),
           h('div', { class: 'sess-acts' },
             cur ? null : h('button', { type: 'button', class: 'btn', onclick: () => { close(); openSession(x.id); } }, 'Open'),
             asking ? null : h('button', { type: 'button', class: 'btn btn-quiet btn-del', title: 'Delete this session — you are asked to confirm first', onclick: () => {
@@ -763,7 +763,7 @@
       const cancel = results.querySelector('.sess-confirm .btn:last-child');
       if (cancel && !dlg.contains(document.activeElement)) cancel.focus();
     };
-    // The second step for a session in this browser. Shared with the forum and
+    // The second step for a session in this browser. Saved to the forum and
     // connected: deleted there too, unless "Only from this browser".
     const askLocal = (x, cur) => {
       const pb = S.playbook, shared = !!x.playbookAt, reach = shared && pb && pb.state.status === 'ready' && S.shared.has();
@@ -780,8 +780,8 @@
         draw();
       };
       const text = !shared ? `Delete the session for ${name}? It is only in this browser, so it will be gone for good.`
-        : reach ? `Delete the session for ${name} for good — from this browser and from the forum’s shared sessions? Nobody will be able to open it again. (Only from this browser keeps the forum’s copy.)`
-        : `Delete the session for ${name} from this browser? The forum’s shared copy stays — it can be deleted there once this computer is connected to the shared sessions.`;
+        : reach ? `Delete the session for ${name} for good — from this browser and from the forum’s saved sessions? Nobody will be able to open it again. (Only from this browser keeps the forum’s copy.)`
+        : `Delete the session for ${name} from this browser? The forum’s saved copy stays — it can be deleted there once this computer is connected to the saved sessions.`;
       return h('div', { class: 'sess-confirm', role: 'group', 'aria-label': `Delete the session for ${name}` },
         h('p', null, text, busy ? ' Deleting…' : ask.phase === 'error' ? ` Couldn’t delete it from the forum (${ask.error}) — nothing was deleted.` : ''),
         h('div', { class: 'sess-acts' },
@@ -806,7 +806,7 @@
     const outcomes = Object.fromEntries(((A.defs.session || {}).outcomes || []).map(o => [o.code, o.label]));
     const parts = [];
     if (x.local.length) parts.push(`${x.local.length} in this browser`);
-    if (x.shared) parts.push(`${x.shared} shared with the forum`);
+    if (x.shared) parts.push(`${x.shared} saved to the forum`);
     const last = x.entry && x.entry.lastForum ? ` — the last at the forum of ${U.dmy(x.entry.lastForum)}, ${x.entry.lastOutcome ? (outcomes[x.entry.lastOutcome] || x.entry.lastOutcome).toLowerCase() : 'not finished'}` : '';
     el.hidden = false;
     el.appendChild(h('div', null, h('b', null, `⚠ ${st.name} already has ${x.local.length + x.shared === 1 ? 'a session' : 'sessions'}`), ` (${parts.join(', ')})${last}. Open one to carry on with it, or keep going with this new one.`));

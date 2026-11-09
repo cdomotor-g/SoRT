@@ -112,7 +112,7 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   sized to the answer column, its caption in italics under it. The session
   keeps only references (`answers[code].pictures`: id, size, type, caption);
   the pictures themselves are in the browser's IndexedDB (localStorage holds
-  about 5 MB for the whole site), shared with the forum as files of their own
+  about 5 MB for the whole site), saved to the forum as files of their own
   (`stations/pic-<id>.json`, named by a hash of the picture, sent before the
   session and never changed), fetched by any computer that opens the session,
   and carried by *Download session*. A picture alone doesn't answer a
@@ -120,12 +120,12 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   as a precedent or with *Start from it*. The card says they are shared — no
   landholder names, contact details or gate codes in them (the privacy check
   reads text only, captions included).
-- **Shared sessions (the playbook)**: kept by Flood-Net's server
+- **Saved sessions (the playbook)**: kept by Flood-Net's server
   (`floodwarning.net/api/sort/v1`, Flood-Net's `docs/sort-store.md`) for whoever
   has the **forum passphrase**, typed once per computer — no accounts, no tokens.
-  With it, every session with a station and an answer is shared by itself a few
+  With it, every session with a station and an answer is saved by itself a few
   seconds after each change — there is no Share button (`js/store-remote.js`,
-  `js/playbook.js`); the top bar says *✓ Shared* and when, and without the
+  `js/playbook.js`); the top bar says *✓ Saved* and when, and without the
   passphrase a *⚠ Saved only in this browser* bar says so. Saves are kept
   small: four seconds after the last change (at least every half minute while
   changes keep coming), nothing is sent when a fingerprint says nothing stored
@@ -165,14 +165,14 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
 | `js/store.js` | Sessions saved in this browser (`sortv2.*` keys). |
 | `js/floodnet.js` | Flood-Net's read-only API: search, station facts, prefill, hints. |
 | `js/form.js` | The question cards and the Property Services block. |
-| `js/pictures.js` | Pictures pasted, picked or dropped onto a question: made small enough, kept in IndexedDB (the session holds only references), shared with the forum as files of their own, fetched when missing, and put into Word. |
+| `js/pictures.js` | Pictures pasted, picked or dropped onto a question: made small enough, kept in IndexedDB (the session holds only references), saved to the forum as files of their own, fetched when missing, and put into Word. |
 | `js/soil.js` | The Acid sulfate soil question's reading of Queensland's soil maps at the site, the risk it suggests, and its guide (the pop-up). |
 | `js/coast.js` | The Infrastructure options' distance to the sea, the corrosion category it suggests, and the corrosion guide (the pop-up). |
 | `data/surf-coast.json` | Queensland's ocean-facing surf beaches (Point Danger to Agnes Water), made from QSpatial's coastline by `tools/build-surf-coast.mjs`. |
 | `js/word.js` | The tables copied into Word (v1's geometry). |
 | `js/map.js` | The map: layers, pins, location check, drawings, survey marks, bridges, the picture, the zoom lock (on when the page opens), and going back to all of Queensland on a new session. |
 | `js/github.js` | The GitHub token (shared with v1) for publishing question changes, and the contents API. |
-| `js/store-remote.js` | The shared sessions on Flood-Net's server, and the forum passphrase. |
+| `js/store-remote.js` | The saved sessions on Flood-Net's server, and the forum passphrase. |
 | `js/playbook.js` | Sharing sessions by themselves, Sessions' shared list, continue from / precedents. |
 | `js/editor.js` | Edit questions, and publishing them. |
 | `js/tasks.js` | Follow-ups, and the tasks handed to Flood-Net. |

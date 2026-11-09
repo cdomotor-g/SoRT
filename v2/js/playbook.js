@@ -1,5 +1,5 @@
 /* SoRT v2 — playbook.js
-   The playbook — the shared sessions: how SoRT forums dealt with each station,
+   The playbook — the saved sessions: how SoRT forums dealt with each station,
    kept by Flood-Net's server for whoever has the forum passphrase
    (store-remote.js), so every forum computer sees the same sessions and a
    station that comes back, or one like it, starts from what was decided before.
@@ -32,7 +32,7 @@
   const REPO = { owner: 'cdomotor-g', repo: 'SoRT-playbook', branch: 'main' };
   const LS_INDEX = 'sortv2.pb.index';
   const P = { A: null, index: null, indexSha: '', indexAt: 0, status: 'off', error: '', files: new Map(), busy: false, held: new Map(), failure: null, gone: new Set(), ask: null };
-  // P.gone: ids deleted from the shared sessions (here, or found deleted there) — never shared again by
+  // P.gone: ids deleted from the saved sessions (here, or found deleted there) — never shared again by
   // themselves. P.ask: the shared row whose Delete is waiting to be confirmed.
 
   /* ---------------- keys + loading ---------------- */
@@ -176,7 +176,7 @@
       file.station = { number: st.number || '', name: st.name || '', floodnetId: st.source === 'floodnet' ? st.id : '', lat: st.lat, lon: st.lon,
         kinds: st.kinds || [], lga: st.lga || '', hub: st.hubName || '', owner: st.owner || '' };
       file.sessions = file.sessions || [];
-      // Deleted from the shared sessions: not put back unless a person asked to share it again.
+      // Deleted from the saved sessions: not put back unless a person asked to share it again.
       if (deletedHere(file, rec.id)) { if (!again) return { file, sha: cur.sha, gone: true, reread }; file.deleted = file.deleted.filter(d => d.id !== rec.id); }
       const i = file.sessions.findIndex(x => x.id === rec.id);
       const theirs = i >= 0 ? ((file.sessions[i].session || {}).updatedAt || 0) : 0;
@@ -256,24 +256,24 @@
   // what looks private holds it until a person decides). → 'saved' (sent),
   // 'same' (nothing new to send), 'newer' (a later copy is already shared),
   // 'held', 'off', 'none' (no station), 'no' (a person said no), 'gone'
-  // (deleted from the shared sessions) or 'failed'. again: a person asked to
+  // (deleted from the saved sessions) or 'failed'. again: a person asked to
   // share a deleted session again.
   async function save(A, session, quiet, auto, again) {
     session = session || A.session;
     if (P.gone.has(session.id) && !again) return 'gone';
     if (!S.shared.has()) {
-      if (!auto) S.shared.dialog({ why: 'Sharing with the forum needs the forum passphrase — once on this computer.', onDone: ok => { if (ok) loadIndex(); } });
+      if (!auto) S.shared.dialog({ why: 'Saving to the forum needs the forum passphrase — once on this computer.', onDone: ok => { if (ok) loadIndex(); } });
       return 'off';
     }
     const st = session.station, key = stationKey(st);
-    if (!key) { if (!auto) A.toast('Choose (or enter) the station first — the shared sessions are filed by station.'); return 'none'; }
+    if (!key) { if (!auto) A.toast('Choose (or enter) the station first — the saved sessions are filed by station.'); return 'none'; }
     const old = session.playbook || {};
     // A person who said "save it anyway" isn't asked again about the same text.
     const allowed = new Set(old.allowed || []);
     const found = privacyScan(session).filter(f => !allowed.has(hash(f)));
     if (found.length) {
       if (auto) { P.held.set(session.id, found); refresh(); return 'held'; }
-      if (!G.confirm(`This session’s text looks like it holds:\n\n• ${found.slice(0, 6).join('\n• ')}\n\nThe shared sessions keep no landholder contact details and no gate, padlock or key codes. Cancel to remove it first, or OK if it is fine to keep.`)) return 'no';
+      if (!G.confirm(`This session’s text looks like it holds:\n\n• ${found.slice(0, 6).join('\n• ')}\n\nThe saved sessions keep no landholder contact details and no gate, padlock or key codes. Cancel to remove it first, or OK if it is fine to keep.`)) return 'no';
       found.forEach(f => allowed.add(hash(f)));
       session.playbook = Object.assign({}, old, { allowed: [...allowed] });
     }
@@ -293,12 +293,12 @@
       if (old.key && old.key !== key) await moveOut(old.key, session.id).catch(() => {});
       markShared(session, pb(r.sha));
       P.failure = null;
-      if (!quiet) A.toast(`Shared with the forum (${st.name}).`);
+      if (!quiet) A.toast(`Saved to the forum (${st.name}).`);
       return 'saved';
     } catch (e) {
       if (e.status === 401) { P.status = 'denied'; P.error = e.message; }
       P.failure = { message: e.message, status: e.status, at: Date.now(), id: session.id };
-      if (!quiet) A.toast(`Couldn’t share it with the forum (${e.message}) — it is still saved in this browser.`);
+      if (!quiet) A.toast(`Couldn’t save it to the forum (${e.message}) — it is still saved in this browser.`);
       return 'failed';
     } finally { P.busy = false; refresh(); }
   }
@@ -359,7 +359,7 @@
   async function usePrecedent(A, key) {
     try {
       const f = await loadStation(key);
-      if (!f) { A.toast('That station isn’t in the shared sessions.'); return; }
+      if (!f) { A.toast('That station isn’t in the saved sessions.'); return; }
       const rec = (f.data.sessions || []).filter(s => s.summary && Object.keys(s.summary.answers || {}).length).slice(-1)[0];
       if (!rec) { A.toast('No answers recorded for that station yet.'); return; }
       const before = U().clone(A.session.prefill);
@@ -418,7 +418,7 @@
   function fillStrip() {
     const el = stripHost, A = P.A; if (!el || !A) return;
     el.innerHTML = '';
-    const head = h('span', { class: 'fld-label' }, 'Shared sessions');
+    const head = h('span', { class: 'fld-label' }, 'Saved sessions');
     if (P.status === 'off') { el.appendChild(h('div', null, head, ' — ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter the forum passphrase'), ' to see this station’s earlier sessions and similar precedents.')); return; }
     if (P.status === 'loading') { el.appendChild(h('div', null, head, ' — loading…')); return; }
     if (P.status === 'denied') { el.appendChild(h('div', null, head, ' — the forum passphrase on this computer isn’t right any more. ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter it again'))); return; }
@@ -441,7 +441,7 @@
     }
   }
   /* ---------------- sharing by itself ---------------- */
-  // Every change is shared with the forum by itself, with nothing to press: a
+  // Every change is saved to the forum by itself, with nothing to press: a
   // few seconds after the last change (so a burst of clicks is one save), and
   // at least every half minute while changes keep coming. A save sends only
   // what changed: nothing when the fingerprint is the same as last time, else
@@ -534,18 +534,18 @@
   function shareState(A) {
     const s = A && A.session; if (!s) return null;
     const clock = t => U().fmtClock(t);
-    if (!S.shared.has() || P.status === 'off') return { cls: 'warn', short: '⚠ Only in this browser', text: 'Saved only in this browser — with the forum passphrase (the bar at the top) it is shared with the forum by itself.' };
+    if (!S.shared.has() || P.status === 'off') return { cls: 'warn', short: '⚠ Only in this browser', text: 'Saved only in this browser — with the forum passphrase (the bar at the top) it is saved to the forum by itself.' };
     if (P.status === 'denied') return { cls: 'warn', short: '⚠ Only in this browser', text: 'Saved only in this browser — the forum passphrase on this computer isn’t right any more (the bar at the top).' };
-    if (P.status === 'loading') return { cls: '', short: 'Connecting…', text: 'Connecting to the shared sessions…' };
-    if (P.status !== 'ready') return { cls: 'warn', short: '⚠ Only in this browser', text: `Saved only in this browser for now — the shared sessions can’t be reached (${P.error}). It is shared by itself once they can.` };
-    if (P.held.has(s.id)) return { cls: 'warn', short: '⚠ Not shared', text: 'Not shared: its text looks like it holds something private — see the bar at the top.' };
-    if (P.gone.has(s.id)) return { cls: 'warn', short: '⚠ Deleted from the forum', text: 'Not shared: someone deleted this session from the forum’s shared sessions. It is still saved in this browser — see the bar at the top.' };
-    if (!stationKey(s.station) || !answered(s)) return { cls: '', short: '', text: 'It is shared with the forum by itself once it has a station and an answer.' };
-    if (P.busy === s.id) return { cls: '', short: 'Sharing…', text: 'Sharing with the forum…' };
-    if (P.failure && needsSave(s)) return { cls: 'warn', short: '⚠ Not shared yet', text: `Not shared yet — ${P.failure.message}. ${retryAt ? `It tries again by itself at ${clock(retryAt)}.` : 'It tries again at the next change.'} Everything is saved in this browser meanwhile.` };
-    if (soon || todo.has(s.id) || needsSave(s)) return { cls: '', short: 'Sharing in a moment…', text: 'Changed — shared with the forum by itself in a moment.' };
+    if (P.status === 'loading') return { cls: '', short: 'Connecting…', text: 'Connecting to the saved sessions…' };
+    if (P.status !== 'ready') return { cls: 'warn', short: '⚠ Only in this browser', text: `Saved only in this browser for now — the saved sessions can’t be reached (${P.error}). It is saved by itself once they can.` };
+    if (P.held.has(s.id)) return { cls: 'warn', short: '⚠ Not saved', text: 'Not saved: its text looks like it holds something private — see the bar at the top.' };
+    if (P.gone.has(s.id)) return { cls: 'warn', short: '⚠ Deleted from the forum', text: 'Not saved: someone deleted this session from the forum’s saved sessions. It is still saved in this browser — see the bar at the top.' };
+    if (!stationKey(s.station) || !answered(s)) return { cls: '', short: '', text: 'It is saved to the forum by itself once it has a station and an answer.' };
+    if (P.busy === s.id) return { cls: '', short: 'Saving…', text: 'Saving to the forum…' };
+    if (P.failure && needsSave(s)) return { cls: 'warn', short: '⚠ Not saved yet', text: `Not saved yet — ${P.failure.message}. ${retryAt ? `It tries again by itself at ${clock(retryAt)}.` : 'It tries again at the next change.'} Everything is saved in this browser meanwhile.` };
+    if (soon || todo.has(s.id) || needsSave(s)) return { cls: '', short: 'Saving in a moment…', text: 'Changed — saved to the forum by itself in a moment.' };
     const at = (s.playbook || {}).savedAt;
-    return { cls: 'ok', short: `✓ Shared ${clock(at)}`, text: `✓ Shared with the forum by itself — last sent at ${clock(at)}.` };
+    return { cls: 'ok', short: `✓ Saved ${clock(at)}`, text: `✓ Saved to the forum by itself — last sent at ${clock(at)}.` };
   }
   function renderActs(A) {
     P.A = A;
@@ -583,35 +583,35 @@
     const link = (label, run, title) => h('button', { type: 'button', class: 'link', onclick: run, title: title || null }, label);
     const held = P.held.get(A.session.id);
     if (held) {
-      bar('warn', h('span', null, h('b', null, 'Not shared with the forum: '), `it looks like it holds ${held[0]}${held.length > 1 ? ` (and ${held.length - 1} more)` : ''}. Shared sessions keep no landholder contact details and no gate, padlock or key codes — remove it, or `),
-        link('save it anyway', () => save(A), 'Share it as it is — you won’t be asked again about this text'), document.createTextNode('.'));
+      bar('warn', h('span', null, h('b', null, 'Not saved to the forum: '), `it looks like it holds ${held[0]}${held.length > 1 ? ` (and ${held.length - 1} more)` : ''}. Saved sessions keep no landholder contact details and no gate, padlock or key codes — remove it, or `),
+        link('save it anyway', () => save(A), 'Save it as it is — you won’t be asked again about this text'), document.createTextNode('.'));
       return;
     }
     if (P.gone.has(A.session.id)) {
-      bar('warn', h('span', null, h('b', null, '⚠ Deleted from the forum’s shared sessions'), ' — someone deleted this session there, so it isn’t shared any more. It is still saved in this browser. '),
-        link('Share it again', () => save(A, A.session, false, false, true), 'Put it back in the shared sessions, as it is now'), document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
+      bar('warn', h('span', null, h('b', null, '⚠ Deleted from the forum’s saved sessions'), ' — someone deleted this session there, so it isn’t saved there any more. It is still saved in this browser. '),
+        link('Save it again', () => save(A, A.session, false, false, true), 'Put it back in the saved sessions, as it is now'), document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
       return;
     }
     if (P.status === 'ready') {
       const f = P.failure;
       if (f && needsSave(A.session) && (fails >= 2 || !retry)) {
-        bar('warn', h('span', null, h('b', null, '⚠ Not shared with the forum yet'), ` — ${f.message}. `, retry ? `It keeps trying by itself (next at ${U().fmtClock(retryAt)}); ` : '', 'everything is saved in this browser meanwhile. '),
+        bar('warn', h('span', null, h('b', null, '⚠ Not saved to the forum yet'), ` — ${f.message}. `, retry ? `It keeps trying by itself (next at ${U().fmtClock(retryAt)}); ` : '', 'everything is saved in this browser meanwhile. '),
           link('Try now', tryNow), document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
         return;
       }
       el.hidden = true; return;
     }
-    if (P.status === 'loading') { bar('info', h('span', null, 'Connecting to the shared sessions…')); return; }
-    const why = P.status === 'off' ? null : P.status === 'denied' ? 'the forum passphrase on this computer isn’t right any more' : `the shared sessions can’t be reached just now (${P.error}); it keeps trying by itself`;
+    if (P.status === 'loading') { bar('info', h('span', null, 'Connecting to the saved sessions…')); return; }
+    const why = P.status === 'off' ? null : P.status === 'denied' ? 'the forum passphrase on this computer isn’t right any more' : `the saved sessions can’t be reached just now (${P.error}); it keeps trying by itself`;
     bar('warn', h('span', null, h('b', null, '⚠ Saved only in this browser'), why ? ` — ${why}. ` : '. ',
       'Nobody else can open this session, and clearing the browser loses it. '),
-      P.status === 'off' || P.status === 'denied' ? link('Enter the forum passphrase', () => S.shared.dialog({ onDone: () => loadIndex() }), 'Once on this computer: then every session is shared with the whole forum by itself')
+      P.status === 'off' || P.status === 'denied' ? link('Enter the forum passphrase', () => S.shared.dialog({ onDone: () => loadIndex() }), 'Once on this computer: then every session is saved for the whole forum by itself')
         : link('Try now', tryNow),
       document.createTextNode(' · '), link('Download a copy', dl, 'Save this session as a file'));
   }
 
   /* ---------------- deleting ---------------- */
-  // Delete sessions from the shared sessions, and this browser's copies with
+  // Delete sessions from the saved sessions, and this browser's copies with
   // them (a new session if one was on screen). Throws if it couldn't; then
   // nothing has changed.
   async function deleteShared(A, key, ids) {
@@ -656,24 +656,24 @@
     const del = (label, ids, title) => h('button', { type: 'button', class: 'btn btn-danger', disabled: busy, title, onclick: () => confirmDelete(A, e, ids) }, label);
     const here = recs.filter(r => S.store.load(r.id)).length;
     const text = recs.length === 1
-      ? `Delete ${e.name}’s session (${last.what}) from the forum’s shared sessions, for everyone? Nobody will be able to open it again.`
-      : `Delete ${e.name}’s last session (${last.what}) from the forum’s shared sessions, for everyone? Its ${recs.length - 1} earlier session${recs.length > 2 ? 's stay' : ' stays'}.`;
+      ? `Delete ${e.name}’s session (${last.what}) from the forum’s saved sessions, for everyone? Nobody will be able to open it again.`
+      : `Delete ${e.name}’s last session (${last.what}) from the forum’s saved sessions, for everyone? Its ${recs.length - 1} earlier session${recs.length > 2 ? 's stay' : ' stays'}.`;
     return strip([text, here ? ` ${here === 1 ? 'Its copy in this browser goes too.' : 'The copies in this browser go too.'}` : '', busy ? ' Deleting…' : a.phase === 'error' ? ` Couldn’t delete it (${a.error}).` : ''].join(''),
       del('Confirm delete', [last.id], recs.length === 1 ? 'Delete it for good' : 'Delete its last session for good; the earlier ones stay'),
-      recs.length > 1 ? del(`Delete all ${recs.length}`, recs.map(r => r.id), `Delete every one of ${e.name}’s ${recs.length} shared sessions for good`) : null);
+      recs.length > 1 ? del(`Delete all ${recs.length}`, recs.map(r => r.id), `Delete every one of ${e.name}’s ${recs.length} saved sessions for good`) : null);
   }
 
   /* ---------------- the Sessions dialog: the shared playbook ---------------- */
   const matches = (q, ...xs) => !q || xs.some(x => String(x || '').toLowerCase().includes(q));
   function panel(A, query, close, onAsk) {
     const q = String(query || '').trim().toLowerCase();
-    const box = h('div', { class: 'pb-panel' }, h('h3', null, 'Shared with the forum'));
+    const box = h('div', { class: 'pb-panel' }, h('h3', null, 'Saved to the forum'));
     if (P.status === 'off' || P.status === 'denied') { box.appendChild(h('p', { class: 'hint' }, P.status === 'off' ? 'Not connected — the sessions above are only in this browser. ' : 'The forum passphrase on this computer isn’t right any more. ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter the forum passphrase'))); return box; }
-    if (P.status !== 'ready') { box.appendChild(h('p', { class: 'hint' }, P.status === 'loading' ? 'Loading…' : `The shared sessions can’t be reached just now${P.error ? ` (${P.error})` : ''}. `, P.status === 'loading' ? null : h('button', { type: 'button', class: 'link', onclick: () => loadIndex() }, 'Try again'))); return box; }
+    if (P.status !== 'ready') { box.appendChild(h('p', { class: 'hint' }, P.status === 'loading' ? 'Loading…' : `The saved sessions can’t be reached just now${P.error ? ` (${P.error})` : ''}. `, P.status === 'loading' ? null : h('button', { type: 'button', class: 'link', onclick: () => loadIndex() }, 'Try again'))); return box; }
     const o = OUTCOME(A), curKey = stationKey(A.session.station);
     const all = (P.index || []).slice().sort((a, b) => String(b.lastForum).localeCompare(String(a.lastForum)));
     const rows = all.filter(e => matches(q, e.name, e.number, e.lga, e.hub));
-    if (!rows.length) { box.appendChild(h('p', { class: 'hint' }, q ? 'No shared session matches.' : 'Nothing shared yet.')); }
+    if (!rows.length) { box.appendChild(h('p', { class: 'hint' }, q ? 'No saved session matches.' : 'Nothing saved yet.')); }
     if (P.ask && !all.some(e => e.key === P.ask.key)) P.ask = null;
     (q ? rows : rows.slice(0, 12)).forEach(e => {
       const other = curKey && e.key !== curKey, asking = P.ask && P.ask.key === e.key;
@@ -686,12 +686,12 @@
           h('button', { type: 'button', class: 'btn', title: 'Open its last session as it was saved, and carry on with it', onclick: () => { close(); openSaved(A, e.key); } }, 'Open'),
           h('button', { type: 'button', class: 'btn btn-quiet', title: 'A new session for today’s forum, starting from its last answers (each to check)', onclick: () => { close(); continueFrom(A, e.key); } }, 'Start from it'),
           other ? h('button', { type: 'button', class: 'btn btn-quiet', title: `Fill ${A.session.station ? A.session.station.name : 'this session'}’s unanswered questions from this station’s last session — each one orange until you check it`, onclick: () => { close(); usePrecedent(A, e.key); } }, 'Use as a precedent') : null,
-          asking ? null : h('button', { type: 'button', class: 'btn btn-quiet btn-del', title: 'Delete its last session from the forum’s shared sessions, for everyone — you are asked to confirm first', onclick: () => { if (onAsk) onAsk(); askDelete(A, e); } }, 'Delete')),
+          asking ? null : h('button', { type: 'button', class: 'btn btn-quiet btn-del', title: 'Delete its last session from the forum’s saved sessions, for everyone — you are asked to confirm first', onclick: () => { if (onAsk) onAsk(); askDelete(A, e); } }, 'Delete')),
         asking ? askRow(A, e) : null));
     });
     if (!q && rows.length > 12) box.appendChild(h('p', { class: 'hint' }, `${rows.length - 12} more — search to find them.`));
     const waiting = todo.size + (P.busy ? 1 : 0), held = P.held.size;
-    if (waiting) box.appendChild(h('p', { class: 'hint' }, `${waiting} session${waiting > 1 ? 's' : ''} from this browser ${waiting > 1 ? 'are' : 'is'} being shared by ${waiting > 1 ? 'themselves' : 'itself'}, one at a time.`));
+    if (waiting) box.appendChild(h('p', { class: 'hint' }, `${waiting} session${waiting > 1 ? 's' : ''} from this browser ${waiting > 1 ? 'are' : 'is'} being saved by ${waiting > 1 ? 'themselves' : 'itself'}, one at a time.`));
     if (held) box.appendChild(h('p', { class: 'hint' }, `${held} session${held > 1 ? 's' : ''} in this browser ${held > 1 ? 'are' : 'is'} held back: the text looks like it holds a phone number, an email or a gate code. Open ${held > 1 ? 'each' : 'it'} to see what, and remove it or save it anyway.`));
     box.appendChild(h('p', { class: 'hint' }, h('button', { type: 'button', class: 'link', id: 'changePass', onclick: () => S.shared.changeDialog({ onDone: () => A.toast('Forum passphrase changed — tell the forum; each computer asks for it next time.') }) }, 'Change the forum passphrase')));
     return box;
