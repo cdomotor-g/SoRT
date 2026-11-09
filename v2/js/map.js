@@ -76,7 +76,7 @@
   const M = {
     version: 0,
     app: null, root: null, els: {}, esri: null, esriP: null, view: null, map: null, layers: {}, gl: {},
-    contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true, ghost: false },   // Flood-Net's position: hidden unless ticked
+    contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true, ghost: false, autofit: true },   // Flood-Net's position: hidden unless ticked
     move: false, hover: null, drag: null, place: null, measure: null, sketch: null,
     pins: [], anchor: null, fetchedAt: null, marks: [], bridges: [], shown: [], shownSig: '', nearby: [], diag: {}, log: [],
     framedFor: null, ready: false, failed: null, contourIds: null, railIds: null,
@@ -146,6 +146,15 @@
     return pins;
   }
   const shownPins = () => M.pins.filter(p => p.shown && p.ok);
+  // Re-frame every location once a pin change is final (placed, typed, or Move pins switched off).
+  const pinSig = () => shownPins().map(p => `${p.key}@${p.lat},${p.lon}`).join('|');
+  const autoFitSoon = (() => { let t = null; return () => { clearTimeout(t); t = setTimeout(() => { if (M.move || M.drag) return; M.fitPending = false; if (M.on.autofit && M.ready) frame(true); }, 500); }; })();
+  function notePins(fit) {
+    const sig = pinSig(), was = M.pinSigPrev; M.pinSigPrev = sig;
+    if (!fit || was == null || sig === was || !M.on.autofit) return;
+    if (M.move || M.drag) { M.fitPending = true; return; }
+    autoFitSoon();
+  }
 
   function ans(code) {
     const s = M.app.session;
@@ -190,6 +199,7 @@
       contourSel, tog('road', 'Road reserve', 'The cadastre’s road parcels, as on QLD Globe'), tog('rail', 'Rail'),
       M.els.marksTog = tog('marks', 'State survey marks', 'Queensland’s permanent survey marks and benchmarks (QSpatial) within 2 km, nearest 5, for tying a water level station to AHD — not the Bureau’s own station benchmarks, which are on the Local TBM question. Water level tables only.'),
       tog('bridges', 'Bridges', 'Road bridges within 1 km, and who manages them'),
+      tog('autofit', 'Auto-fit', 'After a pin is placed, moved or typed in, frame every location again so none is missed. Untick to keep your own zoom'),
       tog('nearby', 'Flood-Net stations', 'Other Flood-Net stations within 3 km — shown for the forum, left out of the Word picture'),
       tog('ghost', 'Flood-Net position', 'Tick to see where Flood-Net has the station, once its pin has been moved away from it — a working aid on this map only, never in the Word picture'),
       h('span', { class: 'map-tools-gap' }),
@@ -988,7 +998,7 @@
     if (M.move && M.measure) setMeasure(false);
     M.els.moveBtn.setAttribute('aria-pressed', String(M.move));
     M.els.moveBtn.classList.toggle('on', M.move);
-    if (!M.move) { M.hover = null; M.drag = null; M.els.view.classList.remove('grab', 'grabbing'); }
+    if (!M.move) { M.hover = null; M.drag = null; M.els.view.classList.remove('grab', 'grabbing'); if (M.fitPending) autoFitSoon(); }
     applyZoomLock();
   }
   /* Zoom lock (🔒, above + / −): on when the page opens. */
@@ -1544,7 +1554,7 @@
   }
   function sync(app) {
     M.app = app;
-    resolvePins();
+    resolvePins(); notePins(true);
     if (suggestDistances()) { M.app.changed(); return; }
     if (M.els.marksTog) M.els.marksTog.hidden = !marksWanted();
     // The table changed to one that uses survey marks (ask for them now) or to one that doesn't (drop them).
@@ -1568,7 +1578,7 @@
   // A (new) station: frame it, and fetch what is near it.
   function station(app) {
     M.app = app;
-    resolvePins();
+    resolvePins(); notePins(false);
     renderCheck();
     lastAnchor = key(M.anchor);
     refreshNear(true);
@@ -1576,7 +1586,7 @@
     const k = key(M.anchor);
     if (k && M.framedFor !== k) { M.framedFor = k; M.homeNext = false; frame(false); }
   }
-  function reset() { M.marks = []; M.marksAsked = false; M.bridges = []; M.shown = []; M.shownSig = ''; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); dropCloseups(); }
+  function reset() { M.marks = []; M.marksAsked = false; M.bridges = []; M.shown = []; M.shownSig = ''; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.pinSigPrev = null; M.fitPending = false; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); dropCloseups(); }
   /* A small map of its own, in the corrosion guide (js/coast.js): the imagery and
      its place names, the shoreline the distances were measured to (surf beaches
      orange, other shore blue), and a dashed line from the site to each nearest

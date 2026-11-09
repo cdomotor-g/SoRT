@@ -937,6 +937,8 @@ const scenarios = {
     const far = await p.evaluate(() => { const st = SoRT.app.session.station; return `${(st.lat - 0.01).toFixed(6)}, ${(st.lon + 0.002).toFixed(6)}`; });
     await p.fill('.loc[data-pin="relocation.newLocation"] input', far); await p.press('.loc[data-pin="relocation.newLocation"] input', 'Enter');
     ok(await p.waitForFunction(() => document.querySelectorAll('.map-closeups:not([hidden]) .mc-frame').length === 2, null, { timeout: 20000 }).then(() => true).catch(() => false), 'a relocation 1 km away: two close-ups under the map');
+    // Auto-fit: typing the far relocation re-framed the map so both pins are in view.
+    ok(await p.waitForFunction(() => { const M = SoRT.mapView._M, W = M.view.width, H = M.view.height; return M.pins.filter(x => x.shown && x.ok).every(x => { const s = M.view.toScreen(new M.esri.Graphic({ geometry: { type: 'point', longitude: x.lon, latitude: x.lat } }).geometry); return !!s && s.x >= 0 && s.x <= W && s.y >= 0 && s.y <= H; }); }, null, { timeout: 10000 }).then(() => true).catch(() => false), 'a relocation pin put in far away: the map re-fits so every pin is in view');
     ok(/Current location — close-up/.test(await p.innerText('.map-closeups')) && /Relocation site — close-up/.test(await p.innerText('.map-closeups')) && /1\.\d km from the current location/.test(await p.innerText('.map-closeups')), 'each named, and why they are there');
     await p.waitForTimeout(4000);
     await p.click('.top .copy-btn');
