@@ -13,7 +13,10 @@
    "pictures" pastes made-up snips (drawn on a canvas) into question cards.
    Needs Playwright: `npm i playwright` anywhere and point PLAYWRIGHT_PKG at it,
    or have it resolvable. PW_CHROMIUM pins a browser binary. BASE overrides
-   the page address (default http://127.0.0.1:8642/v2/). */
+   the page address (default http://127.0.0.1:8642/v2/). STUB_IMAGERY=1 gives
+   the State's imagery tiles a stand-in (random-coloured squares), for when the
+   imagery server won't serve this computer and "map" fails with "the map
+   hadn't finished drawing" — everything else on the map stays live. */
 'use strict';
 const { chromium } = require(process.env.PLAYWRIGHT_PKG || 'playwright');
 const BASE = process.env.BASE || 'http://127.0.0.1:8642/v2/';
@@ -88,6 +91,18 @@ function fakeStore() {
   return { files, handler, puts: () => puts, log, failPuts: k => { failPuts = k; } };
 }
 
+// A 256×256 PNG of random-ish colours, made with Node alone: the stand-in imagery tile.
+function standInTile() {
+  const zlib = require('zlib');
+  const crc32 = buf => { let crc = 0xffffffff; for (let n = 0; n < buf.length; n++) { let c = (crc ^ buf[n]) & 0xff; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crc = (crc >>> 8) ^ c; } return (crc ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td)); return Buffer.concat([len, td, crc]); };
+  const W = 256, H = 256, raw = Buffer.alloc((W * 3 + 1) * H);
+  let r = 7;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { r = (r * 1103515245 + 12345) & 0x7fffffff; const o = y * (W * 3 + 1) + 1 + x * 3; raw[o] = 60 + (r % 90); raw[o + 1] = 90 + ((r >> 8) % 90); raw[o + 2] = 50 + ((r >> 16) % 60); }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
 async function page(browser, opts) {
   const o = opts || {};
   const ctx = await browser.newContext({ viewport: o.viewport || { width: 1360, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
@@ -104,6 +119,7 @@ async function page(browser, opts) {
   if (o.coast) await ctx.route(/CoastalWaters\/MapServer\/17\/query/, o.coast);
   if (o.soil) await ctx.route(/SoilsAndLandResource\/MapServer\/\d+\/query/, o.soil);
   await ctx.route(o.map ? /raw\.githubusercontent\.com/ : /raw\.githubusercontent\.com|js\.arcgis\.com/, r => r.abort());
+  if (process.env.STUB_IMAGERY) { const tile = standInTile(); await ctx.route(/spatial-img\.information\.qld\.gov\.au\/.*\/tile\//, r => r.fulfill({ status: 200, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: tile })); }
   const p = await ctx.newPage();
   p.errors = [];
   p.on('pageerror', e => p.errors.push(e.message));
