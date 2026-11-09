@@ -287,7 +287,7 @@
     // (the view started wherever the anchor was when it was built, maybe nowhere).
     resolvePins();
     M.framedFor = null; M.homeNext = false;
-    if (M.anchor) { M.framedFor = key(M.anchor); frame(false); } else home();
+    if (M.anchor) { M.framedFor = key(M.anchor); frameStart(); } else home();
     attachInteraction();
     E.reactiveUtils.watch(() => M.view.updating, u => { M.els.progress.hidden = !u; });
     E.reactiveUtils.watch(() => [M.view.extent, M.view.scale], () => { renderEdges(); renderStamp(); });
@@ -1051,6 +1051,8 @@
     M.view.goTo(new M.esri.Extent({ xmin: x0, ymin: y0, xmax: x1, ymax: y1, spatialReference: { wkid: 3857 } }), { animate: false })
       .catch(e => log(`Going back to Queensland didn’t finish: ${e && (e.name || e.message)}`));
   }
+  // First framing of a station or page load: every location when Auto-fit is on, else the station.
+  const frameStart = () => frame(!!M.on.autofit);
   async function frame(all) {
     if (!M.ready) return;
     const pts = shownPins();
@@ -1588,8 +1590,8 @@
     if (!M.ready) return;
     // Straight after a new (or another) session: start from its station, or from
     // the whole of Queensland when it has none yet.
-    if (M.homeNext) { M.homeNext = false; if (M.anchor) { M.framedFor = key(M.anchor); frame(false); } else home(); }
-    if (M.anchor && M.view.center && near(M.anchor, { lat: M.view.center.latitude, lon: M.view.center.longitude }) > 5000 && M.framedFor !== key(M.anchor)) { M.framedFor = key(M.anchor); frame(false); }
+    if (M.homeNext) { M.homeNext = false; if (M.anchor) { M.framedFor = key(M.anchor); frameStart(); } else home(); }
+    if (M.anchor && M.view.center && near(M.anchor, { lat: M.view.center.latitude, lon: M.view.center.longitude }) > 5000 && M.framedFor !== key(M.anchor)) { M.framedFor = key(M.anchor); frameStart(); }
     drawPins(); drawMarks(); drawBridges(); drawFeatures(); renderEdges();
     refreshShown();
     syncCloseups();
@@ -1604,7 +1606,7 @@
     refreshNear(true);
     if (!M.ready) return;
     const k = key(M.anchor);
-    if (k && M.framedFor !== k) { M.framedFor = k; M.homeNext = false; frame(false); }
+    if (k && M.framedFor !== k) { M.framedFor = k; M.homeNext = false; frameStart(); }
   }
   function reset() { M.marks = []; M.marksAsked = false; M.bridges = []; M.shown = []; M.shownSig = ''; M.nearby = []; M.fetchedAt = null; M.framedFor = null; M.pinSigPrev = null; M.fitPending = false; M.homeNext = true; lastAnchor = ''; cancelPlace(); setMove(false); dropCloseups(); }
   /* A small map of its own, in the corrosion guide (js/coast.js): the imagery and
