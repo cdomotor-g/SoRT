@@ -1259,6 +1259,8 @@ const scenarios = {
     const back = await box();
     ok(!(await p.evaluate(() => document.body.classList.contains('map-full'))) && Math.abs(back.w - small.w) < 4 && await p.evaluate(() => SoRT.mapView._M.zoomLocked), 'Esc puts the map back, zoom lock and all');
     ok(await p.$eval('#q-orificeRun [data-fk="orificeRun::f::newLength"]', e => Number(e.value) > 0), 'the question card shows the drawn length');
+    await p.waitForTimeout(800);
+    ok(await p.$eval('#preview', e => { const r = e.querySelector('tr[data-go="q:orificeRun"]'); return !!r && /Orifice run/.test(r.textContent) && /New run length: \d/.test(r.textContent) && !/Current run length/.test(r.textContent); }), 'the Word table has an Orifice run row with the drawn length (and not the cleared one)');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },

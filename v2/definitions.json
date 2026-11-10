@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 13,
+  "version": 14,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-11-05",
@@ -1155,7 +1155,6 @@
           "colour": "purple"
         }
       ],
-      "word": false,
       "precedent": false
     },
     "sensorOption": {
