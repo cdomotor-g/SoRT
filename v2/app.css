@@ -119,9 +119,20 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .save-bar.warn { background: var(--warn-bg); color: var(--warn); }
 .save-bar.info { background: var(--info-bg); color: var(--info); }
 .save-bar .link { color: inherit; font-weight: 600; }
-.sess-search { width: 100%; font-size: 15px; padding: 8px 10px; margin: 6px 0 4px; position: sticky; top: 0; z-index: 1; }
+.sess-top { position: sticky; top: -8px; z-index: 1; background: var(--card); padding: 6px 0 0; margin-top: -8px; }
+.sess-search { width: 100%; font-size: 15px; padding: 8px 10px; margin: 6px 0 4px; }
+/* Sessions Management: two tabs, each with how many it holds */
+.sess-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line-2); margin-top: 6px; }
+.sess-tab { background: none; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; padding: 8px 14px; cursor: pointer; color: var(--muted); font-weight: 600; margin-bottom: -1px; white-space: nowrap; }
+.sess-tab:hover { color: var(--ink); }
+.sess-tab.on { background: var(--card); border-color: var(--line-2); color: var(--accent); }
+.sess-count { display: inline-block; min-width: 22px; margin-left: 7px; padding: 0 6px; border-radius: 999px; background: var(--line); color: var(--ink); font-size: 12px; font-weight: 700; text-align: center; }
+.sess-tab.on .sess-count { background: var(--accent-weak); color: var(--accent); }
+#sessionsDlg { width: min(900px, calc(100vw - 32px)); }
+#sessionsList { min-height: min(340px, 50vh); }
+.sess-tidy { margin: 10px 0 4px; }
 #sessionsResults h3 { margin: 12px 0 4px; font-size: 15px; }
-.pb-panel { border-top: 1px solid var(--line); margin-top: 10px; }
+.pb-panel { margin-top: 0; }
 .st-dup { margin: 0 0 8px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 14px; }
 .st-dup .link { color: inherit; }
 .st-dup-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
@@ -208,12 +219,13 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .src-auto { background: var(--src-auto); color: var(--src-auto-ink); padding-right: 8px; }
 .src-ok { border: 0; background: rgba(255, 255, 255, .7); color: inherit; border-radius: 999px; cursor: pointer; font-weight: 700; padding: 0 6px; }
 :root[data-theme="dark"] .src-ok { background: rgba(0, 0, 0, .3); }
-.opts-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Pills keep their own height (and so their round ends) however tall the row beside them is. */
+.opts-pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; align-content: flex-start; align-self: start; }
 .opts-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 4px 10px; }
 .opt-group { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 4px 10px; }
 .opt-group-label { grid-column: 1 / -1; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
 .opt { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px; cursor: pointer; background: var(--card); }
-.opts-pills .opt { border-radius: 999px; padding: 5px 12px; }
+.opts-pills .opt { border-radius: 999px; padding: 5px 12px; align-items: center; flex: 0 0 auto; max-width: 100%; }
 .opt input { margin: 3px 0 0; accent-color: var(--accent); }
 .opts-pills .opt input { position: absolute; opacity: 0; pointer-events: none; }
 .opt:hover { border-color: var(--accent); }
@@ -229,7 +241,12 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 input.prefilled, textarea.prefilled { background: var(--src-floodnet); }
 input.pre-precedent, textarea.pre-precedent, input.pre-earlier, textarea.pre-earlier { background: var(--src-precedent); }
 input.pre-map, textarea.pre-map { background: var(--src-map); }
-.pb-sim { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+.pb-sim { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
+.pb-sim-what { min-width: 0; overflow-wrap: anywhere; }
+/* The station card's saved sessions: folded away until asked for */
+.pb-fold > summary { cursor: pointer; list-style-position: inside; }
+.pb-fold > summary:hover .fld-label { color: var(--accent); }
+.pb-fold-body { display: grid; gap: 6px; padding: 8px 0 2px 16px; }
 .pb-fu { border-top: 1px solid var(--line); margin-top: 10px; }
 .gh-dlg ol { padding-left: 20px; }
 .gh-dlg .dlg-body { display: grid; gap: 8px; }
@@ -276,11 +293,16 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
 .dlg-head h2 { margin: 0; font-size: 18px; }
 .dlg-foot { border-top: 1px solid var(--line); flex-wrap: wrap; }
 .dlg-body { padding: 8px 18px; max-height: 60vh; overflow: auto; }
-.sess { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); align-items: center; }
+/* A row: its words wrap on the left; its buttons stay in one line on the right. */
+.sess { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 10px 0; border-top: 1px solid var(--line); align-items: center; }
+.sess-main { min-width: 0; overflow-wrap: anywhere; }
+.sess-main .res-meta { white-space: normal; }
 .sess:first-child { border-top: 0; }
 .sess.current .sess-name { color: var(--accent); }
 .sess-name { font-weight: 600; }
-.sess-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.sess-acts { display: flex; flex-wrap: nowrap; gap: 6px; justify-content: flex-end; align-items: center; }
+.sess-confirm .sess-acts { flex-wrap: wrap; }
+@media (max-width: 600px) { .sess { grid-template-columns: minmax(0, 1fr); } .sess-acts { flex-wrap: wrap; justify-content: flex-start; } }
 /* Delete, then Confirm delete: the second step sits under the row, in red */
 .btn-quiet.btn-del:hover { color: var(--error); border-color: var(--error); }
 .btn-danger { background: var(--error); border-color: var(--error); color: #fff; font-weight: 600; }
@@ -288,7 +310,7 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
 :root[data-theme="dark"] .btn-danger { color: #2a0b08; }
 .sess.asking { background: var(--error-bg); border-radius: 8px; padding: 10px; margin: 2px -10px; }
 .sess.asking .btn-quiet { background: transparent; }
-.sess-confirm { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.sess-confirm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .sess-confirm p { margin: 0; flex: 1 1 320px; color: var(--ink); }
 .file-btn { position: relative; overflow: hidden; }
 .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
@@ -426,6 +448,7 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
 .loc-head { display: flex; gap: 6px; align-items: center; }
 .loc-label { font-weight: 600; }
 .loc input { padding: 5px 8px; font-size: 13px; }
+.dash { width: 18px; height: 4px; border-radius: 2px; flex: 0 0 auto; box-shadow: 0 0 0 1px #fff, 0 0 0 2px var(--line-2); }
 .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line-2); }
 .mark { display: flex; gap: 8px; align-items: flex-start; border-top: 1px solid var(--line); padding-top: 6px; }
 .mark.poor { opacity: .7; }
@@ -445,7 +468,8 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
   .sub { max-width: 60vw; }
 }
 /* Map beside the questions (wide screens only; narrower ones keep it above). */
-.layout-btn { margin-left: auto; }
+.full-btn { margin-left: auto; }
+.layout-btn { margin-left: 0; }
 @media (max-width: 1199px) { .layout-btn { display: none; } }
 @media (min-width: 1200px) {
   body.layout-side .top-row, body.layout-side .banner { max-width: none; }
@@ -462,6 +486,21 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
   body.layout-side .map-grid { grid-template-columns: 1fr; }
   body.layout-side .map-frame { height: max(340px, calc(100vh - var(--top-h, 60px) - 330px)); }
   body.layout-side .map-side { max-height: none; }
+}
+/* The map, full screen: the map card over the whole window (the same map, so
+   nothing is lost), the list of locations beside it. Esc or the button ends it. */
+body.map-full { overflow: hidden; }
+body.map-full #map-card { position: fixed; inset: 10px; top: 10px; bottom: 10px; right: 10px; left: 10px; width: auto; max-width: none; z-index: 70; margin: 0;
+  overflow: auto; overscroll-behavior: contain; box-shadow: 0 0 0 100vmax rgba(10, 15, 20, .6); }
+body.map-full .layout-btn { display: none; }
+body.map-full .map-grid { grid-template-columns: minmax(0, 1fr) 320px; }
+body.map-full .map-frame { height: max(320px, calc(100vh - 270px)); }
+body.map-full .map-side { max-height: max(320px, calc(100vh - 200px)); overflow: auto; }
+body.map-full .jump-btns { display: none; }
+@media (max-width: 900px) {
+  body.map-full .map-grid { grid-template-columns: 1fr; }
+  body.map-full .map-frame { height: 66vh; }
+  body.map-full .map-side { max-height: none; }
 }
 /* Jump buttons: back to the top, and on to the question you are up to (bottom left, over the questions). */
 .jump-btns { position: fixed; left: 16px; bottom: 16px; z-index: 40; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -485,6 +524,11 @@ dialog::backdrop { background: rgba(10, 15, 20, .45); }
 .confirm-panel .cp-foot { border-top: 1px solid var(--line); padding-top: 8px; text-align: right; }
 .btn-keep { font-weight: 700; }
 .q.flash { outline: 3px solid #e07a10; outline-offset: 2px; }
+/* The preview's rows are clickable: each goes to the question it came from */
+#preview [data-go] { cursor: pointer; }
+#preview [data-go]:hover { outline: 2px solid #0f6e6a; outline-offset: -2px; }
+#preview tr[data-go]:hover > td { background-image: linear-gradient(rgba(15, 110, 106, .09), rgba(15, 110, 106, .09)); }
+.go-flash { outline: 3px solid #e07a10; outline-offset: 2px; border-radius: 6px; }
 
 /* Close-ups of a long relocation's two ends, under the map */
 .map-closeups { display: grid; gap: 6px; }

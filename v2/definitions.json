@@ -1,6 +1,6 @@
 {
   "schema": "sort-definitions/2",
-  "version": 12,
+  "version": 13,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
     "updated": "2026-11-05",
@@ -284,7 +284,11 @@
           },
           "value": "na"
         }
-      ]
+      ],
+      "prefill": {
+        "from": "station.txPower"
+      },
+      "hintFrom": "station.txPower"
     },
     "frequency": {
       "label": "ERRTS/ALERT Frequency",
@@ -1074,7 +1078,7 @@
       ]
     },
     "riverCoords": {
-      "label": "River Line Termination Coordinates",
+      "label": "River Line Termination / Radar sensor Coordinates (if not with primary location)",
       "section": "location",
       "icon": "📍",
       "type": "none",
@@ -1087,7 +1091,8 @@
       ],
       "pin": {
         "field": "detail",
-        "label": "River line termination",
+        "label": "River line termination / Radar sensor (if not with primary location)",
+        "mapLabel": "River line termination / Radar sensor",
         "colour": "blue"
       },
       "precedent": false
@@ -1111,9 +1116,46 @@
       ],
       "pin": {
         "field": "newRiver",
-        "label": "River line relocation",
+        "label": "River line termination relocation",
         "colour": "purple"
       },
+      "precedent": false
+    },
+    "orificeRun": {
+      "label": "Orifice run",
+      "section": "location",
+      "hint": "(Draw the current and/or the new run on the map — each length fills in)",
+      "icon": "〰",
+      "type": "none",
+      "fields": [
+        {
+          "code": "currentLength",
+          "label": "Current run length",
+          "type": "number",
+          "unit": "m"
+        },
+        {
+          "code": "newLength",
+          "label": "New run length",
+          "type": "number",
+          "unit": "m"
+        }
+      ],
+      "mapDraw": [
+        {
+          "kind": "line",
+          "field": "currentLength",
+          "label": "Current orifice run",
+          "colour": "blue"
+        },
+        {
+          "kind": "line",
+          "field": "newLength",
+          "label": "New orifice run",
+          "colour": "purple"
+        }
+      ],
+      "word": false,
       "precedent": false
     },
     "sensorOption": {
@@ -1755,6 +1797,7 @@
         "relocation",
         "riverCoords",
         "riverRelocation",
+        "orificeRun",
         "sensorOption",
         "sensorRange",
         "terminationType",
@@ -1879,6 +1922,7 @@
           "q": "riverRelocation",
           "hint": "Leave blank if not applicable"
         },
+        "orificeRun",
         {
           "q": "sensorOption",
           "options": [
@@ -2279,6 +2323,10 @@
           {
             "code": "high",
             "label": "High – trenching (e.g. a new orifice line)"
+          },
+          {
+            "code": "na",
+            "label": "NA"
           }
         ]
       },

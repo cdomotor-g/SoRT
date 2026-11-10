@@ -244,9 +244,10 @@
     if (q.pin && q.pin.field === f.code) {
       line.appendChild(h('button', { type: 'button', class: 'btn-mini', title: 'Show this point on the map', onclick: () => app.focusMapOn(q.code, f.code) }, '📍 Map'));
     }
-    if (q.mapDraw && q.mapDraw.field === f.code) {
-      line.appendChild(h('button', { type: 'button', class: 'btn-mini', title: `Draw the ${q.mapDraw.label.toLowerCase()} on the map`, onclick: () => app.drawOnMap(q.code) },
-        q.mapDraw.kind === 'circle' ? '◯ Draw on map' : '〰 Draw on map'));
+    const md = sch().mapDraws(q).find(d => d.field === f.code);
+    if (md) {
+      line.appendChild(h('button', { type: 'button', class: 'btn-mini', title: `Draw the ${md.label.toLowerCase()} on the map`, onclick: () => app.drawOnMap(q.code, f.code) },
+        md.kind === 'circle' ? '◯ Draw on map' : '〰 Draw on map'));
     }
     row.appendChild(line);
     // Coordinates: DMS converts on paste, and a bad one says why (v1's behaviour).

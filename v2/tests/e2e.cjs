@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: oldforum, station, copy, playbook, shared, delete, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil, pictures. They use the live Flood-Net
+   Scenarios: oldforum, station, copy, playbook, shared, delete, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil, pictures, refine, mapwork, jump. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    "coast" gives QSpatial's coastline a stand-in too: one straight shore, so the
@@ -139,6 +139,7 @@ async function page(browser, opts) {
     await p.waitForSelector('.station-card', { timeout: 40000 });
     await p.waitForTimeout(600);
   };
+  p.tab = t => p.click('#sessTab-' + t);   // Sessions Management's tabs: 'browser' or 'forum'
   p.newSession = async () => { await p.click('#sessionsBtn'); await p.click('#newSessionBtn'); };
   p.clip = () => p.evaluate(async () => { for (const it of await navigator.clipboard.read()) if (it.types.includes('text/html')) return (await it.getType('text/html')).text(); return ''; });
   return p;
@@ -221,11 +222,15 @@ const scenarios = {
     await p.newSession(); await p.pick('540335');
     await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
     await p.waitForTimeout(400);
+    ok(await p.$eval('#pbFold', e => !e.open) && /1 similar station|similar stations/.test(await p.innerText('#pbFold summary')), 'the card’s saved sessions are folded away, the line saying what is inside');
+    await p.click('#pbFold summary');
     ok(/Fifteen Mile AL/.test(await p.innerText('#pbStrip')), 'Fifteen Mile offered as a similar station');
     await p.click('#pbStrip .pb-sim button'); await p.waitForTimeout(1200);
     ok((await p.$$eval('#q-stockFence .opt.on', e => e.map(x => x.className))).join().includes('from-precedent'), 'precedent answers marked Precedent');
     ok(!(await p.$eval('[data-fk="installNotes::f::notes"]', e => e.value)).includes('0459'), 'free-text notes never travel as a precedent');
     await p.newSession(); await p.pick('540601');
+    ok(await p.$eval('#pbFold', e => !e.open), 'another station’s card starts folded again');
+    await p.click('#pbFold summary');
     await p.click('#pbStrip button:has-text("Continue")'); await p.waitForTimeout(2500);
     ok((await p.$$eval('.q.waiting .src', e => e.map(x => x.textContent))).some(t => /Earlier session/.test(t)), 'Continue carries answers over as Earlier session');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
@@ -247,7 +252,7 @@ const scenarios = {
     ok(await n.evaluate(() => localStorage.getItem('sortv2.passphrase')) === 'TESTPASS' && await n.$eval('#saveBar', e => e.hidden), 'the right one (typed loosely) is remembered and the warning goes');
     ok(await until(() => n.store.files.has('stations/540601.json')), 'the session answered before the passphrase is saved by itself once it is typed');
     // Changing it: only its fingerprint leaves, and the old one stops working.
-    await n.click('#sessionsBtn'); await n.click('#changePass');
+    await n.click('#sessionsBtn'); await n.tab('forum'); await n.click('#changePass');
     await n.fill('#passNew', 'short'); await n.fill('#passNew2', 'short'); await n.click('.pass-dlg .btn-primary');
     ok(/longer/.test(await n.textContent('#passNewMsg')), 'a short new passphrase is refused');
     await n.fill('#passNew', 'Wombats queue politely at the river ford'); await n.fill('#passNew2', 'wombats queue politely, at the river ford.');
@@ -319,17 +324,20 @@ const scenarios = {
     ok(/already has (a session|sessions)/.test(await p.innerText('#dupNote')) && /saved to the forum/.test(await p.innerText('#dupNote')), 'picking it again warns that a session already exists');
     await p.click('#dupNote button:has-text("Show its sessions")');
     ok(await p.evaluate(() => document.querySelector('#sessionsDlg').open) && (await p.inputValue('#sessionsSearch')) === '540601', 'which opens Sessions, searched for the station');
-    const res = await p.innerText('#sessionsResults');
-    ok(/In this browser[\s\S]*Fifteen Mile AL[\s\S]*Saved to the forum[\s\S]*Fifteen Mile AL/.test(res), 'its sessions are listed, here and saved to the forum');
+    ok(/In this browser\s*[12]\s*Saved to the forum\s*1/.test(await p.innerText('#sessionsTabs')) && await p.$eval('#sessTab-browser', e => e.classList.contains('on')), `two tabs, each with how many match; the browser’s first (${(await p.innerText('#sessionsTabs')).replace(/\s+/g, ' ')})`);
+    ok(/Fifteen Mile AL/.test(await p.innerText('#sessionsResults')) && !(await p.$('.pb-panel')), 'its session in this browser is listed');
+    await p.tab('forum');
+    ok(/Fifteen Mile AL/.test(await p.innerText('.pb-panel')), 'and, on the other tab, the one saved to the forum');
+    await p.tab('browser');
     await p.fill('#sessionsSearch', 'zzz');
     ok(!/Fifteen Mile AL/.test(await p.innerText('#sessionsResults')), 'the search narrows the list');
-    await p.fill('#sessionsSearch', 'fifteen');
+    await p.fill('#sessionsSearch', 'fifteen'); await p.tab('forum');
     await p.click('.pb-panel .sess button:has-text("Open")');
     await p.waitForTimeout(800);
     ok(await p.evaluate(id => SoRT.app.session.id === id, first) && (await p.$$eval('#q-stockFence .opt.on', e => e.length)) === 1, 'Open carries on with that saved session itself');
     // A precedent: another station filled from this one, orange until checked, then green.
     await p.newSession(); await p.pick('540335');
-    await p.click('#sessionsBtn'); await p.fill('#sessionsSearch', 'fifteen');
+    await p.click('#sessionsBtn'); await p.fill('#sessionsSearch', 'fifteen'); await p.tab('forum');
     await p.click('.pb-panel .sess button:has-text("Use as a precedent")');
     await p.waitForTimeout(1500);
     ok((await p.$$('.q.waiting')).length >= 2 && (await p.$$eval('#q-stockFence .opt.on', e => e.map(x => x.className))).join().includes('from-precedent'), 'Use as a precedent fills its answers, each waiting to be checked');
@@ -379,15 +387,17 @@ const scenarios = {
     ok(await until(() => (file('540601') || { sessions: [] }).sessions.some(z => z.id === first)), 'a session saved to the forum');
     const q = await page(b, { pass: true, autosaveMs: 800, retryMs: 1000, store: p.store });
     await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'fifteen');
+    ok(await q.$eval('#sessTab-forum', e => e.classList.contains('on')), 'a search with nothing in this browser turns to the forum’s tab by itself');
     await q.click('.pb-panel .sess button:has-text("Open")');
     ok(await until(() => q.evaluate(id => SoRT.app.session.id === id, first)), 'the other computer has it open');
     // This computer deletes it everywhere.
-    await p.click('#sessionsBtn');
+    await p.click('#sessionsBtn'); await p.tab('browser');
     await p.click('#sessionsResults .sess.current button:has-text("Delete")');
     ok(/from this browser and from the forum’s saved sessions/.test(await p.innerText('.sess-confirm')) && await p.isVisible('.sess-confirm button:has-text("Only from this browser")'), 'shared: it says it goes from the forum too, and offers Only from this browser');
     await p.click('.sess-confirm button:has-text("Confirm delete")');
     ok(await until(() => !file('540601').sessions.some(z => z.id === first) && (file('540601').deleted || []).some(d => d.id === first) && !index().some(e => e.key === '540601')), 'Confirm delete: out of the station’s file (noted as deleted) and out of the shared list');
     ok(await p.evaluate(id => !SoRT.store.load(id) && SoRT.app.session.id !== id, first), 'and out of this browser, with a new session on screen');
+    await p.tab('forum');
     ok(!/Fifteen Mile AL/.test(await p.innerText('.pb-panel')), 'the shared list no longer shows it');
     // The other computer, still on it: a change there doesn't share it back.
     await q.keyboard.press('Escape').catch(() => {});
@@ -398,7 +408,7 @@ const scenarios = {
     ok(await until(() => file('540601').sessions.some(z => z.id === first) && !(file('540601').deleted || []).some(d => d.id === first) && index().some(e => e.key === '540601')), 'Save it again puts it back, in the shared list too');
     // A shared row: Delete reads the station's sessions, then asks.
     p.store.files.set('stations/540601.json', { text: JSON.stringify(Object.assign(file('540601'), { sessions: [{ id: 'earlier-one', source: 'sort-v2', forum: { date: '2026-01-01' }, outcome: 'complete', summary: { answers: {} } }].concat(file('540601').sessions) })), etag: '"two"' });
-    await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'fifteen');
+    await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'fifteen'); await q.tab('forum');
     await q.click('.pb-panel .sess button:has-text("Delete")');
     await q.waitForSelector('.pb-panel .sess-confirm button:has-text("Confirm delete")', { timeout: 8000 });
     ok(/last session[\s\S]*1 earlier session stays/.test(await q.innerText('.pb-panel .sess-confirm')) && await q.isVisible('.pb-panel .sess-confirm button:has-text("Delete all 2")'), 'a station with two: Confirm delete takes its last one, or Delete all 2');
@@ -415,7 +425,7 @@ const scenarios = {
     await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
     const second = await p.evaluate(() => SoRT.app.session.id);
     ok(await until(() => (file('540335') || { sessions: [] }).sessions.some(z => z.id === second)), 'another session shared');
-    await p.click('#sessionsBtn');
+    await p.click('#sessionsBtn'); await p.tab('browser');
     await p.click('#sessionsResults .sess.current button:has-text("Delete")');
     await p.click('.sess-confirm button:has-text("Only from this browser")');
     await p.waitForTimeout(1500);
@@ -1114,7 +1124,7 @@ const scenarios = {
     const q = await page(b, { pass: true });
     for (const [k, v] of p.store.files) q.store.files.set(k, v);
     await q.evaluate(() => SoRT.playbook.loadIndex());
-    await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'bengalla');
+    await q.click('#sessionsBtn'); await q.fill('#sessionsSearch', 'bengalla'); await q.tab('forum');
     await q.click('.pb-panel .sess button:has-text("Open")');
     await q.waitForSelector('#q-installNotes .pic img', { timeout: 20000 }).catch(() => {});
     ok(!!(await q.$('#q-installNotes .pic img')) && (await q.inputValue('#q-installNotes .pic-cap')) === 'Gauge hut from the north' && !!(await q.$('#q-demolition .pic img')), 'another computer opening the shared session gets its pictures');
@@ -1123,6 +1133,135 @@ const scenarios = {
     await p.context().close();
   },
   // The two jump buttons: back to the top, and on to the question you are up to.
+  // The refinements of 10 Nov 2026: the tabs and tidy-up in Sessions Management, rows whose
+  // buttons stay on the right, round answer buttons, the clickable preview and its jump
+  // button, the wording changes, NA for cultural heritage, and the radio set-up from Flood-Net.
+  async refine(b) {
+    const p = await page(b, { pass: true, autosaveMs: 600, retryMs: 1000 });
+    await p.pick('532030');   // Black Weir AL: a water level station, with a radio set-up in Flood-Net
+    // Wording.
+    ok(/River Line Termination \/ Radar sensor Coordinates \(if not with primary location\)/.test(await p.innerText('#q-riverCoords .q-label')), 'the river line question says “/ Radar sensor (if not with primary location)”');
+    const locs = await p.$$eval('.map-side .loc-label', e => e.map(x => x.textContent));
+    ok(locs.includes('River line termination / Radar sensor (if not with primary location)') && locs.includes('River line termination relocation') && !locs.includes('River line relocation'), `the map’s list uses the new names (${locs.join(' | ')})`);
+    // Radio details from Flood-Net: TX power filled in, orange until checked, with where it came from.
+    const tx = await p.evaluate(() => ({ rs: SoRT.app.session.station.radioSystem, pre: SoRT.app.session.prefill.txPower || null, card: document.querySelector('.st-facts').innerText,
+      waiting: document.querySelector('#q-txPower').classList.contains('waiting'), hint: (document.querySelector('#q-txPower [data-hint]') || {}).textContent || '' }));
+    ok(tx.rs && tx.rs.txPowerW != null && tx.pre && tx.pre.src === 'floodnet' && tx.waiting, `TX power comes from Flood-Net and waits to be checked (${JSON.stringify(tx.pre)})`);
+    ok(/Radio set-up/.test(tx.card) && /radio model/.test(tx.hint), 'the station card and the question say where it came from');
+    await p.click('#q-txPower .src-ok');
+    ok(await p.$eval('#q-txPower', e => e.classList.contains('checked') && !e.classList.contains('waiting')), 'Keep marks it checked');
+    // Cultural heritage: NA.
+    await p.click('[data-ps="culturalHeritage"] .opt:has-text("NA")');
+    ok(await p.$eval('[data-ps="culturalHeritage"] .opt.on', e => e.textContent.trim() === 'NA'), 'cultural heritage can be answered NA');
+    // Round buttons: a pill keeps its own height beside a label three lines tall.
+    const pills = await p.evaluate(() => [...document.querySelectorAll('#ps .ps-row')].map(r => { const o = r.querySelector('.opts-pills .opt'); return o ? { row: r.getBoundingClientRect().height, pill: o.getBoundingClientRect().height } : null; }).filter(Boolean));
+    ok(pills.length > 3 && pills.every(x => x.pill < 40), `answer buttons keep their shape whatever the row’s height (tallest ${Math.max(...pills.map(x => x.pill))} px)`);
+    // The preview: a click on a row goes to its question.
+    await p.click('#q-complexity .opt >> nth=0');
+    await p.waitForTimeout(700);
+    ok(!(await p.$eval('#jumpPreview', e => e.hidden)), 'a “Word preview” button sits with Top and Current question');
+    await p.click('#jumpPreview'); await p.waitForTimeout(1800);
+    const head = await p.$eval('#previewHead', e => e.getBoundingClientRect().top);
+    ok(head >= 0 && head < 700 && await p.$eval('#jumpPreview', e => e.hidden), `it brings the preview on screen (${Math.round(head)} px down), then hides`);
+    ok(await p.$eval('#preview', e => !!e.querySelector('tr[data-go="q:txPower"]') && !!e.querySelector('tr[data-go="ps:culturalHeritage"]')), 'each preview row knows its question');
+    await p.fill('[data-fk="riverCoords::f::detail"]', '-19.3170, 146.7355'); await p.press('[data-fk="riverCoords::f::detail"]', 'Tab'); await p.waitForTimeout(700);
+    await p.click('#jumpPreview').catch(() => {}); await p.waitForTimeout(1500);
+    await p.click('#preview tr[data-go="q:riverCoords"] td >> nth=1'); await p.waitForTimeout(1500);
+    const went = await p.evaluate(() => { const c = document.querySelector('#q-riverCoords'), r = c.getBoundingClientRect(); return { on: r.top >= 0 && r.bottom <= innerHeight + 2, focus: c.contains(document.activeElement) && document.activeElement.dataset.fk }; });
+    ok(went.on && went.focus === 'riverCoords::f::detail', `a click on a preview row scrolls to its question and puts the keyboard in its box (${JSON.stringify(went)})`);
+    await p.click('#jumpPreview'); await p.waitForTimeout(1500);
+    await p.click('#preview tr[data-go="q:txPower"] td >> nth=1'); await p.waitForTimeout(1500);
+    ok(await p.evaluate(() => String(document.activeElement.dataset.fk || '').startsWith('txPower::opt::')), 'for a question answered with buttons, the keyboard lands on the answer chosen');
+    await p.click('#jumpPreview'); await p.waitForTimeout(1500);
+    await p.click('#preview tr[data-go="ps:culturalHeritage"] td >> nth=1'); await p.waitForTimeout(1500);
+    ok(await p.evaluate(() => { const c = document.querySelector('[data-ps="culturalHeritage"]'), r = c.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight + 2 && c.contains(document.activeElement); }), 'and the same for a Property Services row');
+    await p.click('.copy-btn >> nth=0'); await p.waitForTimeout(2500);
+    ok(!/data-go/.test(await p.clip()), 'the copy for Word carries none of the click marks');
+    // Sessions Management: three sessions in this browser, all saved to the forum.
+    for (const st of ['540601', '540335']) { await p.newSession(); await p.pick(st); await p.click('#q-complexity .opt >> nth=0'); }
+    ok(await until(() => ['532030', '540601', '540335'].every(k => p.store.files.has(`stations/${k}.json`)), 20000), 'three sessions saved to the forum');
+    await p.waitForTimeout(1200);
+    await p.click('#sessionsBtn');
+    ok(/In this browser\s*3\s*Saved to the forum\s*3/.test(await p.innerText('#sessionsTabs')), `the tabs count both lists (${(await p.innerText('#sessionsTabs')).replace(/\s+/g, ' ')})`);
+    ok(await p.$eval('#sessionsResults .sess', e => e.classList.contains('current')), 'the session on screen is first in the browser’s list');
+    // Rows: words on the left, buttons in one line on the right — in a narrow window too.
+    const rows = async sel => p.$$eval(sel, es => es.map(e => { const a = e.querySelector('.sess-acts'), bs = [...a.querySelectorAll('button')].map(x => x.getBoundingClientRect()), r = e.getBoundingClientRect(), m = e.querySelector('.sess-main').getBoundingClientRect();
+      return { oneLine: bs.every(x => Math.abs(x.top - bs[0].top) < 2), right: Math.abs(r.right - bs[bs.length - 1].right) < 14, beside: m.right <= bs[0].left + 1 }; }));
+    await p.setViewportSize({ width: 700, height: 900 });
+    let rr = await rows('#sessionsResults .sess');
+    ok(rr.length === 3 && rr.every(x => x.oneLine && x.right && x.beside), `browser rows: the buttons stay in a line on the right (${JSON.stringify(rr)})`);
+    await p.tab('forum');
+    rr = await rows('.pb-panel .sess');
+    ok(rr.length === 3 && rr.every(x => x.oneLine && x.right && x.beside), `forum rows too, with four buttons (${JSON.stringify(rr)})`);
+    await p.setViewportSize({ width: 1360, height: 1000 });
+    // The tab is remembered; the tidy-up clears what the forum already holds, never the one on screen.
+    await p.click('#sessionsClose'); await p.click('#sessionsBtn');
+    ok(await p.$eval('#sessTab-forum', e => e.classList.contains('on')), 'the tab last used is the one it opens on');
+    await p.tab('browser');
+    ok(/2 of the sessions in this browser are also saved to the forum/.test(await p.innerText('#sessionsResults')), 'it offers to clear the ones the forum already holds');
+    await p.click('#sessTidy');
+    ok(await p.isVisible('#sessTidyGo') && (await p.$$('#sessionsResults .sess-list .sess')).length === 3, 'asking first — nothing gone yet');
+    await p.click('#sessTidyGo');
+    ok((await p.$$('#sessionsResults .sess-list .sess')).length === 1 && /In this browser\s*1\s*Saved to the forum\s*3/.test(await p.innerText('#sessionsTabs')), 'Confirm: only the one on screen is left here; the forum still has all three');
+    ok(['532030', '540601', '540335'].every(k => JSON.parse(p.store.files.get(`stations/${k}.json`).text).sessions.length === 1), 'and nothing was deleted from the forum');
+    await p.tab('forum'); await p.fill('#sessionsSearch', 'black weir');
+    await p.click('.pb-panel .sess button:has-text("Open")'); await p.waitForTimeout(1500);
+    ok(await p.evaluate(() => SoRT.app.session.station.number === '532030' && (SoRT.app.session.ps.answers || {}).culturalHeritage === 'na'), 'a cleared session opens again from the forum, answers and all');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
+  // The map: full screen, drawing the orifice runs, and mending itself when the imagery doesn't draw.
+  async mapwork(b) {
+    const p = await page(b, { map: true });
+    let block = true;   // the State's imagery refuses every tile at first
+    await p.context().route(/spatial-img\.information\.qld\.gov\.au\/.*\/tile\//, r => (block ? r.abort() : r.fallback()));
+    await p.pick('532030');
+    await p.waitForFunction(() => SoRT.mapView.ready(), null, { timeout: 60000 });
+    const imagery = () => p.evaluate(async () => { const M = SoRT.mapView._M; try { const s = await M.view.takeScreenshot({ layers: [M.layers.imagery], width: 96, height: 64 }); let n = 0, t = 0; for (let i = 3; i < s.data.data.length; i += 28) { t++; if (s.data.data[i] > 8) n++; } return n / t; } catch (e) { return -1; } });
+    await p.waitForFunction(() => SoRT.mapView._M.log.some(l => /nothing drawn over the station/.test(l)), null, { timeout: 45000 }).catch(() => {});
+    ok(await p.evaluate(() => SoRT.mapView._M.log.some(l => /nothing drawn over the station/.test(l))) && (await imagery()) < 0.02, 'imagery refused: the map is grey, and the page notices');
+    block = false;
+    ok(await until(async () => (await imagery()) > 0.5, 60000), 'once the imagery answers, the map draws by itself — no page refresh');
+    ok(await until(() => p.evaluate(() => SoRT.mapView._M.log.some(l => /drawing again/.test(l))), 30000), 'and the map details say so');
+    const zm = await p.evaluate(() => SoRT.mapView._M.view.zoom);
+    ok(zm > 10, `the map still knows its zoom levels after the swap (zoom ${zm.toFixed(1)})`);
+    // Full screen.
+    const box = () => p.$eval('#map-card', e => { const r = e.getBoundingClientRect(); return { w: r.width, h: r.height, vw: innerWidth, vh: innerHeight }; });
+    const small = await box();
+    await p.click('#fullBtn'); await p.waitForTimeout(600);
+    const big = await box();
+    console.log('    (closest zoom: 1:' + await p.evaluate(() => Math.round(SoRT.mapView._M.view.constraints.effectiveMaxScale)) + ', level ' + await p.evaluate(() => SoRT.mapView._M.view.constraints.effectiveMaxZoom) + ')');
+    ok(big.w > big.vw - 40 && big.h > big.vh - 40 && big.w > small.w + 300, `Full screen gives the map the whole window (${Math.round(small.w)} → ${Math.round(big.w)} px wide)`);
+    ok(await p.evaluate(() => { const M = SoRT.mapView._M; return M.view.width > innerWidth - 420 && !M.zoomLocked; }), 'the map itself grows, and the wheel zooms while it is full screen');
+    // Draw the current orifice run: two clicks on the map, then Finish.
+    await p.click('.map-side [data-draw="orificeRun.currentLength"] button:has-text("Draw")');
+    ok(/Current orifice run/.test(await p.innerText('.map-place')), 'the map says which line is being drawn');
+    const fr = await p.$eval('#mapView', e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await p.mouse.click(fr.x - 60, fr.y + 20); await p.waitForTimeout(400);
+    await p.mouse.click(fr.x + 40, fr.y + 70); await p.waitForTimeout(400);
+    await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+    ok(await p.evaluate(() => document.body.classList.contains('map-full')), 'Esc while drawing cancels the drawing, not full screen');
+    await p.click('.map-side [data-draw="orificeRun.currentLength"] button:has-text("Draw")');
+    await p.mouse.click(fr.x - 60, fr.y + 20); await p.waitForTimeout(400);
+    await p.mouse.click(fr.x + 40, fr.y + 70); await p.waitForTimeout(400);
+    await p.click('.map-drawacts button:has-text("Finish")'); await p.waitForTimeout(800);
+    await p.click('.map-side [data-draw="orificeRun.newLength"] button:has-text("Draw")');
+    await p.mouse.click(fr.x - 60, fr.y + 20); await p.waitForTimeout(400);
+    await p.mouse.click(fr.x - 90, fr.y + 110); await p.waitForTimeout(400);
+    await p.keyboard.press('Enter'); await p.waitForTimeout(800);
+    const runs = await p.evaluate(() => { const s = SoRT.app.session, fs = (s.map.features || []).filter(f => f.kind === 'line' && f.q === 'orificeRun'); return { fields: fs.map(f => f.field), lens: fs.map(f => f.lengthM), pre: (s.prefill.orificeRun || {}).fields, key: document.querySelector('.map-legend').innerText }; });
+    ok(runs.fields.join() === 'currentLength,newLength' && runs.lens.every(n => n > 0), `both orifice runs are kept, each with its length (${runs.lens.join(' m, ')} m)`);
+    ok(runs.pre && runs.pre.currentLength === String(runs.lens[0]) && runs.pre.newLength === String(runs.lens[1]), 'the lengths fill the Orifice run question');
+    ok(/Current orifice run \(/.test(runs.key) && /New orifice run \(/.test(runs.key), 'and both are in the map’s key');
+    await p.click('.map-side [data-draw="orificeRun.currentLength"] button:has-text("Clear")'); await p.waitForTimeout(400);
+    ok(await p.evaluate(() => { const s = SoRT.app.session; return (s.map.features || []).filter(f => f.q === 'orificeRun').map(f => f.field).join() === 'newLength' && !('currentLength' in ((s.prefill.orificeRun || {}).fields || {})); }), 'Clear takes one run off, and its length with it');
+    await p.keyboard.press('Escape'); await p.waitForTimeout(500);
+    const back = await box();
+    ok(!(await p.evaluate(() => document.body.classList.contains('map-full'))) && Math.abs(back.w - small.w) < 4 && await p.evaluate(() => SoRT.mapView._M.zoomLocked), 'Esc puts the map back, zoom lock and all');
+    ok(await p.$eval('#q-orificeRun [data-fk="orificeRun::f::newLength"]', e => Number(e.value) > 0), 'the question card shows the drawn length');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
   async jump(b) {
     for (const [label, vp] of [['map beside (two panes)', { width: 1360, height: 900 }], ['narrow (one page)', { width: 800, height: 900 }]]) {
       const p = await page(b, { viewport: vp });

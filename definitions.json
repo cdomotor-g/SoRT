@@ -640,13 +640,13 @@
         },
         {
           "id": "riverCoords",
-          "item": "River Line Termination Coordinates",
+          "item": "River Line Termination / Radar sensor Coordinates (if not with primary location)",
           "instruction": "",
           "type": "none",
           "icon": "📍",
           "mapPin": {
             "field": "detail",
-            "label": "River line termination",
+            "label": "River line termination / Radar sensor (if not with primary location)",
             "colour": "blue",
             "defaultOn": true
           },
@@ -666,7 +666,7 @@
           "icon": "📍📍",
           "mapPin": {
             "field": "newRiver",
-            "label": "River line relocation",
+            "label": "River line termination relocation",
             "colour": "purple",
             "defaultOn": true
           },
@@ -853,14 +853,14 @@
         },
         {
           "id": "riverCoords",
-          "item": "River Line Termination Coordinates",
+          "item": "River Line Termination / Radar sensor Coordinates (if not with primary location)",
           "instruction": "",
           "type": "none",
           "icon": "📍",
           "note": "Leave blank if not applicable",
           "mapPin": {
             "field": "detail",
-            "label": "River line termination",
+            "label": "River line termination / Radar sensor (if not with primary location)",
             "colour": "blue",
             "defaultOn": true
           },
@@ -880,7 +880,7 @@
           "icon": "📍📍",
           "mapPin": {
             "field": "newRiver",
-            "label": "River line relocation",
+            "label": "River line termination relocation",
             "colour": "purple",
             "defaultOn": true
           },

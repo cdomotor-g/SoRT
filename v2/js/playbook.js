@@ -407,7 +407,7 @@
   }
 
   /* ---------------- on the page ---------------- */
-  let stripHost = null;
+  let stripHost = null, stripFor = '', stripOpen = false;   // the fold stays as the person left it while the card redraws
   function stationStrip(A) {
     P.A = A;
     stripHost = h('div', { class: 'pb-strip', id: 'pbStrip' });
@@ -424,19 +424,29 @@
     if (P.status === 'denied') { el.appendChild(h('div', null, head, ' — the forum passphrase on this computer isn’t right any more. ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter it again'))); return; }
     if (P.status !== 'ready') { el.appendChild(h('div', null, head, ` — couldn’t be read (${P.error}). `, h('button', { type: 'button', class: 'link', onclick: () => loadIndex() }, 'Try again'))); return; }
     const key = stationKey(A.session.station);
+    if (stripFor !== `${A.session.id}|${key}`) { stripFor = `${A.session.id}|${key}`; stripOpen = false; }   // another session or station: folded again
     const mine = (P.index || []).find(e => e.key === key);
     const o = OUTCOME(A);
-    if (mine && !(A.session.continuesFrom && A.session.continuesFrom.key === key)) {
-      el.appendChild(h('div', null, head, ` — ${mine.sessions} earlier session${mine.sessions > 1 ? 's' : ''}, the last at the forum of ${U().dmy(mine.lastForum)}${mine.lastOutcome ? ' (' + (o[mine.lastOutcome] || mine.lastOutcome) + ')' : ''}. `,
-        h('button', { type: 'button', class: 'btn-mini', onclick: () => continueFrom(A, key) }, 'Continue from it')));
-    } else if (mine) el.appendChild(h('div', null, head, ` — continuing from the session of ${U().dmy(A.session.continuesFrom.date)}.`));
-    else el.appendChild(h('div', null, head, ' — no earlier session for this station.'));
     const sim = similar(A);
+    // Folded away until asked for: one line says what is inside.
+    const cont = mine && !(A.session.continuesFrom && A.session.continuesFrom.key === key);
+    const gist = [cont ? `${mine.sessions} earlier session${mine.sessions > 1 ? 's' : ''}` : mine ? 'continuing from an earlier session' : 'no earlier session',
+      sim.length ? `${sim.length} similar station${sim.length > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
+    const body = h('div', { class: 'pb-fold-body' });
+    const fold = h('details', { class: 'pb-fold', id: 'pbFold', open: stripOpen },
+      h('summary', { title: 'This station’s earlier sessions, and similar stations whose answers can fill this one in' }, head, h('span', { class: 'hint' }, ` — ${gist}`)), body);
+    fold.addEventListener('toggle', () => { stripOpen = fold.open; });
+    el.appendChild(fold);
+    if (cont) {
+      body.appendChild(h('div', null, `${mine.sessions} earlier session${mine.sessions > 1 ? 's' : ''}, the last at the forum of ${U().dmy(mine.lastForum)}${mine.lastOutcome ? ' (' + (o[mine.lastOutcome] || mine.lastOutcome) + ')' : ''}. `,
+        h('button', { type: 'button', class: 'btn-mini', onclick: () => continueFrom(A, key) }, 'Continue from it')));
+    } else if (mine) body.appendChild(h('div', null, `Continuing from the session of ${U().dmy(A.session.continuesFrom.date)}.`));
+    else body.appendChild(h('div', null, 'No earlier session for this station.'));
     if (sim.length) {
-      el.appendChild(h('div', { class: 'hint' }, 'Similar stations — use one to fill the answers it shares (marked Precedent until confirmed):'));
-      sim.forEach(x => el.appendChild(h('div', { class: 'pb-sim' },
-        h('b', null, x.e.name), x.e.number ? h('span', { class: 'res-num' }, x.e.number) : null,
-        h('span', { class: 'hint' }, ` ${x.why.join(' · ')}${x.e.lastOutcome ? ' · ' + (o[x.e.lastOutcome] || x.e.lastOutcome) : ''}`), ' ',
+      body.appendChild(h('div', { class: 'hint' }, 'Similar stations — use one to fill the answers it shares (marked Precedent until confirmed):'));
+      sim.forEach(x => body.appendChild(h('div', { class: 'pb-sim' },
+        h('div', { class: 'pb-sim-what' }, h('b', null, x.e.name), x.e.number ? h('span', { class: 'res-num' }, x.e.number) : null,
+          h('span', { class: 'hint' }, ` ${x.why.join(' · ')}${x.e.lastOutcome ? ' · ' + (o[x.e.lastOutcome] || x.e.lastOutcome) : ''}`)),
         h('button', { type: 'button', class: 'btn-mini', onclick: () => usePrecedent(A, x.e.key) }, 'Use'))));
     }
   }
@@ -667,17 +677,19 @@
   const matches = (q, ...xs) => !q || xs.some(x => String(x || '').toLowerCase().includes(q));
   function panel(A, query, close, onAsk) {
     const q = String(query || '').trim().toLowerCase();
-    const box = h('div', { class: 'pb-panel' }, h('h3', null, 'Saved to the forum'));
-    if (P.status === 'off' || P.status === 'denied') { box.appendChild(h('p', { class: 'hint' }, P.status === 'off' ? 'Not connected — the sessions above are only in this browser. ' : 'The forum passphrase on this computer isn’t right any more. ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter the forum passphrase'))); return box; }
+    const box = h('div', { class: 'pb-panel' });
+    if (P.status === 'off' || P.status === 'denied') { box.appendChild(h('p', { class: 'hint' }, P.status === 'off' ? 'Not connected — sessions are only being kept in this browser. ' : 'The forum passphrase on this computer isn’t right any more. ', h('button', { type: 'button', class: 'link', onclick: () => S.shared.dialog({ onDone: () => loadIndex() }) }, 'Enter the forum passphrase'))); return box; }
     if (P.status !== 'ready') { box.appendChild(h('p', { class: 'hint' }, P.status === 'loading' ? 'Loading…' : `The saved sessions can’t be reached just now${P.error ? ` (${P.error})` : ''}. `, P.status === 'loading' ? null : h('button', { type: 'button', class: 'link', onclick: () => loadIndex() }, 'Try again'))); return box; }
     const o = OUTCOME(A), curKey = stationKey(A.session.station);
     const all = (P.index || []).slice().sort((a, b) => String(b.lastForum).localeCompare(String(a.lastForum)));
     const rows = all.filter(e => matches(q, e.name, e.number, e.lga, e.hub));
     if (!rows.length) { box.appendChild(h('p', { class: 'hint' }, q ? 'No saved session matches.' : 'Nothing saved yet.')); }
     if (P.ask && !all.some(e => e.key === P.ask.key)) P.ask = null;
-    (q ? rows : rows.slice(0, 12)).forEach(e => {
+    const rowsBox = h('div', { class: 'sess-list' });
+    box.appendChild(rowsBox);
+    (q ? rows : rows.slice(0, 15)).forEach(e => {
       const other = curKey && e.key !== curKey, asking = P.ask && P.ask.key === e.key;
-      box.appendChild(h('div', { class: 'sess' + (asking ? ' asking' : '') },
+      rowsBox.appendChild(h('div', { class: 'sess' + (asking ? ' asking' : '') },
         h('div', { class: 'sess-main' },
           h('div', { class: 'sess-name' }, e.name, e.number ? h('span', { class: 'res-num' }, e.number) : null),
           h('div', { class: 'res-meta' }, [`${e.sessions} session${e.sessions === 1 ? '' : 's'}`, e.lastForum && `last at the forum of ${U().dmy(e.lastForum)}`,
@@ -689,12 +701,18 @@
           asking ? null : h('button', { type: 'button', class: 'btn btn-quiet btn-del', title: 'Delete its last session from the forum’s saved sessions, for everyone — you are asked to confirm first', onclick: () => { if (onAsk) onAsk(); askDelete(A, e); } }, 'Delete')),
         asking ? askRow(A, e) : null));
     });
-    if (!q && rows.length > 12) box.appendChild(h('p', { class: 'hint' }, `${rows.length - 12} more — search to find them.`));
+    if (!q && rows.length > 15) box.appendChild(h('p', { class: 'hint' }, `${rows.length - 15} more — search to find them.`));
     const waiting = todo.size + (P.busy ? 1 : 0), held = P.held.size;
     if (waiting) box.appendChild(h('p', { class: 'hint' }, `${waiting} session${waiting > 1 ? 's' : ''} from this browser ${waiting > 1 ? 'are' : 'is'} being saved by ${waiting > 1 ? 'themselves' : 'itself'}, one at a time.`));
     if (held) box.appendChild(h('p', { class: 'hint' }, `${held} session${held > 1 ? 's' : ''} in this browser ${held > 1 ? 'are' : 'is'} held back: the text looks like it holds a phone number, an email or a gate code. Open ${held > 1 ? 'each' : 'it'} to see what, and remove it or save it anyway.`));
     box.appendChild(h('p', { class: 'hint' }, h('button', { type: 'button', class: 'link', id: 'changePass', onclick: () => S.shared.changeDialog({ onDone: () => A.toast('Forum passphrase changed — tell the forum; each computer asks for it next time.') }) }, 'Change the forum passphrase')));
     return box;
+  }
+  // How many stations the forum's list holds (or how many match a search); null while it can't be read.
+  function count(query) {
+    if (P.status !== 'ready') return null;
+    const q = String(query || '').trim().toLowerCase();
+    return (P.index || []).filter(e => matches(q, e.name, e.number, e.lga, e.hub)).length;
   }
   // The station's other sessions — in this browser and in the playbook — for the card's warning.
   function existing(A) {
@@ -717,5 +735,5 @@
   // Sessions opening: the shared list as it is now, and anything left unshared.
   function onSessionsOpen() { P.ask = null; freshIndex(); catchUp(); }
 
-  S.playbook = { REPO, init, stationStrip, renderActs, panel, existing, openSaved, autosaveSoon, flush, catchUp, onSessionsOpen, renderSaveBar, save, needsSave, shareState, usePrecedent, continueFrom, similar, summary, record, indexEntry, fingerprint, stationKey, privacyScan, loadIndex, deleteShared, dropQueued, state: P };
+  S.playbook = { REPO, init, stationStrip, renderActs, panel, count, existing, openSaved, autosaveSoon, flush, catchUp, onSessionsOpen, renderSaveBar, save, needsSave, shareState, usePrecedent, continueFrom, similar, summary, record, indexEntry, fingerprint, stationKey, privacyScan, loadIndex, deleteShared, dropQueued, state: P };
 })(typeof window !== 'undefined' ? window : globalThis);

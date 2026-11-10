@@ -64,6 +64,7 @@
     // close-up of its own beside the map and in Word.
     closeups: { minM: 500, zoom: 18, w: 360, h: 240 },
     siteZoom: 17,
+    extraZoomLevels: 2,                               // closer than the imagery's own last level, for drawing lines
     qld: { xmin: 137.6, ymin: -29.4, xmax: 154.0, ymax: -9.0 },   // the map's home: all of Queensland, Torres Strait included
     order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, pins: 10 },
     timeouts: { esri: 20000, view: 20000, meta: 10000, layer: 10000, query: 12000 },
@@ -72,6 +73,10 @@
   const PIN_RGB = { red: [214, 40, 40], orange: [224, 122, 10], blue: [30, 110, 200], purple: [130, 60, 200], green: [40, 150, 70], teal: [15, 150, 140] };
   const rgb = c => PIN_RGB[c] || (/^#[0-9a-f]{6}$/i.test(c || '') ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : PIN_RGB.red);
   const DRAW_RGB = [20, 160, 80];
+  const LINE_RGB = [255, 170, 0];
+  const lineRgb = d => (d && d.colour ? rgb(d.colour) : LINE_RGB);
+  // Lighter, for the words beside a drawn line.
+  const pale = c => c.map(n => Math.round(n + (255 - n) * 0.72));
 
   const M = {
     version: 0,
@@ -137,7 +142,7 @@
       const raw = String(e.fields[q.pin.field] || '');
       const p = U().parseCoord(raw);
       const shown = R().visible(ctx, q) && R().test(ctx, q.pin.showIf);
-      pins.push({ key: `${q.code}.${q.pin.field}`, code: q.code, field: q.pin.field, label: q.pin.label || q.label, qlabel: q.label,
+      pins.push({ key: `${q.code}.${q.pin.field}`, code: q.code, field: q.pin.field, label: q.pin.label || q.label, mapLabel: q.pin.mapLabel || q.pin.label || q.label, qlabel: q.label,
         colour: q.pin.colour || 'red', anchor: !!q.pin.anchor, shown, gate: q.pin.showIf || null, ok: !!p.ok, lat: p.lat, lon: p.lon, raw, src: e.fieldSrc[q.pin.field] });
     });
     M.pins = pins;
@@ -214,7 +219,7 @@
     M.els.progress = h('div', { class: 'map-progress', hidden: true }, h('div'));
     M.els.placeHint = h('div', { class: 'map-place', hidden: true });
     M.els.drawActs = h('div', { class: 'map-drawacts', hidden: true },
-      h('button', { type: 'button', class: 'btn btn-primary', onclick: () => { if (M.sketch) M.sketch.complete(); } }, '✓ Finish route'),
+      h('button', { type: 'button', class: 'btn btn-primary', onclick: () => { if (M.sketch) M.sketch.complete(); } }, '✓ Finish'),
       h('button', { type: 'button', class: 'btn', onclick: () => cancelPlace() }, 'Cancel'));
     M.els.lockBtn = h('button', { type: 'button', class: 'map-lock', id: 'zoomLock', 'aria-label': 'Zoom lock', onclick: () => setZoomLock(!M.zoomLocked) });
     M.els.lockHint = h('div', { class: 'map-lockhint', 'aria-hidden': 'true' }, 'Zoom is locked so the page scrolls — zoom with + / − or Ctrl + scroll, or press 🔒 to unlock');
@@ -244,11 +249,26 @@
       if (ev.key === 'Escape' && (M.place || M.drawing)) cancelPlace();
       else if (ev.key === 'Enter' && M.drawing && M.sketch) { ev.preventDefault(); M.sketch.complete(); }
     });
+    startBuild(0);
+  }
+  // Build the map; if it can't (the map library didn't arrive), say so, try once
+  // more by itself, and leave a button — no page refresh needed.
+  function startBuild(attempt) {
+    M.failed = null;
+    M.els.status.hidden = false; M.els.status.classList.remove('error');
+    M.els.status.textContent = attempt ? 'Trying the map again…' : 'Loading the map…';
     build().catch(e => {
       M.failed = e.message;
+      try { if (M.view) M.view.destroy(); } catch (_) { /* never started */ }
+      M.view = null; M.map = null; M.ready = false; M.layers = {}; M.gl = {}; M.sketch = null; M.measure = null;
+      M.els.view.innerHTML = '';
       M.els.status.hidden = false;
-      M.els.status.textContent = `The map couldn’t load (${e.message}). Everything else works — type coordinates into the questions.`;
+      M.els.status.innerHTML = '';
+      M.els.status.append(`The map couldn’t load (${e.message}). Everything else works — type coordinates into the questions. `,
+        h('button', { type: 'button', class: 'link', id: 'mapRetry', onclick: () => startBuild(attempt + 1) }, 'Try the map again'));
       M.els.status.classList.add('error');
+      log(`The map didn’t start (${e.message}).`);
+      if (!attempt) setTimeout(() => { if (M.failed) startBuild(1); }, 6000);
     });
   }
 
@@ -277,6 +297,17 @@
       log(`The map view took more than ${CFG.timeouts.view / 1000} s to start.`);
       await ready;
     }
+    // The zoom levels come from the imagery's tiling: kept on the view itself from here on,
+    // so swapping the imagery layer for a fresh one (below) never loses them.
+    // Two closer levels are added past the imagery's last (it is stretched there, not sharper),
+    // for close work such as drawing an orifice run.
+    try {
+      const lods = (M.view.constraints.effectiveLODs || []).slice();
+      if (lods.length) {
+        for (let i = 0; i < CFG.extraZoomLevels; i++) { const z = lods[lods.length - 1]; lods.push({ level: z.level + 1, resolution: z.resolution / 2, scale: z.scale / 2 }); }
+        M.view.constraints.lods = lods;
+      }
+    } catch (_) { /* as it was */ }
     M.view.ui.move('zoom', 'bottom-right');
     M.view.ui.add(M.els.lockBtn, { position: 'bottom-right', index: 0 });
     applyZoomLock();
@@ -292,28 +323,119 @@
     E.reactiveUtils.watch(() => M.view.updating, u => { M.els.progress.hidden = !u; });
     E.reactiveUtils.watch(() => [M.view.extent, M.view.scale], () => { renderEdges(); renderStamp(); });
     E.reactiveUtils.watch(() => M.view.stationary, still => { if (still) { changedPicture(); refreshShown(); } });
-    E.reactiveUtils.watch(() => M.view.updating, busy => { if (!busy) changedPicture(); });
+    E.reactiveUtils.watch(() => M.view.updating, busy => { if (!busy) { changedPicture(); checkImagerySoon(); } });
+    // The browser dropped the map's graphics (a sleeping laptop, a busy GPU): start them again.
+    E.reactiveUtils.watch(() => M.view.fatalError, err => { if (err) { log(`The map view stopped (${err.name || err.message || 'error'}) — starting it again.`); try { M.view.tryFatalErrorRecovery(); } catch (_) { /* nothing more to try */ } } });
     loadLabels(); loadContours(); loadRoad(); loadRail();
+    sketchReady();   // the drawing tool, ready before it is first wanted
     sync(M.app);
     refreshNear(true);
   }
 
   /* ---------------- layers (ported from v1) ---------------- */
-  async function loadImagery(l) {
+  /* The imagery sometimes fails to come up — the State's server slow to answer,
+     or its tiles refused for a moment — and used to leave the map grey until
+     the page was refreshed. Now: a layer that won't load is tried again by
+     itself (and from a button), and a layer that loaded but drew nothing over
+     the station is swapped for a fresh one (checkImagery). */
+  const IMG_RETRY_MS = [4000, 10000, 20000, 40000, 60000, 60000, 60000, 60000];
+  let imgTimer = null;
+  function imageryOk() {
+    clearTimeout(imgTimer); imgTimer = null;
+    if (M.els.imgBanner) { M.els.imgBanner.remove(); M.els.imgBanner = null; }
+  }
+  function imageryFailed(msg, attempt) {
+    clearTimeout(imgTimer);
+    const again = attempt < IMG_RETRY_MS.length;
+    if (M.els.imgBanner) M.els.imgBanner.remove();
+    M.els.imgBanner = h('div', { class: 'map-banner error', id: 'imgBanner' },
+      `Imagery didn’t load (${msg}). ${again ? 'Trying again by itself — ' : ''}The rest of the map still works. `,
+      h('button', { type: 'button', class: 'link', onclick: () => freshImagery(0, 'asked') }, 'Try now'));
+    if (M.els.banners) M.els.banners.appendChild(M.els.imgBanner);
+    if (again) imgTimer = setTimeout(() => freshImagery(attempt + 1, 'retry'), IMG_RETRY_MS[attempt]);
+  }
+  // A new imagery layer in place of the one there (if any).
+  function freshImagery(attempt, why) {
+    clearTimeout(imgTimer); imgTimer = null;
+    const E = M.esri; if (!E || !M.map) return;
+    const old = M.layers.imagery;
+    const l = new E.ImageryTileLayer({ url: CFG.imagery });
+    M.layers.imagery = l; addOrdered(l, 'imagery');
+    if (old) { try { M.map.remove(old); } catch (_) { /* gone already */ } }
+    log(`Imagery: a fresh layer (${why}${attempt ? `, try ${attempt + 1}` : ''}).`);
+    return loadImagery(l, attempt);
+  }
+  async function loadImagery(l, attempt) {
     const E = M.esri, t0 = now();
+    attempt = attempt || 0;
     try {
       await withTimeout(l.load(), CFG.timeouts.layer, 'Imagery');
-      diag('imagery', 'loaded', 'tiled', now() - t0);
+      if (M.layers.imagery !== l) return;
+      diag('imagery', 'loaded', attempt ? `tiled, try ${attempt + 1}` : 'tiled', now() - t0);
+      imageryOk(); checkImagerySoon(2500);
     } catch (e) {
+      if (M.layers.imagery !== l) return;
       // v1's last resort: the same service as a dynamic (non-tiled) layer.
       try {
         M.map.remove(l);
         const d = new E.ImageryLayer({ url: CFG.imagery });
+        M.layers.imagery = d;
         await withTimeout(d.load(), CFG.timeouts.layer, 'Imagery (dynamic)');
-        M.layers.imagery = d; addOrdered(d, 'imagery');
+        if (M.layers.imagery !== d) return;
+        addOrdered(d, 'imagery');
         diag('imagery', 'loaded', 'dynamic fallback', now() - t0);
-      } catch (e2) { diag('imagery', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); banner(`Imagery didn’t load (${e.message}). The rest of the map still works.`, 'error'); }
+        imageryOk(); checkImagerySoon(2500);
+      } catch (e2) {
+        diag('imagery', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0);
+        // Before the view has started it still needs the tiled layer it was given (see build()).
+        if (!M.ready && !M.map.layers.includes(l)) { M.layers.imagery = l; addOrdered(l, 'imagery'); }
+        imageryFailed(e.message, attempt);
+      }
     }
+  }
+  /* Is the imagery drawing? Looked at only where it must be: the map settled,
+     the station in view (so over land, inside Queensland). A tiny picture of the
+     imagery layer alone — nothing in it means the map is grey. */
+  async function imageryBlank() {
+    const l = M.layers.imagery, v = M.view;
+    if (!M.ready || !l || !v || l.loadStatus !== 'loaded' || !M.anchor || v.updating || !v.stationary || v.suspended || !v.width || !v.height) return null;
+    if (M.shooting || M.drawing || M.drag) return null;                  // never while the Word picture is being taken
+    const ext = v.extent, a = M.anchor, q = CFG.qld;
+    if (a.lon < q.xmin || a.lon > q.xmax || a.lat < q.ymin || a.lat > q.ymax) return null;   // the State's imagery stops at its borders
+    if (!ext || !ext.contains(G_(pt(a.lon, a.lat)).geometry)) return null;
+    // Only once the layer is on the map and has stopped fetching: before that, nothing drawn means nothing yet.
+    const lv = v.allLayerViews && v.allLayerViews.find(x => x.layer === l);
+    if (!lv || lv.updating || lv.suspended) return null;
+    try {
+      const w = 96, hh = Math.max(24, Math.round(96 * v.height / v.width));
+      M.imgShot = v.takeScreenshot({ layers: [l], width: w, height: hh, format: 'png' });
+      let shot; try { shot = await M.imgShot; } finally { M.imgShot = null; }
+      const d = shot && shot.data && shot.data.data; if (!d) return null;
+      let seen = 0, tot = 0;
+      for (let i = 3; i < d.length; i += 4 * 7) { tot++; if (d[i] > 8) seen++; }
+      return tot ? seen / tot < 0.02 : null;
+    } catch (_) { return null; }
+  }
+  const IMG_CHECK = { tries: 0, max: 6, busy: false, timer: null, spot: '', seen: 0 };
+  function checkImagerySoon(ms) { clearTimeout(IMG_CHECK.timer); IMG_CHECK.timer = setTimeout(checkImagery, ms == null ? 1500 : ms); }
+  async function checkImagery() {
+    if (IMG_CHECK.busy || imgTimer) return;
+    IMG_CHECK.busy = true;
+    try {
+      const spot = key(M.anchor) || '';
+      if (spot !== IMG_CHECK.spot) { IMG_CHECK.spot = spot; IMG_CHECK.tries = 0; }
+      const blank = await imageryBlank();
+      if (blank === false) { if (IMG_CHECK.tries) log('Imagery: drawing again.'); IMG_CHECK.tries = 0; IMG_CHECK.seen = 0; return; }
+      if (blank !== true) return;
+      if (IMG_CHECK.tries >= IMG_CHECK.max) return;
+      // Grey twice running, a few seconds apart, before anything is changed: a slow first draw is not a fault.
+      if (++IMG_CHECK.seen < 2) { checkImagerySoon(4000); return; }
+      IMG_CHECK.seen = 0;
+      IMG_CHECK.tries++;
+      log(`Imagery: nothing drawn over the station (look ${IMG_CHECK.tries} of ${IMG_CHECK.max}) — swapping in a fresh layer.`);
+      await freshImagery(0, 'the map was grey');
+      checkImagerySoon(3000 + IMG_CHECK.tries * 2500);
+    } finally { IMG_CHECK.busy = false; }
   }
   async function loadLabels() {
     const E = M.esri, t0 = now();
@@ -822,7 +944,7 @@
     }
     shownPins().forEach(p => {
       L.add(G_(pt(p.lon, p.lat), { type: 'simple-marker', style: 'circle', size: 15, color: rgb(p.colour).concat(1), outline: { color: [255, 255, 255, 1], width: 2 } }, { pin: p.key }));
-      L.add(G_(pt(p.lon, p.lat), text(p.label), { pinLabel: p.key }));
+      L.add(G_(pt(p.lon, p.lat), text(p.mapLabel), { pinLabel: p.key }));
     });
   }
   function drawMarks() {
@@ -867,6 +989,13 @@
     });
   }
   function features() { return M.app.session.map.features = M.app.session.map.features || []; }
+  // What a question draws (schema.mapDraws): its circle, or the line a feature belongs to.
+  const draws = q => S.schema.mapDraws(q);
+  const circleOf = q => draws(q).find(d => d.kind === 'circle') || null;
+  const lineDefs = q => draws(q).filter(d => d.kind === 'line');
+  // A line saved before a question could have two is its first (the access track).
+  const lineOf = (q, f) => { const ls = lineDefs(q); return ls.find(d => d.field === f.field) || (f.field ? null : ls[0]) || null; };
+  const lineFeature = (q, d) => features().find(f => f.kind === 'line' && f.q === q.code && lineOf(q, f) === d) || null;
   function drawFeatures() {
     if (!M.ready) return;
     changedPicture();
@@ -876,7 +1005,7 @@
       const q = ctx.byCode[f.q];
       if (q && !R().visible(ctx, q)) return;
       if (f.kind === 'circle') {
-        const r = Number(R().eff(ctx, f.q).fields[(q && q.mapDraw && q.mapDraw.field) || 'radius']) || f.radiusM || 0;
+        const r = Number(R().eff(ctx, f.q).fields[(circleOf(q) || {}).field || 'radius']) || f.radiusM || 0;
         if (!r) return;
         const poly = E.geometryEngine.geodesicBuffer(G_(pt(f.lon, f.lat)).geometry, r, 'meters');
         L.add(G_(poly, { type: 'simple-fill', color: DRAW_RGB.concat(0.18), outline: { color: DRAW_RGB.concat(1), width: 2, style: 'dash' } }, { feature: f.id }));
@@ -885,25 +1014,41 @@
         L.add(G_(pt(f.lon, f.lat), { type: 'simple-marker', style: 'triangle', size: 13, color: DRAW_RGB.concat(1), outline: { color: [255, 255, 255, 1], width: 1.5 } }, { feature: f.id }));
         L.add(G_(pt(f.lon, f.lat), text(f.ref, [220, 255, 225], 12, 10)));
       } else if (f.kind === 'line' && f.path && f.path.length > 1) {
-        L.add(G_({ type: 'polyline', paths: [f.path], spatialReference: { wkid: 4326 } }, { type: 'simple-line', color: [255, 170, 0, 1], width: 3.5 }, { feature: f.id }));
+        const d = q ? lineOf(q, f) : null, col = lineRgb(d);
+        const geom = { type: 'polyline', paths: [f.path], spatialReference: { wkid: 4326 } };
+        L.add(G_(geom, { type: 'simple-line', color: [255, 255, 255, 0.9], width: 5.5, cap: 'round', join: 'round' }));
+        L.add(G_(geom, { type: 'simple-line', color: col.concat(1), width: 3.5, cap: 'round', join: 'round' }, { feature: f.id }));
         const mid = f.path[Math.floor(f.path.length / 2)];
-        L.add(G_(pt(mid[0], mid[1]), text(`Access track ${Math.round(f.lengthM || 0)} m`, [255, 235, 200], 12, 10)));
+        L.add(G_(pt(mid[0], mid[1]), text(`${d ? d.label : 'Line'} ${Math.round(f.lengthM || 0)} m`, pale(col), 12, 10)));
       }
     });
   }
-  function startDraw(code) {
+  // field: which of the question's lines (a question can have two — the current and the new orifice run).
+  function sketchReady() {
+    if (!M.sketch) M.sketch = new M.esri.SketchViewModel({ view: M.view, layer: M.gl.draw, updateOnGraphicClick: false });
+    if (M.sketch.state === 'ready' || M.sketch.state === 'active') return Promise.resolve();
+    return withTimeout(M.esri.reactiveUtils.whenOnce(() => M.sketch.state === 'ready'), 8000, 'The drawing tool').catch(() => {});
+  }
+  async function startDraw(code, field) {
     const q = M.app.ctx.byCode[code];
-    if (!q || !q.mapDraw) return;
+    if (!q || !draws(q).length) return;
     if (!M.ready) { M.app.toast('The map hasn’t loaded yet.'); return; }
-    if (q.mapDraw.kind === 'circle') {
+    const d = (field && draws(q).find(x => x.field === field)) || draws(q)[0];
+    if (d.kind === 'circle') {
       startPlace({ kind: 'circle', q: code, label: 'Click the centre of the clearance (usually the station)' });
-    } else if (q.mapDraw.kind === 'line') {
+    } else if (d.kind === 'line') {
       cancelPlace();
-      if (!M.sketch) M.sketch = new M.esri.SketchViewModel({ view: M.view, layer: M.gl.draw, updateOnGraphicClick: false });
+      setMove(false);
+      const col = lineRgb(d);
       M.drawing = true;
       showMap();
-      setPlaceHint('Click along the route — double-click, press Enter or ✓ Finish route when done');
+      setPlaceHint(`${d.label}: click along it — double-click, press Enter or ✓ Finish when done (zoom in with + or Ctrl + scroll)`);
       M.els.drawActs.hidden = false;
+      // The drawing tool takes a moment to be ready the first time; a line begun before then never took a click.
+      const mine = M.drawTurn = (M.drawTurn || 0) + 1;
+      await sketchReady();
+      if (mine !== M.drawTurn || !M.drawing) return;
+      M.sketch.polylineSymbol = { type: 'simple-line', color: col.concat(1), width: 3.5, cap: 'round', join: 'round' };
       M.sketch.create('polyline');
       const hnd = M.sketch.on('create', ev => {
         if (ev.state !== 'active') log(`Drawing: ${ev.state}${ev.toolEventInfo ? ' (' + ev.toolEventInfo.type + ')' : ''}${ev.graphic && ev.graphic.geometry ? `, ${(ev.graphic.geometry.paths[0] || []).length} points` : ''}`);
@@ -911,22 +1056,32 @@
         if (ev.state === 'cancel') { hnd.remove(); M.drawing = false; M.els.drawActs.hidden = true; setPlaceHint(null); drawFeatures(); return; }
         if (ev.state !== 'complete') return;
         hnd.remove(); M.drawing = false; M.els.drawActs.hidden = true; setPlaceHint(null);
-        if (!ev.graphic || !ev.graphic.geometry || !(ev.graphic.geometry.paths[0] || []).length || ev.graphic.geometry.paths[0].length < 2) { drawFeatures(); M.app.toast('A route needs at least two points.'); return; }
+        if (!ev.graphic || !ev.graphic.geometry || !(ev.graphic.geometry.paths[0] || []).length || ev.graphic.geometry.paths[0].length < 2) { drawFeatures(); M.app.toast('A line needs at least two points.'); return; }
         const g = ev.graphic.geometry;
         const lengthM = M.esri.geometryEngine.geodesicLength(g, 'meters');
         const merc = g.spatialReference && g.spatialReference.isWebMercator;
-        const path = (g.paths[0] || []).map(([x, y]) => (merc ? M.esri.webMercatorUtils.xyToLngLat(x, y) : [x, y]).map(n => Math.round(n * 1e6) / 1e6));
-        const fs = features().filter(f => !(f.kind === 'line' && f.q === code));
-        fs.push({ id: U().uuid(), kind: 'line', q: code, path, lengthM: Math.round(lengthM) });
+        const path = (g.paths[0] || []).map(([x, y]) => (merc ? M.esri.webMercatorUtils.xyToLngLat(x, y) : [x, y]).map(n => Math.round(n * 1e7) / 1e7));
+        // Under 20 m (an orifice run), the length keeps one decimal place.
+        const len = lengthM < 20 ? Math.round(lengthM * 10) / 10 : Math.round(lengthM);
+        const fs = features().filter(f => !(f.kind === 'line' && f.q === code && lineOf(q, f) === d));
+        fs.push({ id: U().uuid(), kind: 'line', q: code, field: d.field, path, lengthM: len });
         M.app.session.map.features = fs;
         // The length fills the question's length field (as a suggestion from the map).
         const pre = M.app.session.prefill[code] = Object.assign({ src: 'map', fields: {} }, M.app.session.prefill[code] || {});
-        pre.src = 'map'; pre.fields[q.mapDraw.field] = String(Math.round(lengthM));
+        pre.src = 'map'; pre.fields = pre.fields || {}; pre.fields[d.field] = String(len);
         M.app.changed();
         drawFeatures();
-        M.app.toast(`Access track drawn: ${Math.round(lengthM)} m.`);
+        M.app.toast(`${d.label} drawn: ${len} m.`);
       });
     }
+  }
+  // A drawn line off the map, and its length out of the question if the map put it there.
+  function clearLine(q, d) {
+    const line = lineFeature(q, d); if (!line) return;
+    M.app.session.map.features = features().filter(f => f.id !== line.id);
+    const pre = M.app.session.prefill[q.code];
+    if (pre && pre.src === 'map' && pre.fields) delete pre.fields[d.field];
+    M.app.changed(); drawFeatures();
   }
   function addTree(lat, lon) {
     const fs = features();
@@ -943,7 +1098,7 @@
   // Bring the map into view for a click on it (the button may be below it, in a scrolled card).
   function showMap() { const f = M.els.view && M.els.view.closest('.map-frame'); if (f) f.scrollIntoView({ block: 'nearest' }); }
   function startPlace(p) { if (!M.ready) { M.app.toast('The map hasn’t loaded yet.'); return; } setMove(false); M.place = p; setPlaceHint(`${p.label} — Esc to cancel`); showMap(); }
-  function cancelPlace() { M.place = null; if (M.drawing && M.sketch) M.sketch.cancel(); M.drawing = false; if (M.els.drawActs) M.els.drawActs.hidden = true; setPlaceHint(null); }
+  function cancelPlace() { M.place = null; M.drawTurn = (M.drawTurn || 0) + 1; if (M.drawing && M.sketch) M.sketch.cancel(); M.drawing = false; if (M.els.drawActs) M.els.drawActs.hidden = true; setPlaceHint(null); }
   function findPin(hit) {
     for (const r of (hit && hit.results) || []) { const a = r.graphic && r.graphic.attributes; if (a && a.pin) return r.graphic; }
     return null;
@@ -960,7 +1115,7 @@
           fs.push({ id: U().uuid(), kind: 'circle', q: p.q, lat: mp.latitude, lon: mp.longitude });
           M.app.session.map.features = fs;
           const q = M.app.ctx.byCode[p.q];
-          if (!Number(R().eff(M.app.ctx, p.q).fields[q.mapDraw.field])) { ans(p.q).fields[q.mapDraw.field] = '10'; M.app.toast('Clearance circle placed at 10 m — change the radius in the Vegetation Management question.'); }
+          const cf = circleOf(q).field; if (!Number(R().eff(M.app.ctx, p.q).fields[cf])) { ans(p.q).fields[cf] = '10'; M.app.toast('Clearance circle placed at 10 m — change the radius in the Vegetation Management question.'); }
           M.app.changed(); drawFeatures();
         } else if (p.kind === 'tree') addTree(mp.latitude, mp.longitude);
         ev.stopPropagation();
@@ -1127,28 +1282,30 @@
     });
     if (!M.pins.length) el.appendChild(h('p', { class: 'hint' }, 'This table has no locations.'));
     // Things drawn for the scope.
-    const ctx = M.app.ctx, drawQs = ctx.qs.filter(q => q.mapDraw && R().visible(ctx, q));
+    const ctx = M.app.ctx, drawQs = ctx.qs.filter(q => draws(q).length && R().visible(ctx, q));
     if (drawQs.length) {
       el.appendChild(h('h4', null, 'Drawn for the scope'));
-      drawQs.forEach(q => {
+      drawQs.forEach(q => draws(q).forEach(d => {
         const fs = features().filter(f => f.q === q.code);
-        const row = h('div', { class: 'loc' }, h('div', { class: 'loc-label' }, q.mapDraw.label));
-        if (q.mapDraw.kind === 'circle') {
+        const row = h('div', { class: 'loc', dataset: { draw: `${q.code}.${d.field || d.kind}` } });
+        if (d.kind === 'circle') {
+          row.appendChild(h('div', { class: 'loc-label' }, d.label));
           row.appendChild(h('div', { class: 'fld-line' },
-            h('button', { type: 'button', class: 'btn-mini', onclick: () => startDraw(q.code) }, fs.some(f => f.kind === 'circle') ? '◯ Move circle' : '◯ Place circle'),
+            h('button', { type: 'button', class: 'btn-mini', onclick: () => startDraw(q.code, d.field) }, fs.some(f => f.kind === 'circle') ? '◯ Move circle' : '◯ Place circle'),
             h('button', { type: 'button', class: 'btn-mini', onclick: () => startPlace({ kind: 'tree', label: 'Click a tree to remove' }) }, '▲ Mark a tree'),
             fs.length ? h('button', { type: 'button', class: 'link', onclick: () => { M.app.session.map.features = features().filter(f => f.q !== q.code); delete (M.app.session.prefill[q.code] || { fields: {} }).fields.detail; M.app.changed(); drawFeatures(); } }, 'Clear') : null));
           const trees = fs.filter(f => f.kind === 'tree');
           if (trees.length) row.appendChild(h('div', { class: 'hint' }, `${trees.length} tree${trees.length > 1 ? 's' : ''} marked (${trees.map(t => t.ref).join(', ')})`));
         } else {
-          const line = fs.find(f => f.kind === 'line');
+          const line = lineFeature(q, d);
+          row.appendChild(h('div', { class: 'loc-head' }, h('span', { class: 'dash', style: { background: `rgb(${lineRgb(d).join(',')})` } }), h('span', { class: 'loc-label' }, d.label)));
           row.appendChild(h('div', { class: 'fld-line' },
-            h('button', { type: 'button', class: 'btn-mini', onclick: () => startDraw(q.code) }, line ? '〰 Redraw route' : '〰 Draw route'),
+            h('button', { type: 'button', class: 'btn-mini', title: `Click along the ${d.label.toLowerCase()} on the map — zoom right in first`, onclick: () => startDraw(q.code, d.field) }, line ? '〰 Redraw' : '〰 Draw on the map'),
             line ? h('span', { class: 'hint' }, `${line.lengthM} m`) : null,
-            line ? h('button', { type: 'button', class: 'link', onclick: () => { M.app.session.map.features = features().filter(f => f.id !== line.id); M.app.changed(); drawFeatures(); } }, 'Clear') : null));
+            line ? h('button', { type: 'button', class: 'link', onclick: () => clearLine(q, d) }, 'Clear') : null));
         }
         el.appendChild(row);
-      });
+      }));
     }
     // Survey marks (water level tables only).
     if (marksWanted()) {
@@ -1206,8 +1363,11 @@
     if (fs.some(f => f.kind === 'circle')) { const f = fs.find(x => x.kind === 'circle'); const r = Number(R().eff(ctx, f.q).fields.radius) || 0; if (r) items.push({ kind: 'circle', colour: DRAW_RGB, label: `Vegetation clearance (${r} m radius)` }); }
     const trees = fs.filter(f => f.kind === 'tree');
     if (trees.length) items.push({ kind: 'tree', colour: DRAW_RGB, label: `Trees to remove (${trees.map(t => t.ref).join(', ')})` });
-    const line = fs.find(f => f.kind === 'line');
-    if (line) items.push({ kind: 'line', colour: [255, 170, 0], label: `Access track (${line.lengthM} m)` });
+    fs.filter(f => f.kind === 'line' && f.path && f.path.length > 1).forEach(f => {
+      const q = ctx.byCode[f.q]; if (!q || !R().visible(ctx, q)) return;
+      const d = lineOf(q, f);
+      items.push({ kind: 'line', colour: lineRgb(d), label: `${d ? d.label : 'Line'} (${f.lengthM} m)` });
+    });
     const hidden = new Set(M.app.session.map.hiddenMarks || []);
     const marks = marksOn() ? M.marks.filter(m => !hidden.has(m.id)) : [];
     if (marks.length) items.push({ kind: 'mark', colour: [27, 79, 114], label: `State survey marks ${marks.map(m => m.ref).join(', ')} — table below the map` });
@@ -1442,7 +1602,14 @@
     await settle(() => !v.updating && (!v.allLayerViews || v.allLayerViews.toArray().every(lv => !lv.updating)));
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   }
+  // The picture and the imagery check never photograph the map at once (two
+  // screenshots in flight can come back with each other's layers).
   async function picture() {
+    M.shooting = (M.shooting || 0) + 1;
+    try { if (M.imgShot) await M.imgShot.catch(() => {}); return await takePicture(); }
+    finally { M.shooting--; }
+  }
+  async function takePicture() {
     if (M.failed) throw new Error('the map didn’t load');
     if (!M.ready) throw new Error('the map is still loading');
     resolvePins();
@@ -1665,6 +1832,11 @@
     return null;
   }
 
-  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, miniMap, marksWanted, CFG, _M: M,
+  // Full screen (app.js): the wheel zooms the map while it has the whole window, and the lock comes back after.
+  function fullScreen(on) {
+    if (on) { M.lockBefore = M.zoomLocked; setZoomLock(false); }
+    else if (M.lockBefore != null) { setZoomLock(M.lockBefore); M.lockBefore = null; }
+  }
+  S.mapView = { mount, sync, station, reset, focusPin, startDraw, hint, picture, miniMap, marksWanted, fullScreen, busy: () => !!(M.place || M.drawing), CFG, _M: M,
     ready: () => M.ready && !M.failed, version: () => M.version };
 })(window);

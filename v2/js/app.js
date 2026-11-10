@@ -104,9 +104,9 @@
     const el = $('#map-card'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (S.mapView) S.mapView.focusPin(code, field);
   }
-  function drawOnMap(code) {
+  function drawOnMap(code, field) {
     const el = $('#map-card'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (S.mapView) S.mapView.startDraw(code); else toast('The map isn’t available here.');
+    if (S.mapView) S.mapView.startDraw(code, field); else toast('The map isn’t available here.');
   }
 
   // An older session opened only to look at keeps its forum date and its
@@ -380,7 +380,7 @@
         owner: f.owner.value.trim(), sls: null,
         alertIds: ids.map(x => ({ id: Number(x), type: '' })), satcom: false,
         commsGuess: ids.length ? 'errts' : null, commsWhy: ids.length ? 'you entered ALERT IDs for it' : '',
-        txFrequency: null, repeater: null, acma: null, acmaLicence: '', acmaHolder: '', fadeMargin: null, radioPath: null,
+        txFrequency: null, radioSystem: null, repeater: null, acma: null, acmaLicence: '', acmaHolder: '', fadeMargin: null, radioPath: null,
         lastHeard: null, fetchedAt: Date.now(), app: ''
       };
       if (was) {
@@ -576,6 +576,7 @@
     if (st.commsGuess) add('Comms now', `${({ errts: 'ERRTS / ALERT VHF', cellular: 'IP logger – cellular (probably)', satellite: 'IP logger – satellite', unknown: 'not known' })[st.commsGuess]} — ${st.commsWhy}`, 'Flood-Net’s best guess at what is on site now; the Current Comms question starts from it');
     if (st.repeater) add('Repeater radio', `RX ${fn.freqText(st.repeater.rx)} · TX ${fn.freqText(st.repeater.tx)}${st.repeater.passRanges ? ' · passes ' + st.repeater.passRanges : ''}`);
     else if (st.txFrequency) add('Frequency', `${fn.freqText(st.txFrequency.mhz)} — inferred from ${st.txFrequency.from.join(', ')}`, 'Flood-Net records frequencies on repeaters; a field station transmits on what the repeaters passing its ALERT IDs listen on');
+    if (st.radioSystem) add('Radio set-up', fn.radioText(st.radioSystem), 'How Flood-Net’s radio path model has this station set up. It fills the TX power question — check it against what is really on site');
     // (The radio path to base is on the Fade Margin question, not here.)
     if (st.acma) {
       const own = st.acma.recorded.concat(st.acma.register).slice(0, 3);
@@ -648,7 +649,7 @@
   }
   function renderPreview() {
     const root = $('#preview'); if (!root || !A.ctx) return;
-    const out = S.word.build(A.ctx, A.session.include.map ? A.picture : null);
+    const out = S.word.build(A.ctx, A.session.include.map ? A.picture : null, { marks: true });
     root.innerHTML = out.html;
     if (A.session.include.map && !A.picture) refreshPicture();
   }
@@ -667,7 +668,39 @@
   }, 1500);
   function renderPreviewNow() {
     const root = $('#preview'); if (!root || !A.ctx) return;
-    root.innerHTML = S.word.build(A.ctx, A.session.include.map ? A.picture : null).html;
+    root.innerHTML = S.word.build(A.ctx, A.session.include.map ? A.picture : null, { marks: true }).html;
+  }
+  /* The preview is clickable: a click on a row goes to the question it came
+     from — scrolled into view, lit for a moment, and the keyboard put in its
+     answer — so a change spotted in the preview is one click from being made. */
+  function goFromPreview(to) {
+    let el = null, focus = null;
+    const [kind, id] = [to.slice(0, to.indexOf(':') < 0 ? to.length : to.indexOf(':')), to.indexOf(':') < 0 ? '' : to.slice(to.indexOf(':') + 1)];
+    if (kind === 'q') el = document.getElementById(`q-${id}`);
+    else if (kind === 'ps') el = document.querySelector(`#ps [data-ps="${CSS.escape(id)}"]`);
+    else if (kind === 'ps-general') { focus = document.querySelector('[data-fk="ps::general"]'); el = focus && focus.closest('.fld'); }
+    else if (to === 'forum:date') { focus = $('#forumDate'); el = $('#forum'); }
+    else if (to === 'forum:attendees') { focus = $('#attendeeInput'); el = $('#forum'); }
+    else if (to === 'out:outcome') { focus = $('#outcome'); el = focus && focus.closest('.out-grid'); }
+    else if (to === 'followups') el = $('#followups');
+    else if (to === 'map') el = $('#map-card');
+    if (!el) { toast('That part isn’t on the page just now.'); return; }
+    // Where the keyboard goes: a box to type in if it has one, else the answer chosen, else the first choice.
+    if (!focus) focus = el.querySelector('.q-body input[type=text], .q-body textarea, .fld-line input[type=text], textarea')
+      || el.querySelector('input:checked:not(:disabled)') || el.querySelector('input:not(:disabled), select, textarea, button');
+    el.scrollIntoView({ behavior: 'smooth', block: to === 'map' ? 'nearest' : 'center' });
+    if (focus) try { focus.focus({ preventScroll: true }); } catch (_) { /* not focusable */ }
+    el.classList.remove('go-flash'); void el.offsetWidth; el.classList.add('go-flash');
+    setTimeout(() => el.classList.remove('go-flash'), 1800);
+  }
+  function initPreviewClicks() {
+    const root = $('#preview'); if (!root) return;
+    root.addEventListener('click', ev => {
+      if (ev.target.closest('a')) return;                       // a link in the table is still a link
+      if (String(G.getSelection && G.getSelection()).trim()) return;   // selecting text to copy isn't a click
+      const row = ev.target.closest('[data-go]'); if (!row || !root.contains(row)) return;
+      goFromPreview(row.dataset.go);
+    });
   }
   A.mapChanged = () => refreshPicture();
   A.picturesLoaded = () => previewSoon();   // a question's pictures reached memory (js/pictures.js)
@@ -742,28 +775,57 @@
     if (cur) newSession(null, true);
   }
   A.dropLocal = dropLocal;
-  /* Sessions Management: a search, this browser's sessions, then the shared
-     playbook's. Delete is two steps: Delete, then Confirm delete (or Cancel)
-     in a line under the row, saying what goes. */
+  /* Sessions Management: a search, then two tabs — this browser's sessions, and
+     the forum's saved ones (the shared playbook) — each with how many it holds
+     (or how many match the search), so neither list buries the other. Delete is
+     two steps: Delete, then Confirm delete (or Cancel) in a line under the row,
+     saying what goes. The browser's list shows its newest 15 unless searched,
+     and offers to clear out the ones the forum already holds. */
+  const LS_SESS_TAB = 'sortv2.sessTab', SESS_SHOWN = 15;
   function openSessions(query) {
     const dlg = $('#sessionsDlg'), list = $('#sessionsList');
     list.innerHTML = '';
-    let ask = null;   // the session in this browser whose Delete is waiting to be confirmed: { id, phase, error }
+    let ask = null;      // the session in this browser whose Delete is waiting to be confirmed: { id, phase, error }
+    let tidying = false; // "Clear them from this browser" pressed, waiting for its Confirm
+    let tab = S.playbook && U.LS.get(LS_SESS_TAB) === 'forum' ? 'forum' : 'browser';
     const search = h('input', { type: 'search', id: 'sessionsSearch', class: 'sess-search', placeholder: 'Find a station — name or number', autocomplete: 'off', value: query || '' });
-    const results = h('div', { id: 'sessionsResults' });
-    list.appendChild(search); list.appendChild(results);
+    const tabs = h('div', { class: 'sess-tabs', id: 'sessionsTabs', role: 'tablist', 'aria-label': 'Where the sessions are kept' });
+    const results = h('div', { id: 'sessionsResults', role: 'tabpanel' });
+    list.appendChild(h('div', { class: 'sess-top' }, search, tabs)); list.appendChild(results);
     const close = () => { if (dlg.open) dlg.close(); };
+    const term = () => search.value.trim().toLowerCase();
+    const localRows = q => S.store.index().filter(x => !q || [x.name, x.number].some(v => String(v || '').toLowerCase().includes(q)))
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const forumCount = q => (S.playbook ? S.playbook.count(q) : null);
+    const setTab = (t, keep) => { tab = t; if (keep) U.LS.set(LS_SESS_TAB, t); ask = null; tidying = false; if (S.playbook) S.playbook.state.ask = null; draw(); };
+    // Searching: a tab with nothing in it gives way to the one that has a match.
+    const follow = () => {
+      const q = term(); if (!q || !S.playbook) return;
+      const here = localRows(q).length, there = forumCount(q);
+      if (tab === 'browser' && !here && there) tab = 'forum';
+      else if (tab === 'forum' && there === 0 && here) tab = 'browser';
+    };
     const draw = () => {
-      const q = search.value.trim().toLowerCase();
+      const q = term();
+      const idx = localRows(q), fc = forumCount(q);
+      tabs.innerHTML = '';
+      const tabBtn = (id, label, n, title) => tabs.appendChild(h('button', { type: 'button', role: 'tab', id: `sessTab-${id}`, class: 'sess-tab' + (tab === id ? ' on' : ''), 'aria-selected': String(tab === id), title,
+        onclick: () => setTab(id, true) }, label, n == null ? null : h('span', { class: 'sess-count', title: q ? 'How many match the search' : 'How many there are' }, String(n))));
+      tabBtn('browser', 'In this browser', idx.length, 'The sessions kept in this browser, on this computer — the newest first');
+      if (S.playbook) tabBtn('forum', 'Saved to the forum', fc, 'The sessions saved for the whole forum — open one on any computer');
       results.innerHTML = '';
-      const idx = S.store.index().filter(x => !q || [x.name, x.number].some(v => String(v || '').toLowerCase().includes(q)));
-      results.appendChild(h('h3', null, 'In this browser'));
+      results.setAttribute('aria-labelledby', `sessTab-${tab}`);
+      if (tab === 'forum' && S.playbook) { results.appendChild(S.playbook.panel(A, q, close, () => { ask = null; })); return focusCancel(); }
       if (!idx.length) results.appendChild(h('p', { class: 'muted' }, q ? 'No session in this browser matches.' : 'No sessions saved in this browser yet.'));
       const outcomes = Object.fromEntries(((A.defs.session || {}).outcomes || []).map(o => [o.code, o.label]));
       if (ask && !idx.some(x => x.id === ask.id)) ask = null;
-      idx.forEach(x => {
+      // The one on screen first, then the newest; all of them when searching.
+      const ordered = idx.filter(x => A.session && x.id === A.session.id).concat(idx.filter(x => !(A.session && x.id === A.session.id)));
+      const shown = q ? ordered : ordered.slice(0, SESS_SHOWN);
+      const box = h('div', { class: 'sess-list' });
+      shown.forEach(x => {
         const cur = A.session && x.id === A.session.id, asking = ask && ask.id === x.id;
-        results.appendChild(h('div', { class: 'sess' + (cur ? ' current' : '') + (asking ? ' asking' : '') },
+        box.appendChild(h('div', { class: 'sess' + (cur ? ' current' : '') + (asking ? ' asking' : '') },
           h('div', { class: 'sess-main' },
             h('div', { class: 'sess-name' }, x.name || 'No station', x.number ? h('span', { class: 'res-num' }, x.number) : null, cur ? h('span', { class: 'tag' }, 'open') : null),
             h('div', { class: 'res-meta' }, [(S.schema.template(A.defs, x.template) || {}).label, x.forumDate && `forum ${U.dmy(x.forumDate)}`, x.outcome ? outcomes[x.outcome] : 'not finished',
@@ -771,16 +833,44 @@
           h('div', { class: 'sess-acts' },
             cur ? null : h('button', { type: 'button', class: 'btn', onclick: () => { close(); openSession(x.id); } }, 'Open'),
             asking ? null : h('button', { type: 'button', class: 'btn btn-quiet btn-del', title: 'Delete this session — you are asked to confirm first', onclick: () => {
-              ask = { id: x.id, phase: 'ready' };
+              ask = { id: x.id, phase: 'ready' }; tidying = false;
               if (S.playbook) S.playbook.state.ask = null;
               draw();
             } }, 'Delete')),
           asking ? askLocal(x, cur) : null));
       });
-      if (S.playbook) results.appendChild(S.playbook.panel(A, q, close, () => { ask = null; }));
-      // Delete just pressed (its button is gone): the keyboard lands on Cancel, never on Confirm.
+      results.appendChild(box);
+      if (ordered.length > shown.length) results.appendChild(h('p', { class: 'hint' }, `${ordered.length - shown.length} older — search to find them.`));
+      const spare = tidyList();
+      if (!q && spare.length) results.appendChild(tidyRow(spare));
+      focusCancel();
+    };
+    // Delete just pressed (its button is gone): the keyboard lands on Cancel, never on Confirm.
+    const focusCancel = () => {
       const cancel = results.querySelector('.sess-confirm .btn:last-child');
       if (cancel && !dlg.contains(document.activeElement)) cancel.focus();
+    };
+    /* Keeping the browser's list short: sessions the forum already holds in
+       full (nothing waiting to be saved) and that aren't on screen can go from
+       this browser — the forum's copy opens again from the other tab. */
+    const tidyList = () => {
+      const pb = S.playbook;
+      if (!pb || pb.state.status !== 'ready' || !S.shared.has()) return [];
+      return S.store.index().filter(x => x.playbookAt && !(A.session && x.id === A.session.id)).filter(x => { const s = S.store.load(x.id); return s && !pb.needsSave(s); });
+    };
+    const tidyRow = spare => {
+      const n = spare.length, many = n > 1;
+      if (!tidying) return h('p', { class: 'hint sess-tidy' }, `${n} of the sessions in this browser ${many ? 'are' : 'is'} also saved to the forum. `,
+        h('button', { type: 'button', class: 'link', id: 'sessTidy', title: 'Takes them out of this browser only. The forum keeps every one, and they open again from “Saved to the forum”.',
+          onclick: () => { tidying = true; ask = null; draw(); } }, many ? 'Clear them from this browser' : 'Clear it from this browser'));
+      return h('div', { class: 'sess asking sess-tidy' }, h('div', { class: 'sess-confirm', role: 'group', 'aria-label': 'Clear saved sessions from this browser' },
+        h('p', null, `Take ${many ? `these ${n} sessions` : 'this session'} out of this browser? The forum keeps ${many ? 'every one' : 'it'} — open ${many ? 'them' : 'it'} again from “Saved to the forum”. The session on screen stays.`),
+        h('div', { class: 'sess-acts' },
+          h('button', { type: 'button', class: 'btn btn-danger', id: 'sessTidyGo', onclick: () => {
+            spare.forEach(x => { S.playbook.dropQueued(x.id, false); S.store.remove(x.id); });
+            tidying = false; draw(); toast(`${n} session${many ? 's' : ''} cleared from this browser — the forum still has ${many ? 'them' : 'it'}.`);
+          } }, 'Confirm'),
+          h('button', { type: 'button', class: 'btn', onclick: () => { tidying = false; draw(); } }, 'Cancel'))));
     };
     // The second step for a session in this browser. Saved to the forum and
     // connected: deleted there too, unless "Only from this browser".
@@ -808,8 +898,8 @@
           reach ? h('button', { type: 'button', class: 'btn', disabled: busy, onclick: () => local(false) }, 'Only from this browser') : null,
           h('button', { type: 'button', class: 'btn', disabled: busy, onclick: () => { ask = null; draw(); } }, 'Cancel')));
     };
-    search.addEventListener('input', draw);
-    draw();
+    search.addEventListener('input', () => { follow(); draw(); });
+    follow(); draw();
     A.sessionsDraw = () => { if (dlg.open) draw(); };
     if (S.playbook) S.playbook.onSessionsOpen();
     if (!dlg.open) dlg.showModal();
@@ -853,6 +943,32 @@
     setLayout(saved ? saved === 'side' : true);
   }
 
+  /* ---------------- the map, full screen ---------------- */
+  // The map card over the whole window (the same map, not a copy), for close
+  // work such as drawing an orifice run. Esc or the button puts it back.
+  function setMapFull(on) {
+    on = !!on;
+    if (document.body.classList.contains('map-full') === on) return;
+    document.body.classList.toggle('map-full', on);
+    const b = $('#fullBtn');
+    if (b) { b.textContent = on ? '✕ Exit full screen' : '⛶ Full screen'; b.setAttribute('aria-pressed', String(on)); b.title = on ? 'Put the map back beside the questions (Esc)' : 'Give the map the whole window — more room for placing pins and drawing lines'; }
+    const card = $('#map-card');
+    if (card) { if (on) { card.setAttribute('role', 'dialog'); card.setAttribute('aria-modal', 'true'); card.scrollTop = 0; } else { card.removeAttribute('role'); card.removeAttribute('aria-modal'); } }
+    if (S.mapView && S.mapView.fullScreen) S.mapView.fullScreen(on);
+    if (on && b) b.focus();
+  }
+  A.setMapFull = setMapFull;
+  function initMapFull() {
+    const b = $('#fullBtn'); if (!b) return;
+    b.addEventListener('click', () => setMapFull(!document.body.classList.contains('map-full')));
+    // Esc leaves full screen — unless the map is in the middle of placing or drawing (Esc cancels that first).
+    document.addEventListener('keydown', ev => {
+      if (ev.key !== 'Escape' || !document.body.classList.contains('map-full')) return;
+      if (document.querySelector('dialog[open]') || (S.mapView && S.mapView.busy && S.mapView.busy())) return;
+      setMapFull(false);
+    }, true);
+  }
+
   /* ---------------- jump buttons: to the top, and to the question you are up to ---------------- */
   // The questions scroll inside the left pane when the map sits beside them, else the whole page scrolls.
   function scroller() {
@@ -871,10 +987,17 @@
     const box = $('#jumpBtns'); if (!box) return;
     const sc = scroller();
     const y = sc ? sc.scrollTop : (G.scrollY || 0);
-    const top = $('#jumpTop'), next = $('#jumpNext');
+    const top = $('#jumpTop'), next = $('#jumpNext'), prev = $('#jumpPreview');
     top.hidden = y < 400;
     next.hidden = !currentQuestion();
-    box.hidden = top.hidden && next.hidden;
+    // "Word preview" hides once the preview is on screen.
+    const head = $('#previewHead'), pv = $('#preview');
+    if (prev && head && pv) {
+      const t = head.getBoundingClientRect().top, btm = pv.getBoundingClientRect().bottom;
+      prev.hidden = t < G.innerHeight - 80 && btm > 120;
+      prev.textContent = `${t < 0 ? '↑' : '↓'} Word preview`;
+    }
+    box.hidden = top.hidden && next.hidden && (!prev || prev.hidden);
   }
   function initJump() {
     const top = $('#jumpTop'), next = $('#jumpNext'); if (!top || !next) return;
@@ -888,6 +1011,13 @@
         if (q.isConnected && (r.top < box.top || r.bottom > box.bottom)) q.scrollIntoView({ behavior: 'auto', block: 'center' });
       }, ms));
       q.classList.add('jump-flash'); setTimeout(() => q.classList.remove('jump-flash'), 1600);
+    });
+    const prev = $('#jumpPreview');
+    if (prev) prev.addEventListener('click', () => {
+      const head = $('#previewHead'); if (!head) return;
+      head.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // The page above can still be settling (the map picture landing): put it back in view if it slid away.
+      [600, 1500].forEach(ms => setTimeout(() => { const r = head.getBoundingClientRect(); if (r.top < 0 || r.top > G.innerHeight - 120) head.scrollIntoView({ behavior: 'auto', block: 'start' }); }, ms));
     });
     let pending = false;
     const later = () => { if (pending) return; pending = true; G.requestAnimationFrame(() => { pending = false; updateJump(); }); };
@@ -943,7 +1073,7 @@
     // Leaving the tab (or closing it): keep it here, and share it now rather than in a moment.
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { saveSoon.flush(); if (S.playbook) S.playbook.flush(A); } });
     if (S.mapView) S.mapView.mount($('#mapMount'), A);
-    watchPreview();
+    watchPreview(); initPreviewClicks(); initMapFull();
     initJump();
     if (S.playbook) S.playbook.init(A);
     if (S.bureauBM) S.bureauBM.init(A);

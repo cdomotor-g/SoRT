@@ -62,6 +62,23 @@
   // ALERT channels sit 6.25 kHz apart: four decimals where they matter, never fewer than three.
   function freqText(mhz) { return mhz == null ? '' : `${Number(mhz).toFixed(4).replace(/0$/, '')} MHz`; }
 
+  /* The station's radio as Flood-Net's path model has it set up (the dossier's
+     rm_system): transmit power, antenna, its gain and height. Flood-Net works
+     the fade margins out from these, so they are worth a check against what is
+     really on site — the TX power question starts from the power here. */
+  function radioSystemFacts(rm) {
+    if (!rm || (rm.tx_power_w == null && !rm.antenna_type && rm.antenna_gain_dbi == null)) return null;
+    const ant = String(rm.antenna_type || '').replace(/\.ant$/i, '');
+    return { name: rm.name || '', txPowerW: rm.tx_power_w != null ? Number(rm.tx_power_w) : null, antenna: ant,
+      gainDbi: rm.antenna_gain_dbi != null ? Number(rm.antenna_gain_dbi) : null, heightM: rm.antenna_height_m != null ? Number(rm.antenna_height_m) : null,
+      lineLossDb: rm.line_loss_db != null ? Number(rm.line_loss_db) : null };
+  }
+  const wattText = w => `${Number(w)} W`;
+  function radioText(r) {
+    const ant = [r.antenna && `${r.antenna} antenna`, r.gainDbi != null && `${r.gainDbi} dBi`, r.heightM != null && `at ${r.heightM} m`].filter(Boolean).join(' ');
+    return [r.txPowerW != null && `TX ${wattText(r.txPowerW)}`, ant, r.lineLossDb != null && `line loss ${r.lineLossDb} dB`].filter(Boolean).join(' · ') + (r.name ? ` — “${r.name}” in Flood-Net’s radio model` : ' — from Flood-Net’s radio model');
+  }
+
   // The facts SoRT keeps about a station (session.station), from its dossier.
   async function stationFacts(id) {
     const d = await dossier(id);
@@ -81,7 +98,7 @@
       owner: (sls && sls.owner) || idn.owner || '', sls: sls ? { gaugeType: sls.gauge_type, dataType: sls.data_type, priority: sls.priority, owner: sls.owner } : null,
       alertIds: addresses, satcom: !!(nr.satcom && nr.satcom.enabled),
       commsGuess: guess.code, commsWhy: guess.why,
-      txFrequency: null, repeater: null, acma: null, acmaLicence: '', acmaHolder: '', fadeMargin: null,
+      txFrequency: null, radioSystem: radioSystemFacts(nr.rm_system), repeater: null, acma: null, acmaLicence: '', acmaHolder: '', fadeMargin: null,
       lastHeard: ((tel.health || {}).last_seen_at) || null,
       fetchedAt: Date.now(), app: (d.links || {}).app || `https://floodwarning.net/?station=${encodeURIComponent(id)}`
     };
@@ -190,6 +207,14 @@
       const other = S.schema.flatOptions(q.options).find(o => o.other);
       if (opt) put('frequency', { value: opt.code });
       else if (other) put('frequency', { value: other.code, other: freqText(st.txFrequency.mhz) });
+    }
+    // TX power, as Flood-Net's radio model has the station (1 W, 5 W…): the matching answer, or Other with the figure.
+    if (has('txPower') && st.radioSystem && st.radioSystem.txPowerW != null && st.commsGuess !== 'cellular' && st.commsGuess !== 'satellite') {
+      const q = has('txPower'), w = st.radioSystem.txPowerW, flat = S.schema.flatOptions(q.options);
+      const opt = flat.find(o => !o.other && parseFloat(o.label) === w && /w\b/i.test(o.label));
+      const other = flat.find(o => o.other);
+      if (opt) put('txPower', { value: opt.code });
+      else if (other) put('txPower', { value: other.code, other: wattText(w) });
     }
     if (has('acmaLicence') && st.acmaLicence) put('acmaLicence', { fields: { licenceNo: st.acmaLicence, holder: st.acmaHolder || '' } });
     if (has('repeaterRadio') && st.repeater) put('repeaterRadio', { fields: {
@@ -311,11 +336,14 @@
       if (A.extract) parts.push(`Register extract of ${U().dmy(A.extract.date)}${A.extract.stale ? ' — check anything newer on the ACMA register' : ''}.`);
       return parts.length ? parts.join(' ') : null;
     }
+    if (key === 'station.txPower' && st.radioSystem && st.radioSystem.txPowerW != null) {
+      return `Flood-Net: ${radioText(st.radioSystem)}. That is how its fade margins were worked out — confirm it is what is on site.`;
+    }
     if (key === 'station.txFrequency' && st.txFrequency) {
       return `Flood-Net: the repeaters passing its ALERT IDs (${st.txFrequency.from.join(', ')}) listen on ${freqText(st.txFrequency.mhz)}${st.txFrequency.others.length ? '; others: ' + st.txFrequency.others.join(', ') : ''}. Inferred — confirm.`;
     }
     return null;
   }
 
-  S.floodnet = { API, search, dossier, record, near, acma, stationFacts, radioPathFacts, pathText, dbText, suggestTemplate, applyPrefill, hint, commsGuess, freqText, KIND_LABEL };
+  S.floodnet = { API, search, dossier, record, near, acma, stationFacts, radioPathFacts, pathText, dbText, suggestTemplate, applyPrefill, hint, commsGuess, freqText, radioText, KIND_LABEL };
 })(typeof window !== 'undefined' ? window : globalThis);

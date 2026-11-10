@@ -38,7 +38,12 @@
 
   const td0 = (html, extra) => `<td${wAttr(0)} style="font-weight:bold;vertical-align:top;padding:6px 8px;${B}${extra || ''}${wStyle(0)}">${html}</td>`;
   const td1 = (html, extra) => `<td${wAttr(1)} style="vertical-align:top;padding:6px 8px;${B}${extra || ''}${wStyle(1)}">${html}</td>`;
-  const span = (html, extra) => `<tr><td colspan="2"${wAttr()} style="padding:6px 8px;${B}${extra || ''}${wStyle()}">${html}</td></tr>`;
+  const span = (html, extra, to) => `<tr${go(to)}><td colspan="2"${wAttr()} style="padding:6px 8px;${B}${extra || ''}${wStyle()}">${html}</td></tr>`;
+  // The page's preview only (build(…, { marks: true })): each row says which
+  // question it came from, so a click on it goes there. The copy for Word
+  // carries none of this.
+  let marking = false;
+  function go(to) { return marking && to ? ` data-go="${esc(to)}" title="Click to go to this on the page"` : ''; }
 
   // The station, on every copied table's heading and in the picture's legend —
   // a breadcrumb so a paste into the wrong report is plain to whoever reads it.
@@ -85,21 +90,21 @@
     let head = '';
     if (inc.header) {
       head += span(esc(withStation('SoRT Forum Agreed Remediation', s)), 'background:#1f2d3d;color:#fff;font-weight:bold;padding:8px;');
-      head += span(`<b>SoRT Forum Date:</b> ${esc(U().dmy(s.forum.date) || 'dd/mm/yyyy')}`);
-      head += span(`<b>SoRT Forum Attendees:</b> ${esc(attendeesLine(s))}`);
+      head += span(`<b>SoRT Forum Date:</b> ${esc(U().dmy(s.forum.date) || 'dd/mm/yyyy')}`, '', 'forum:date');
+      head += span(`<b>SoRT Forum Attendees:</b> ${esc(attendeesLine(s))}`, '', 'forum:attendees');
       const outcome = s.outcome && ((ctx.defs.session || {}).outcomes || []).find(o => o.code === s.outcome);
-      if (outcome) head += span(`<b>SoRT Forum Outcome:</b> ${esc(outcome.label)}${s.outcomeNote ? ' — ' + escL(s.outcomeNote) : ''}`);
+      if (outcome) head += span(`<b>SoRT Forum Outcome:</b> ${esc(outcome.label)}${s.outcomeNote ? ' — ' + escL(s.outcomeNote) : ''}`, '', 'out:outcome');
     }
     // The table's own title carries the station even with the header left out.
     head += span(`<i><b>${esc(withStation(tpl.title || tpl.label || '', s))}</b></i>`);
     head += `<tr>${td0('Item', 'background:#e8e8e8;')}${td1('Details', 'background:#e8e8e8;font-weight:bold;')}</tr>`;
     let rows = '';
-    scopeRows(ctx).forEach(r => { rows += `<tr>${td0(esc(r.q.label))}${td1(r.lines.map(lineHtml).concat(r.pics.map(picHtml)).join('<br>'))}</tr>`; });
+    scopeRows(ctx).forEach(r => { rows += `<tr${go('q:' + r.q.code)}>${td0(esc(r.q.label))}${td1(r.lines.map(lineHtml).concat(r.pics.map(picHtml)).join('<br>'))}</tr>`; });
     if (inc.followUps) {
       const fu = openFollowUps(ctx, 'scope');
       if (fu.length) {
         const lines = fu.map(f => `• <b>${esc(f.owner)}:</b> ${esc(f.text)}${f.link ? ` <a href="${esc(f.link.url)}">${esc(f.link.label)}</a>` : ''}`);
-        rows += `<tr>${td0('Follow-up Actions', 'background:#fff2cc;')}${td1(lines.join('<br>'), 'background:#fff2cc;')}</tr>`;
+        rows += `<tr${go('followups')}>${td0('Follow-up Actions', 'background:#fff2cc;')}${td1(lines.join('<br>'), 'background:#fff2cc;')}</tr>`;
       }
     }
     return `${tableOpen()}${head}${rows}</table>`;
@@ -209,26 +214,26 @@
       if (!R().test(ctx, row.showIf)) return;
       const comment = String(p.comments[row.id] || '').trim();
       if (row.kind === 'coordGroup') {
-        rows += span(esc(row.label), 'background:#e8e8e8;font-weight:bold;');
+        rows += span(esc(row.label), 'background:#e8e8e8;font-weight:bold;', 'ps:' + row.id);
         (row.coords || []).forEach(c => {
-          rows += `<tr><td ${label}>${esc(c.label)}</td><td ${cell}>${esc(R().psText(ctx, `${row.id}.${c.key}`, c.source, c.default))}</td></tr>`;
+          rows += `<tr${go('ps:' + row.id)}><td ${label}>${esc(c.label)}</td><td ${cell}>${esc(R().psText(ctx, `${row.id}.${c.key}`, c.source, c.default))}</td></tr>`;
         });
-        if (comment) rows += `<tr><td ${label}>Comment</td><td ${cell}>${escL(comment)}</td></tr>`;
+        if (comment) rows += `<tr${go('ps:' + row.id)}><td ${label}>Comment</td><td ${cell}>${escL(comment)}</td></tr>`;
       } else if (row.kind === 'question') {
         const detail = R().psDetail(ctx, row);
-        rows += `<tr><td ${label}>${esc(row.label)}</td><td ${cell}>${answer(R().psQuestionLabel(ctx, row), detail && `${row.detail.label}: ${detail}`, comment)}</td></tr>`;
+        rows += `<tr${go('ps:' + row.id)}><td ${label}>${esc(row.label)}</td><td ${cell}>${answer(R().psQuestionLabel(ctx, row), detail && `${row.detail.label}: ${detail}`, comment)}</td></tr>`;
       } else if (row.kind === 'text') {
-        rows += `<tr><td ${label}>${esc(row.label)}</td><td ${cell}>${answer(R().psNA(ctx, row) ? 'NA' : R().psText(ctx, row.id, row.source, ''), comment)}</td></tr>`;
+        rows += `<tr${go('ps:' + row.id)}><td ${label}>${esc(row.label)}</td><td ${cell}>${answer(R().psNA(ctx, row) ? 'NA' : R().psText(ctx, row.id, row.source, ''), comment)}</td></tr>`;
       } else if (row.kind === 'sectionHeader') {
         rows += span(esc(row.label), 'background:#f0f0f0;font-style:italic;font-weight:bold;');
       } else if (row.kind === 'date') {
-        rows += `<tr><td ${label}>${esc(row.label)}:</td><td ${cell}>${answer(R().psText(ctx, row.id, null, U().dmy(ctx.session.forum.date)), comment)}</td></tr>`;
+        rows += `<tr${go('ps:' + row.id)}><td ${label}>${esc(row.label)}:</td><td ${cell}>${answer(R().psText(ctx, row.id, null, U().dmy(ctx.session.forum.date)), comment)}</td></tr>`;
       }
     });
     if (ctx.session.include.followUps) openFollowUps(ctx, 'ps').forEach(f => {
       rows += `<tr><td ${label.replace('font-weight:bold;', 'font-weight:bold;background:#fff2cc;')}>ACTION – ${esc(f.owner)}</td><td ${cell.replace('vertical-align:top;', 'vertical-align:top;background:#fff2cc;')}>${esc(f.text)}</td></tr>`;
     });
-    if (p.general.trim()) rows += `<tr><td ${label}>Additional comments</td><td ${cell}>${escL(p.general.trim())}</td></tr>`;
+    if (p.general.trim()) rows += `<tr${go('ps-general')}><td ${label}>Additional comments</td><td ${cell}>${escL(p.general.trim())}</td></tr>`;
     // The note is an instruction people must not miss: an
     // orange heading and a tinted, heavy-bordered box, its key sentence bold.
     if (ps.note) {
@@ -263,12 +268,17 @@
 
   // ---- the whole copy ----------------------------------------------------------------
   // picture: {dataUrl} or null — made by the map (map.js) before this is called.
-  function build(ctx, picture) {
+  // opts.marks: for the page's preview — each row carries where it came from (see go()).
+  function build(ctx, picture, opts) {
+    marking = !!(opts && opts.marks);
+    try { return buildAll(ctx, picture); } finally { marking = false; }
+  }
+  function buildAll(ctx, picture) {
     const s = ctx.session, inc = s.include;
     let html = scopeHtml(ctx), text = scopeText(ctx);
     if (inc.map && picture && picture.dataUrl) {
       // Centred, like the tables: align= for Word's paste, text-align for the preview.
-      html += GAP + `<div align="center" style="text-align:center;"><img src="${picture.dataUrl}" alt="Site map" style="width:16cm;max-width:100%;height:auto;border:1px solid #999;"></div>`;
+      html += GAP + `<div${go('map')} align="center" style="text-align:center;"><img src="${picture.dataUrl}" alt="Site map" style="width:16cm;max-width:100%;height:auto;border:1px solid #999;"></div>`;
       text += '\n\n[Site map image included]\n';
       // A long relocation's close-ups: side by side under the map, the same 16 cm across.
       const cu = picture.closeups || [];

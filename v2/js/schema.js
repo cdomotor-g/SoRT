@@ -58,6 +58,9 @@
   function template(defs, id) { return (defs.templates || []).find(t => t.id === id) || null; }
 
   // A preset question (q.presets): its choice field, and the choice its ticks match.
+  // What a question has drawn on the map: one thing (mapDraw: {…}) or several
+  // (mapDraw: [{…}, {…}] — the current and the new orifice run), always as a list.
+  function mapDraws(q) { return q && q.mapDraw ? [].concat(q.mapDraw) : []; }
   function presetField(q) { return q && q.presets ? (q.fields || []).find(f => f.code === q.presets && f.type === 'choice') || null : null; }
   function presetFor(q, ticks) {
     const f = presetField(q); if (!f) return null;
@@ -198,7 +201,10 @@
       }
       const fields = checkFields(where, q.fields);
       if (q.pin && !fields.has(q.pin.field)) E(`${where}: pin.field "${q.pin.field}" is not one of its fields`);
-      if (q.mapDraw && q.mapDraw.field && !fields.has(q.mapDraw.field)) E(`${where}: mapDraw.field "${q.mapDraw.field}" is not one of its fields`);
+      mapDraws(q).forEach(d => {
+        if (!['circle', 'line'].includes(d.kind)) E(`${where}: mapDraw kind "${d.kind}" is not circle or line`);
+        if (d.field && !fields.has(d.field)) E(`${where}: mapDraw.field "${d.field}" is not one of its fields`);
+      });
       if (q.prefill && q.prefill.field && !fields.has(q.prefill.field)) E(`${where}: prefill.field "${q.prefill.field}" is not one of its fields`);
       checkPresets(where, q); checkGuide(where, q);
       checkCond(`${where} showIf`, q.showIf);
@@ -273,5 +279,5 @@
     return { errors, warnings };
   }
 
-  S.schema = { flatOptions, option, optionLabel, templateQuestions, template, check, condRefs, presetField, presetFor };
+  S.schema = { flatOptions, option, optionLabel, templateQuestions, template, check, condRefs, presetField, presetFor, mapDraws };
 })(typeof window !== 'undefined' ? window : globalThis);

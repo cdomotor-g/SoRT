@@ -18,7 +18,7 @@
 </script>
 <!-- Every script and the stylesheet carry ?v=<stamp>; bump it (all of them at
      once) on any change, or browsers keep the old copy for up to 10 minutes. -->
-<link rel="stylesheet" href="app.css?v=20261109i">
+<link rel="stylesheet" href="app.css?v=20261110a">
 </head>
 <body>
 <header class="top">
@@ -52,6 +52,7 @@
   <section class="card" id="station" aria-label="Station"></section>
   <section class="card" id="map-card" aria-label="Map">
     <header class="sec-head"><h2>Map</h2><span class="hint" id="mapHint">Check the station’s position, then mark the other points.</span>
+      <button type="button" class="btn-mini full-btn" id="fullBtn" aria-pressed="false" title="Give the map the whole window — more room for placing pins and drawing lines">⛶ Full screen</button>
       <button type="button" class="btn-mini layout-btn" id="layoutBtn" aria-pressed="true" title="Show the map above the questions, or keep it beside them while you scroll (wide screens)">⇅ Map above the questions</button></header>
     <div id="mapMount"><div class="map-placeholder">Loading the map…</div></div>
   </section>
@@ -67,15 +68,16 @@
       <span id="playbookActs"></span>
       <button type="button" class="btn" id="downloadBtn" title="Save this session as a file (to send, or to open on another computer)">Download session</button>
     </div>
-    <h3>Preview — what will paste into Word <span class="hint">(the map picture is re-taken when the map settles; Copy for Word takes a fresh one)</span></h3>
+    <h3 id="previewHead">Preview — what will paste into Word <span class="hint">(click a row to go to its question · the map picture is re-taken when the map settles; Copy for Word takes a fresh one)</span></h3>
     <div id="preview" class="paper" aria-label="Preview of the copy"></div>
   </section>
   <footer class="foot"><span id="savedChip"></span> · <span id="defsChip"></span> · <a href="../v1/">Version 1</a></footer>
 </main>
 
-<div class="jump-btns" id="jumpBtns" aria-label="Move around the questions" hidden>
+<div class="jump-btns" id="jumpBtns" aria-label="Move around the page" hidden>
   <button type="button" class="btn jump-btn" id="jumpTop" title="Back to the top of the questions" aria-label="Back to the top" hidden>↑ Top</button>
   <button type="button" class="btn btn-primary jump-btn" id="jumpNext" title="Go to where you are up to: the first question still to answer after the last one you answered" aria-label="Go to the current question">↓ Current question</button>
+  <button type="button" class="btn jump-btn" id="jumpPreview" title="Go to the preview of what will paste into Word (click a row there to come back to its question)" aria-label="Go to the Word preview" hidden>↓ Word preview</button>
 </div>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
@@ -89,24 +91,24 @@
   </div>
 </dialog>
 
-<script src="js/util.js?v=20261109i"></script>
-<script src="js/schema.js?v=20261109i"></script>
-<script src="js/rules.js?v=20261109i"></script>
-<script src="js/store.js?v=20261109i"></script>
-<script src="js/pictures.js?v=20261109i"></script>
-<script src="js/github.js?v=20261109i"></script>
-<script src="js/floodnet.js?v=20261109i"></script>
-<script src="js/word.js?v=20261109i"></script>
-<script src="js/form.js?v=20261109i"></script>
-<script src="js/coast.js?v=20261109i"></script>
-<script src="js/soil.js?v=20261109i"></script>
-<script src="js/map.js?v=20261109i"></script>
-<script src="js/store-remote.js?v=20261109i"></script>
-<script src="js/playbook.js?v=20261109i"></script>
-<script src="js/tasks.js?v=20261109i"></script>
-<script src="js/editor.js?v=20261109i"></script>
-<script src="js/benchmarks.js?v=20261109i"></script>
-<script src="js/help.js?v=20261109i"></script>
-<script src="js/app.js?v=20261109i"></script>
+<script src="js/util.js?v=20261110a"></script>
+<script src="js/schema.js?v=20261110a"></script>
+<script src="js/rules.js?v=20261110a"></script>
+<script src="js/store.js?v=20261110a"></script>
+<script src="js/pictures.js?v=20261110a"></script>
+<script src="js/github.js?v=20261110a"></script>
+<script src="js/floodnet.js?v=20261110a"></script>
+<script src="js/word.js?v=20261110a"></script>
+<script src="js/form.js?v=20261110a"></script>
+<script src="js/coast.js?v=20261110a"></script>
+<script src="js/soil.js?v=20261110a"></script>
+<script src="js/map.js?v=20261110a"></script>
+<script src="js/store-remote.js?v=20261110a"></script>
+<script src="js/playbook.js?v=20261110a"></script>
+<script src="js/tasks.js?v=20261110a"></script>
+<script src="js/editor.js?v=20261110a"></script>
+<script src="js/benchmarks.js?v=20261110a"></script>
+<script src="js/help.js?v=20261110a"></script>
+<script src="js/app.js?v=20261110a"></script>
 </body>
 </html>

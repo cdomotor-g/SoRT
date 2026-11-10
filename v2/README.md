@@ -54,7 +54,8 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   it; contours stop at ~1:20,000) and rail; the
   station's locations as pins you can type, place or drag; a *Position checked*
   step against Flood-Net's often-rounded position; a vegetation clearance
-  circle, trees and an access track drawn for the scope; on a water level table
+  circle, trees, an access track and (water level tables) the current and new
+  orifice run drawn for the scope, with a full-screen button for close work; on a water level table
   (they tie its gauge to AHD — a rainfall or repeater table has none), the
   nearest 5 survey marks within 2 km (S1–S5, linked to their reports, tabled
   under the map in Word); the bridges on the map (BR1, BR2…, nearest first, from those within
