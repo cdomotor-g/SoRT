@@ -226,7 +226,8 @@
           "label": "Comments (eg: Specify non standard size)",
           "type": "text"
         }
-      ]
+      ],
+      "note": "Bollards for site protection are ticked further down, under Remediation / Additional Works."
     },
     {
       "id": "demolition",
@@ -242,6 +243,7 @@
         "LPU to be returned to HUB",
         "TBRG to be returned to the HUB",
         "Modem to be returned to HUB",
+        "Antenna assembly to be returned to HUB",
         "Water level sensor to be returned to HUB",
         "Other:"
       ]
@@ -290,13 +292,13 @@
       },
       "fields": [
         {
-          "key": "distance",
-          "label": "Distance",
+          "key": "newLocation",
+          "label": "New Location (coordinates)",
           "type": "text"
         },
         {
-          "key": "newLocation",
-          "label": "New Location (coordinates)",
+          "key": "distance",
+          "label": "Distance",
           "type": "text"
         }
       ]

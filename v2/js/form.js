@@ -60,10 +60,42 @@
     if (f.scroll) el.scrollTop = f.scroll;
   }
 
+  /* ---------------- the box being typed in survives a redraw ----------------
+     A redraw throws every box away and builds it again. One that comes from
+     elsewhere while somebody is typing (the map, the coast or soil lookups
+     finishing) used to swap their box from under them: a spelling fix picked
+     from the right-click menu then landed in the old, thrown-away box and was
+     lost. Now the very box with the cursor is put back in place of its new
+     copy (when they say the same thing), with its cursor and selection. */
+  let drawing = false;
+  function typingBox(root) {
+    const el = document.activeElement;
+    return el && root.contains(el) && el.dataset && el.dataset.fk &&
+      (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type === 'text')) ? el : null;
+  }
+  function redraw(root, draw) {
+    // A box losing the cursor mid-redraw says "changed", which asks for this
+    // same redraw again: the one under way already has the answer.
+    if (!root || drawing) return;
+    const keep = typingBox(root), focus = rememberFocus();
+    drawing = true;
+    try { draw(root); } finally { drawing = false; }
+    if (keep) {
+      const twin = root.querySelector(`[data-fk="${CSS.escape(keep.dataset.fk)}"]`);
+      if (twin && twin !== keep && twin.tagName === keep.tagName && twin.type === keep.type && twin.value === keep.value) {
+        keep.className = twin.className; keep.placeholder = twin.placeholder;
+        if (twin.rows) keep.rows = twin.rows;
+        twin.replaceWith(keep);
+      }
+    }
+    restoreFocus(focus);
+  }
+  function render(root) { redraw(root, drawForm); }
+  function renderPS(root) { redraw(root, drawPS); }
+
   /* ---------------- the scope questions ---------------- */
-  function render(root) {
+  function drawForm(root) {
     const ctx = app.ctx, defs = app.defs;
-    const focus = rememberFocus();
     root.innerHTML = '';
     const vis = new Set(R().visibleQuestions(ctx).map(q => q.code));
     (defs.sections || []).forEach(sec => {
@@ -77,7 +109,6 @@
         qs.map(q => questionCard(q)));
       root.appendChild(secEl);
     });
-    restoreFocus(focus);
   }
 
   function badge(src, onConfirm, from) {
@@ -310,9 +341,8 @@
   }
 
   /* ---------------- Property Services ---------------- */
-  function renderPS(root) {
+  function drawPS(root) {
     const ctx = app.ctx, ps = app.defs.propertyServices, p = R().psState(app.session);
-    const focus = rememberFocus();
     root.innerHTML = '';
     const card = h('section', { class: 'sec card ps', id: 'sec-ps' },
       h('header', { class: 'sec-head' }, h('h2', null, ps.title),
@@ -401,7 +431,6 @@
       h('div', { class: 'ps-note-head' }, 'Important note'),
       h('div', { html: U().linkEmails(U().escEmph(ps.note)) })));
     root.appendChild(card);
-    restoreFocus(focus);
   }
 
   S.form = { bind, render, renderPS, confirmQuestion };

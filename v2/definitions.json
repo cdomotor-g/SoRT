@@ -412,6 +412,11 @@
           "label": "Comments (eg: Specify non standard size)",
           "type": "text"
         }
+      ],
+      "notes": [
+        {
+          "text": "Bollards for site protection are ticked further down, under Remediation / Additional Works."
+        }
       ]
     },
     "demolition": {
@@ -448,6 +453,10 @@
             {
               "code": "modem_to_be_returned_to_hub",
               "label": "Modem to be returned to HUB"
+            },
+            {
+              "code": "antenna_assembly_to_be_returned_to_hub",
+              "label": "Antenna assembly to be returned to HUB"
             },
             {
               "code": "water_level_sensor_to_be_returned_to_hub",
@@ -504,19 +513,19 @@
       ],
       "fields": [
         {
-          "code": "distance",
-          "label": "Distance",
-          "type": "text",
-          "unit": "m",
+          "code": "newLocation",
+          "label": "New Location (coordinates)",
+          "type": "coord",
           "showIf": {
             "q": "relocation",
             "is": "yes"
           }
         },
         {
-          "code": "newLocation",
-          "label": "New Location (coordinates)",
-          "type": "coord",
+          "code": "distance",
+          "label": "Distance",
+          "type": "text",
+          "unit": "m",
           "showIf": {
             "q": "relocation",
             "is": "yes"
@@ -1556,7 +1565,50 @@
         "acmaLicence",
         "alertFormat",
         "stockFence",
-        "demolition",
+        {
+          "q": "demolition",
+          "options": [
+            {
+              "group": "Standard",
+              "options": [
+                {
+                  "code": "complete_demolition_and_or_disposal_nothing_returned_to_hub",
+                  "label": "Complete demolition and/or disposal (nothing returned to HUB)"
+                }
+              ]
+            },
+            {
+              "group": "Complex",
+              "options": [
+                {
+                  "code": "all_parts_to_be_returned_to_hub",
+                  "label": "ALL Parts to be returned to HUB"
+                },
+                {
+                  "code": "lpu_to_be_returned_to_hub",
+                  "label": "LPU to be returned to HUB"
+                },
+                {
+                  "code": "tbrg_to_be_returned_to_the_hub",
+                  "label": "TBRG to be returned to the HUB"
+                },
+                {
+                  "code": "modem_to_be_returned_to_hub",
+                  "label": "Modem to be returned to HUB"
+                },
+                {
+                  "code": "antenna_assembly_to_be_returned_to_hub",
+                  "label": "Antenna assembly to be returned to HUB"
+                },
+                {
+                  "code": "other",
+                  "label": "Other:",
+                  "other": true
+                }
+              ]
+            }
+          ]
+        },
         "accessibility",
         "nonStandard",
         "remediation",

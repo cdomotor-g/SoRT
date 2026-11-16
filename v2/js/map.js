@@ -59,6 +59,10 @@
     // The road reserve is drawn out to ~1:100,000, so a map zoomed out to show a
     // relocation kilometres away still shows it (the State's parcels go to 1:1,000,000).
     roadMinScale: 100000,
+    // Property boundaries: every land parcel's outline (the same cadastre layer
+    // the road reserve comes from), as on QLD Globe and Flood-Net's map. Drawn
+    // from about 1:40,000 in — further out they crowd into a yellow smudge.
+    parcelMinScale: 40000, parcelLine: { color: [255, 225, 40, 0.95], width: 1.2 },
     // Close-ups: once the relocation site is this far from the current location,
     // the map has to zoom out past local detail to show both, so each gets a
     // close-up of its own beside the map and in Word.
@@ -66,7 +70,7 @@
     siteZoom: 17,
     extraZoomLevels: 2,                               // closer than the imagery's own last level, for drawing lines
     qld: { xmin: 137.6, ymin: -29.4, xmax: 154.0, ymax: -9.0 },   // the map's home: all of Queensland, Torres Strait included
-    order: { imagery: 0, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, pins: 10 },
+    order: { imagery: 0, parcels: 0.5, road: 1, contour: 2, rail: 3, labels: 4, nearby: 5, bridges: 6, marks: 7, draw: 8, ghost: 9, pins: 10 },
     timeouts: { esri: 20000, view: 20000, meta: 10000, layer: 10000, query: 12000 },
     attribution: '© State of Queensland (Department of Natural Resources and Mines; Department of Resources; Transport and Main Roads) — CC BY 4.0'
   };
@@ -81,7 +85,7 @@
   const M = {
     version: 0,
     app: null, root: null, els: {}, esri: null, esriP: null, view: null, map: null, layers: {}, gl: {},
-    contour: '5', on: { road: true, rail: true, marks: true, bridges: true, nearby: true, ghost: false, autofit: true },   // Flood-Net's position: hidden unless ticked
+    contour: '5', on: { parcels: true, road: true, rail: true, marks: true, bridges: true, nearby: true, ghost: false, autofit: true },   // Flood-Net's position: hidden unless ticked
     move: false, hover: null, drag: null, place: null, measure: null, sketch: null,
     pins: [], anchor: null, fetchedAt: null, marks: [], bridges: [], shown: [], shownSig: '', nearby: [], diag: {}, log: [],
     framedFor: null, ready: false, failed: null, contourIds: null, railIds: null,
@@ -201,7 +205,7 @@
     M.els.moveBtn = h('button', { type: 'button', class: 'btn-mini', 'aria-pressed': 'false', title: 'Drag a pin to move it; the coordinate is written into its question', onclick: () => setMove(!M.move) }, '✥ Move pins');
     M.els.measureBtn = h('button', { type: 'button', class: 'btn-mini', 'aria-pressed': 'false', title: 'Measure a distance on the map', onclick: () => setMeasure(!M.measure) }, '📏 Measure');
     const tools = h('div', { class: 'map-tools' },
-      contourSel, tog('road', 'Road reserve', 'The cadastre’s road parcels, as on QLD Globe'), tog('rail', 'Rail'),
+      contourSel, tog('parcels', 'Property boundaries', 'The outline of every land parcel (the State cadastre), as on QLD Globe — zoom in to see them'), tog('road', 'Road reserve', 'The cadastre’s road parcels, as on QLD Globe'), tog('rail', 'Rail'),
       M.els.marksTog = tog('marks', 'State survey marks', 'Queensland’s permanent survey marks and benchmarks (QSpatial) within 2 km, nearest 5, for tying a water level station to AHD — not the Bureau’s own station benchmarks, which are on the Local TBM question. Water level tables only.'),
       tog('bridges', 'Bridges', 'Road bridges within 1 km, and who manages them'),
       tog('autofit', 'Auto-fit', 'After a pin is placed, moved or typed in, frame every location again so none is missed. Untick to keep your own zoom'),
@@ -326,7 +330,7 @@
     E.reactiveUtils.watch(() => M.view.updating, busy => { if (!busy) { changedPicture(); checkImagerySoon(); } });
     // The browser dropped the map's graphics (a sleeping laptop, a busy GPU): start them again.
     E.reactiveUtils.watch(() => M.view.fatalError, err => { if (err) { log(`The map view stopped (${err.name || err.message || 'error'}) — starting it again.`); try { M.view.tryFatalErrorRecovery(); } catch (_) { /* nothing more to try */ } } });
-    loadLabels(); loadContours(); loadRoad(); loadRail();
+    loadLabels(); loadContours(); loadParcels(); loadRoad(); loadRail();
     sketchReady();   // the drawing tool, ready before it is first wanted
     sync(M.app);
     refreshNear(true);
@@ -406,17 +410,27 @@
     // Only once the layer is on the map and has stopped fetching: before that, nothing drawn means nothing yet.
     const lv = v.allLayerViews && v.allLayerViews.find(x => x.layer === l);
     if (!lv || lv.updating || lv.suspended) return null;
+    // Cut into squares: nothing drawn in some of them means tiles that never
+    // came (a tile request the State's server dropped stays a grey square
+    // until the page is refreshed). '' all drawn · 'all' · the empty squares.
     try {
-      const w = 96, hh = Math.max(24, Math.round(96 * v.height / v.width));
+      const w = 96, hh = Math.max(24, Math.round(96 * v.height / v.width)), C = 4;
       M.imgShot = v.takeScreenshot({ layers: [l], width: w, height: hh, format: 'png' });
       let shot; try { shot = await M.imgShot; } finally { M.imgShot = null; }
       const d = shot && shot.data && shot.data.data; if (!d) return null;
-      let seen = 0, tot = 0;
-      for (let i = 3; i < d.length; i += 4 * 7) { tot++; if (d[i] > 8) seen++; }
-      return tot ? seen / tot < 0.02 : null;
+      const W = shot.data.width || w, H = shot.data.height || hh;
+      const cols = Math.ceil(W / C), seen = new Array(cols * Math.ceil(H / C)).fill(0), tot = seen.slice();
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const c = Math.floor(y / C) * cols + Math.floor(x / C);
+        tot[c]++; if (d[(y * W + x) * 4 + 3] > 8) seen[c]++;
+      }
+      const empty = [];
+      seen.forEach((n, c) => { if (tot[c] && n / tot[c] < 0.05) empty.push(c); });
+      if (!empty.length) return '';
+      return empty.length === seen.length ? 'all' : empty.join(',');
     } catch (_) { return null; }
   }
-  const IMG_CHECK = { tries: 0, max: 6, busy: false, timer: null, spot: '', seen: 0 };
+  const IMG_CHECK = { tries: 0, max: 6, busy: false, timer: null, spot: '', seen: 0, last: '', settled: '', view: '' };
   function checkImagerySoon(ms) { clearTimeout(IMG_CHECK.timer); IMG_CHECK.timer = setTimeout(checkImagery, ms == null ? 1500 : ms); }
   async function checkImagery() {
     if (IMG_CHECK.busy || imgTimer) return;
@@ -424,16 +438,23 @@
     try {
       const spot = key(M.anchor) || '';
       if (spot !== IMG_CHECK.spot) { IMG_CHECK.spot = spot; IMG_CHECK.tries = 0; }
-      const blank = await imageryBlank();
-      if (blank === false) { if (IMG_CHECK.tries) log('Imagery: drawing again.'); IMG_CHECK.tries = 0; IMG_CHECK.seen = 0; return; }
-      if (blank !== true) return;
+      const e = M.view && M.view.extent, view = e ? [e.xmin, e.ymin, e.xmax, e.ymax].map(Math.round).join(',') : '';
+      if (view !== IMG_CHECK.view) { IMG_CHECK.view = view; IMG_CHECK.settled = ''; IMG_CHECK.last = ''; }
+      const look = await imageryBlank();
+      if (look === '') { if (IMG_CHECK.tries) log('Imagery: drawing again.'); IMG_CHECK.tries = 0; IMG_CHECK.seen = 0; IMG_CHECK.last = ''; return; }
+      if (look == null) return;
+      // The same squares empty again after a fresh layer: nothing there to draw
+      // (the sea, the edge of the State's photos) — left alone until the map moves.
+      if (look !== 'all' && (look === IMG_CHECK.settled || look === IMG_CHECK.last)) { IMG_CHECK.settled = look; IMG_CHECK.seen = 0; return; }
       if (IMG_CHECK.tries >= IMG_CHECK.max) return;
       // Grey twice running, a few seconds apart, before anything is changed: a slow first draw is not a fault.
       if (++IMG_CHECK.seen < 2) { checkImagerySoon(4000); return; }
       IMG_CHECK.seen = 0;
       IMG_CHECK.tries++;
-      log(`Imagery: nothing drawn over the station (look ${IMG_CHECK.tries} of ${IMG_CHECK.max}) — swapping in a fresh layer.`);
-      await freshImagery(0, 'the map was grey');
+      IMG_CHECK.last = look;
+      const all = look === 'all';
+      log(`Imagery: ${all ? 'nothing drawn over the station' : 'grey squares where tiles never came'} (look ${IMG_CHECK.tries} of ${IMG_CHECK.max}) — swapping in a fresh layer.`);
+      await freshImagery(0, all ? 'the map was grey' : 'tiles missing');
       checkImagerySoon(3000 + IMG_CHECK.tries * 2500);
     } finally { IMG_CHECK.busy = false; }
   }
@@ -557,6 +578,18 @@
       diag('road', 'loaded', road.source, now() - t0);
     } catch (e) { diag('road', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); banner(`Road reserve didn’t load (${e.message}).`, 'warn'); }
   }
+  async function loadParcels() {
+    const E = M.esri, t0 = now();
+    try {
+      const l = new E.FeatureLayer({ url: `${CFG.cadastre}/${CFG.cadastreParcelsSublayer}`, title: 'Property boundaries',
+        minScale: CFG.parcelMinScale, maxScale: 0, outFields: [], popupEnabled: false,
+        renderer: { type: 'simple', symbol: { type: 'simple-fill', color: [0, 0, 0, 0], outline: CFG.parcelLine } } });
+      await withTimeout(l.load(), CFG.timeouts.layer, 'Property boundaries');
+      l.visible = M.on.parcels;
+      M.layers.parcels = l; addOrdered(l, 'parcels');
+      diag('parcels', 'loaded', `sublayer ${CFG.cadastreParcelsSublayer}`, now() - t0);
+    } catch (e) { diag('parcels', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); banner(`Property boundaries didn’t load (${e.message}).`, 'warn'); }
+  }
   async function loadRail() {
     const E = M.esri, t0 = now();
     try {
@@ -574,6 +607,7 @@
     } catch (e) { diag('rail', e.isTimeout ? 'timed out' : 'failed', e.message, now() - t0); }
   }
   function applyToggles() {
+    if (M.layers.parcels) M.layers.parcels.visible = M.on.parcels;
     if (M.layers.road) M.layers.road.visible = M.on.road;
     if (M.layers.rail) M.layers.rail.visible = M.on.rail;
     if (M.gl.ghost) M.gl.ghost.visible = M.on.ghost;
