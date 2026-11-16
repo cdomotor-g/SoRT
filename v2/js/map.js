@@ -63,6 +63,9 @@
     // the road reserve comes from), as on QLD Globe and Flood-Net's map. Drawn
     // from about 1:40,000 in — further out they crowd into a yellow smudge.
     parcelMinScale: 40000, parcelLine: { color: [255, 225, 40, 0.95], width: 1.2 },
+    // Lot numbers ("Lot 4" over "RP102393") from about 1:10,000 in, where a lot
+    // is big enough on screen to hold its label.
+    parcelLabelMinScale: 10000,
     // Close-ups: once the relocation site is this far from the current location,
     // the map has to zoom out past local detail to show both, so each gets a
     // close-up of its own beside the map and in Word.
@@ -582,8 +585,12 @@
     const E = M.esri, t0 = now();
     try {
       const l = new E.FeatureLayer({ url: `${CFG.cadastre}/${CFG.cadastreParcelsSublayer}`, title: 'Property boundaries',
-        minScale: CFG.parcelMinScale, maxScale: 0, outFields: [], popupEnabled: false,
-        renderer: { type: 'simple', symbol: { type: 'simple-fill', color: [0, 0, 0, 0], outline: CFG.parcelLine } } });
+        minScale: CFG.parcelMinScale, maxScale: 0, outFields: ['lot', 'plan'], popupEnabled: false,
+        renderer: { type: 'simple', symbol: { type: 'simple-fill', color: [0, 0, 0, 0], outline: CFG.parcelLine } },
+        labelsVisible: true,
+        labelingInfo: [{ labelExpressionInfo: { expression: "IIf(IsEmpty($feature.lot), '', 'Lot ' + $feature.lot + TextFormatting.NewLine + $feature.plan)" },
+          symbol: { type: 'text', color: [255, 235, 90], haloColor: [30, 25, 0, 0.85], haloSize: 1.2, font: { size: 9, weight: 'bold' } },
+          labelPlacement: 'always-horizontal', deconflictionStrategy: 'static', minScale: CFG.parcelLabelMinScale, maxScale: 0 }] });
       await withTimeout(l.load(), CFG.timeouts.layer, 'Property boundaries');
       l.visible = M.on.parcels;
       M.layers.parcels = l; addOrdered(l, 'parcels');

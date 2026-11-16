@@ -913,6 +913,8 @@ const scenarios = {
     await p.waitForFunction(() => document.querySelectorAll('.map-side .mark').length > 0, null, { timeout: 30000 });
     const side = await p.innerText('.map-side');
     ok(/PSM \d+/.test(side), 'survey marks listed');
+    ok(await p.evaluate(() => { const l = SoRT.mapView._M.layers.parcels; return !!l && l.labelsVisible && /\$feature\.lot/.test(JSON.stringify(l.labelingInfo)) && l.outFields.includes('lot') && l.outFields.includes('plan'); }), 'property boundaries carry their lot numbers');
+    if (process.env.SHOT) { await p.evaluate(() => SoRT.mapView._M.view.goTo({ zoom: 17 })); await p.waitForTimeout(6000); await (await p.$('#mapView')).screenshot({ path: process.env.SHOT }); }
     ok(/Abergowrie Bridge/.test(side) && /Transport and Main Roads/.test(side), 'the TMR bridge listed');
     // Bridges: only those on the map, numbered BR1… nearest first; who manages each, and who to call.
     await p.waitForFunction(() => SoRT.mapView._M.bridges.length && SoRT.mapView._M.bridges.every(b => b.asked), null, { timeout: 30000 }).catch(() => {});
