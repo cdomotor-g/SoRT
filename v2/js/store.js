@@ -105,7 +105,9 @@
   }
 
   // keepTime: a copy brought in as it was (from the playbook) keeps its own time.
-  function save(s, keepTime) {
+  // fromElsewhere: another chair's session (playbook or a file) — it must not
+  // become this person's "last forum" attendees.
+  function save(s, keepTime, fromElsewhere) {
     if (blank(s)) { if (!s.playbook) remove(s.id); return true; }
     if (!keepTime || !s.updatedAt) s.updatedAt = Date.now();
     const key = P + 's.' + s.id, text = JSON.stringify(s);
@@ -133,7 +135,7 @@
     writeIndex(list);
     U().LS.set(P + 'current', s.id);
     // Only a session started today speaks for today's forum (its attendees).
-    if (U().dmy(U().todayIso()) === U().fmtWhen(s.createdAt).slice(0, 10)) rememberForum(s.forum);
+    if (!keepTime && !fromElsewhere && U().dmy(U().todayIso()) === U().fmtWhen(s.createdAt).slice(0, 10)) rememberForum(s.forum);
     return ok;
   }
   // Write a session back exactly as it is — its time, its place in the list and

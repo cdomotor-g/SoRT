@@ -760,7 +760,7 @@
         if (!s || !s.id || s.schema !== 'sort-session/1') throw new Error('not a SoRT session file');
         if (s.pictureFiles && S.pictures) await S.pictures.unbundle(s.pictureFiles);
         delete s.pictureFiles;
-        S.store.save(s); openSession(s.id);
+        S.store.save(s, false, true); openSession(s.id);
       } catch (e) { toast(`Couldn’t open that file: ${e.message}`); }
     };
     r.readAsText(file);

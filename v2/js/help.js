@@ -112,7 +112,7 @@
       'For anything bigger, ask Claude in chat — it edits the question file, checks it and publishes it.'
     ] },
     { id: 'small', title: 'Small things worth knowing', items: [
-      'Attendees: comma, space or Enter adds initials; Backspace in the empty box removes the last; **Same as last forum** brings back the last list.',
+      'Attendees: comma, space or Enter adds initials; Backspace in the empty box removes the last; **Same as last forum** brings back the list from your own last session on this computer (sessions opened from other chairs don’t change it).',
       '**Refresh from Flood-Net** (station card) fetches the station again; **Open in Flood-Net ↗** opens it there.',
       'A name or number wrong in Flood-Net (some names are cut short)? **Edit details** on the station card corrects it for this scope: the Word tables use the correction, the card says what Flood-Net still has, and **Report to Flood-Net** asks for its record to be fixed. Flood-Net itself is not changed; **use Flood-Net’s** puts its value back.',
       'Not in Flood-Net? **Enter it by hand** under the station search (or from the search’s “no station” line): only the name is needed; what it measures picks the scope table, and its hub sends the hub’s tasks to the right team. **Edit details** on the station card corrects it later.',
