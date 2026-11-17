@@ -1552,7 +1552,6 @@
       "questions": [
         "stationType",
         "complexity",
-        "infraOptions",
         "assSoil",
         "coords",
         "relocation",

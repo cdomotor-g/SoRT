@@ -1040,6 +1040,25 @@
     });
   }
 
+  /* ---------------- start-up prompt ---------------- */
+  // On landing (new tab, reload), if a session is saved here, ask: pick up where
+  // it was left, or start a new one. The session is named so there's no guessing.
+  // Closing the box (Esc) keeps it — what opening the page did before.
+  function startPrompt() {
+    const s = A.session, dlg = $('#startDlg');
+    if (G.SORT_NO_START_PROMPT || !s || S.store.blank(s) || !dlg || !dlg.showModal) return;
+    const st = s.station || {};
+    const name = [st.name, st.number].filter(Boolean).join(' · ') || 'Unnamed session';
+    const tpl = S.schema.template(A.defs, s.template);
+    const body = $('#startBody'); body.innerHTML = '';
+    body.appendChild(h('p', { class: 'start-name' }, name));
+    body.appendChild(h('p', { class: 'start-meta' },
+      `${tpl ? tpl.label + ' table · ' : ''}forum of ${U.dmy(s.forum.date)} · last changed ${U.fmtWhen(s.updatedAt)}`));
+    body.appendChild(h('p', null, 'Pick up where you left off, or start a new session? Nothing is lost either way: the other one stays under Sessions.'));
+    $('#startResume').onclick = () => dlg.close();
+    $('#startNew').onclick = () => { dlg.close(); newSession(); toast('New session started.'); };
+    dlg.showModal(); $('#startResume').focus();
+  }
   /* ---------------- boot ---------------- */
   function renderAll() {
     renderForum(); renderStation();
@@ -1078,6 +1097,7 @@
     if (S.playbook) S.playbook.init(A);
     if (S.bureauBM) S.bureauBM.init(A);
     renderAll();
+    startPrompt();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })(window);

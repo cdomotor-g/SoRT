@@ -107,6 +107,7 @@ function standInTile() {
 async function page(browser, opts) {
   const o = opts || {};
   const ctx = await browser.newContext({ viewport: o.viewport || { width: 1360, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  if (!o.startPrompt) await ctx.addInitScript(() => { window.SORT_NO_START_PROMPT = true; });
   if (o.token) await ctx.addInitScript(() => { try { localStorage.setItem('sort.github', JSON.stringify({ token: 'fake', login: 'tester' })); } catch (e) { /* */ } });
   if (o.autosaveMs) await ctx.addInitScript(ms => { window.SORT_AUTOSAVE_MS = ms; }, o.autosaveMs);
   if (o.retryMs) await ctx.addInitScript(ms => { window.SORT_RETRY_MS = ms; }, o.retryMs);
@@ -814,9 +815,9 @@ const scenarios = {
     await p.click('.manual-grid button:has-text("Use this station")');
     await p.waitForFunction(() => /Couldn’t reach/.test((document.querySelector('#coast-infraOptions') || {}).textContent || ''), null, { timeout: 20000 });
     ok(await onCat() === '' && /no suggestion/.test(await p.innerText('#coast-infraOptions')), 'without the coastline there is no suggestion, and the card says why');
-    // The Rainfall table keeps its own (footing) options and no corrosion guide.
+    // The Rainfall table has no infrastructure options question any more.
     await p.click('.tpl-pick .seg:has-text("Rainfall")');
-    ok(!(await p.$('#q-infraOptions .guide-sum')) && /Full footing/.test(await p.innerText('#q-infraOptions')), 'Rainfall’s infrastructure options are unchanged');
+    ok(!(await p.$('#q-infraOptions')), 'Rainfall has no infrastructure options question');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
@@ -1263,6 +1264,34 @@ const scenarios = {
     ok(await p.$eval('#q-orificeRun [data-fk="orificeRun::f::newLength"]', e => Number(e.value) > 0), 'the question card shows the drawn length');
     await p.waitForTimeout(800);
     ok(await p.$eval('#preview', e => { const r = e.querySelector('tr[data-go="q:orificeRun"]'); return !!r && /Orifice run/.test(r.textContent) && /New run length: \d/.test(r.textContent) && !/Current run length/.test(r.textContent); }), 'the Word table has an Orifice run row with the drawn length (and not the cleared one)');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
+  async startup(b) {
+    const p = await page(b);
+    await p.fill('#stationSearch', 'Zzyzx Qqq Creek');
+    await p.waitForFunction(() => /No station by that name/.test(document.querySelector('.station-find .hint').textContent), null, { timeout: 20000 });
+    await p.click('.station-find .hint button:has-text("Enter it by hand")');
+    await p.fill('.manual-grid [name=name]', 'Zzyzx Creek AL');
+    await p.fill('.manual-grid [name=pos]', '-27.6123, 152.9456');
+    await p.selectOption('.manual-grid [name=measures]', 'river');
+    await p.click('.manual-grid button:has-text("Use this station")');
+    await p.waitForSelector('.station-card', { timeout: 20000 });
+    await p.waitForTimeout(800);
+    const id = await p.evaluate(() => localStorage.getItem('sortv2.current'));
+    await p.context().addInitScript(() => { window.SORT_NO_START_PROMPT = false; });
+    await p.reload({ waitUntil: 'load' });
+    await p.waitForSelector('#startDlg[open]', { timeout: 20000 });
+    ok(/Zzyzx Creek AL/.test(await p.innerText('#startBody')), 'the prompt names the saved session');
+    await p.click('#startResume');
+    ok(!(await p.$('#startDlg[open]')) && /Zzyzx/.test(await p.innerText('#station')), 'Resume keeps that session open');
+    await p.reload({ waitUntil: 'load' });
+    await p.waitForSelector('#startDlg[open]', { timeout: 20000 });
+    await p.click('#startNew');
+    await p.waitForSelector('#stationSearch', { timeout: 20000 });
+    ok(await p.evaluate(i => !!localStorage.getItem('sortv2.s.' + i), id), 'Start new leaves the old session saved');
+    await p.reload({ waitUntil: 'load' });
+    ok(!(await p.$('#startDlg[open]')) || /Zzyzx/.test(await p.innerText('#startBody')), 'a blank session is never offered');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },

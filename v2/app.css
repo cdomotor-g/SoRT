@@ -128,6 +128,9 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .sess-tab.on { background: var(--card); border-color: var(--line-2); color: var(--accent); }
 .sess-count { display: inline-block; min-width: 22px; margin-left: 7px; padding: 0 6px; border-radius: 999px; background: var(--line); color: var(--ink); font-size: 12px; font-weight: 700; text-align: center; }
 .sess-tab.on .sess-count { background: var(--accent-weak); color: var(--accent); }
+#startDlg { width: min(520px, calc(100vw - 32px)); }
+.start-name { font-size: 17px; font-weight: 700; margin: 4px 0; }
+.start-meta { color: var(--muted); margin: 0 0 6px; }
 #sessionsDlg { width: min(900px, calc(100vw - 32px)); }
 #sessionsList { min-height: min(340px, 50vh); }
 .sess-tidy { margin: 10px 0 4px; }
