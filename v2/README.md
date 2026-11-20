@@ -47,6 +47,7 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   link is lost). *Use* fills the Local TBM (AHD, or the height on the gauge —
   LGH); they go into Word as their own table, BoM-TBM-1, BoM-TBM-2… (B1, B2…
   until 6 Nov 2026, when the bridges were B1… too).
+- **Gauge zero (AHD)** sits with the water level sensor questions. Where Flood-Net's dossier holds it in AHD (`flood_levels.gauge_zero`), it fills the answer (orange until checked, with where it is from); a State-datum figure is only shown as a hint; otherwise the forum answers it, or picks *Not known* and a desktop task goes into the Word table.
 - **Side by side, each pane scrolls on its own**: the questions on the left,
   the map pane on the right, and neither starts the other at its end.
 - **The map is on the page**: v1's imagery, contours, road reserve (drawn out to

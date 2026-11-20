@@ -1153,6 +1153,12 @@ const scenarios = {
     ok(/Radio set-up/.test(tx.card) && /radio model/.test(tx.hint), 'the station card and the question say where it came from');
     await p.click('#q-txPower .src-ok');
     ok(await p.$eval('#q-txPower', e => e.classList.contains('checked') && !e.classList.contains('waiting')), 'Keep marks it checked');
+    // Gauge zero (AHD): filled from Flood-Net's dossier, waiting to be checked, with where it came from.
+    const gz = await p.evaluate(() => ({ st: SoRT.app.session.station.gaugeZero, pre: SoRT.app.session.prefill.gaugeZero || null,
+      waiting: (document.querySelector('#q-gaugeZero') || document.body).classList.contains('waiting'), hint: (document.querySelector('#q-gaugeZero [data-hint]') || {}).textContent || '',
+      val: (document.querySelector('#q-gaugeZero input[data-fk$="::value"]') || {}).value }));
+    ok(gz.st && gz.st.datum === 'AHD' && gz.pre && gz.pre.value === 'known' && gz.pre.fields.value === String(gz.st.m) && gz.waiting, `gauge zero comes from Flood-Net and waits to be checked (${JSON.stringify(gz.pre)})`);
+    ok(/Flood-Net: gauge zero/.test(gz.hint) && gz.val === String(gz.st.m), `its question shows the figure and where it came from (${gz.val} · ${gz.hint})`);
     // Cultural heritage: NA.
     await p.click('[data-ps="culturalHeritage"] .opt:has-text("NA")');
     ok(await p.$eval('[data-ps="culturalHeritage"] .opt.on', e => e.textContent.trim() === 'NA'), 'cultural heritage can be answered NA');

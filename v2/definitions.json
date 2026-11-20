@@ -1477,6 +1477,52 @@
       "precedent": false,
       "hintFrom": "bureau.benchmarks"
     },
+    "gaugeZero": {
+      "label": "Gauge zero (AHD)",
+      "section": "sensors",
+      "icon": "📏",
+      "hint": "(The height of the gauge’s zero, in metres AHD)",
+      "type": "single",
+      "options": [
+        {
+          "code": "known",
+          "label": "Known – gauge zero in AHD"
+        },
+        {
+          "code": "chase",
+          "label": "Not known – desktop task for technical staff (HDB or the hardcopy station file)"
+        }
+      ],
+      "fields": [
+        {
+          "code": "value",
+          "label": "Gauge zero",
+          "type": "number",
+          "unit": "m AHD",
+          "placeholder": "e.g. 184.290",
+          "emptyText": "to be found",
+          "showIf": {
+            "q": "gaugeZero",
+            "in": [
+              "known"
+            ]
+          },
+          "precedent": false
+        }
+      ],
+      "notes": [
+        {
+          "text": "Flood-Net holds this for most stations that have a Bureau gauge. If it has none, the forum answers it, or choose Not known: it goes into the Word table as a desktop task for technical staff.",
+          "when": {
+            "q": "gaugeZero",
+            "filled": false
+          },
+          "level": "info"
+        }
+      ],
+      "precedent": false,
+      "hintFrom": "station.gaugeZero"
+    },
     "assSoil": {
       "label": "Acid sulfate soil",
       "section": "station",
@@ -1854,6 +1900,7 @@
         "gaugeBoards",
         "benchmark",
         "localTbm",
+        "gaugeZero",
         "dipPoint",
         "currentComms",
         "comms",
@@ -2040,6 +2087,7 @@
         "gaugeBoards",
         "benchmark",
         "localTbm",
+        "gaugeZero",
         {
           "q": "dipPoint",
           "options": [
@@ -2543,6 +2591,34 @@
       "team": {
         "name": "Property Services"
       }
+    },
+    {
+      "id": "gaugeZeroDetails",
+      "owner": "Technical staff",
+      "table": "scope",
+      "when": {
+        "any": [
+          {
+            "q": "gaugeZero",
+            "is": "chase"
+          },
+          {
+            "all": [
+              {
+                "q": "gaugeZero",
+                "is": "known"
+              },
+              {
+                "q": "gaugeZero",
+                "filled": false,
+                "field": "value"
+              }
+            ]
+          }
+        ]
+      },
+      "text": "DESKTOP TASK — get the gauge zero (its height in metres AHD) from HDB or the hardcopy station file, then add it to this scope.",
+      "floodnet": false
     },
     {
       "id": "tbmDetails",

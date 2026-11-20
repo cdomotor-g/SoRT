@@ -79,6 +79,15 @@
     return [r.txPowerW != null && `TX ${wattText(r.txPowerW)}`, ant, r.lineLossDb != null && `line loss ${r.lineLossDb} dB`].filter(Boolean).join(' · ') + (r.name ? ` — “${r.name}” in Flood-Net’s radio model` : ' — from Flood-Net’s radio model');
   }
 
+  /* The gauge zero Flood-Net holds (its dossier's flood_levels.gauge_zero): the
+     height of the gauge's zero, in the datum the Bureau lists it in. Only an AHD
+     figure fills the question; a State-datum one is shown as a hint. */
+  function gaugeZeroFacts(gz) {
+    const f = gz && gz.status === 'ok' ? gz.in_force : null;
+    if (!f || f.gauge_zero_m == null || !isFinite(Number(f.gauge_zero_m))) return null;
+    return { m: Number(f.gauge_zero_m), datum: f.datum || '', since: f.valid_from || '' };
+  }
+
   // The facts SoRT keeps about a station (session.station), from its dossier.
   async function stationFacts(id) {
     const d = await dossier(id);
@@ -93,6 +102,7 @@
       awrc: idn.awrc_number || '', proposed: !!idn.proposed,
       lat: loc.lat, lon: loc.lon, precision: loc.lat != null ? U().coordPrecision(loc.lat, loc.lon) : null,
       elevation: loc.elevation_ahd_m != null ? { m: loc.elevation_ahd_m, source: loc.elevation_source } : null,
+      gaugeZero: gaugeZeroFacts((d.flood_levels || {}).gauge_zero),
       kinds: idn.kinds || [], roles: idn.roles || [],
       hubId: (loc.hub || {}).id || '', hubName: (loc.hub || {}).name || '', lga: loc.lga || '', basin: loc.basin || '', stream: loc.stream || '',
       owner: (sls && sls.owner) || idn.owner || '', sls: sls ? { gaugeType: sls.gauge_type, dataType: sls.data_type, priority: sls.priority, owner: sls.owner } : null,
@@ -216,6 +226,8 @@
       if (opt) put('txPower', { value: opt.code });
       else if (other) put('txPower', { value: other.code, other: wattText(w) });
     }
+    // Gauge zero in AHD, where Flood-Net holds it (a water level station): otherwise the forum answers it.
+    if (has('gaugeZero') && st.gaugeZero && st.gaugeZero.datum === 'AHD') put('gaugeZero', { value: 'known', fields: { value: String(st.gaugeZero.m) } });
     if (has('acmaLicence') && st.acmaLicence) put('acmaLicence', { fields: { licenceNo: st.acmaLicence, holder: st.acmaHolder || '' } });
     if (has('repeaterRadio') && st.repeater) put('repeaterRadio', { fields: {
       rx: st.repeater.rx != null ? Number(st.repeater.rx).toFixed(4).replace(/0$/, '') : '',
@@ -338,6 +350,11 @@
     }
     if (key === 'station.txPower' && st.radioSystem && st.radioSystem.txPowerW != null) {
       return `Flood-Net: ${radioText(st.radioSystem)}. That is how its fade margins were worked out — confirm it is what is on site.`;
+    }
+    if (key === 'station.gaugeZero' && st.gaugeZero) {
+      const g = st.gaugeZero;
+      return g.datum === 'AHD' ? `Flood-Net: gauge zero ${g.m} m AHD${g.since ? `, in force since ${U().dmy(g.since)}` : ''}. Confirm it is still right.`
+        : `Flood-Net has the gauge zero as ${g.m} m on ${g.datum || 'an unrecorded datum'}, not AHD, so it hasn’t been filled in — find the AHD figure.`;
     }
     if (key === 'station.txFrequency' && st.txFrequency) {
       return `Flood-Net: the repeaters passing its ALERT IDs (${st.txFrequency.from.join(', ')}) listen on ${freqText(st.txFrequency.mhz)}${st.txFrequency.others.length ? '; others: ' + st.txFrequency.others.join(', ') : ''}. Inferred — confirm.`;
