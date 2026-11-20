@@ -88,6 +88,14 @@
     A.edited = true;
     if (A.earlierForum && !A.forumAsked) { A.forumAsked = true; A.forumAsk = true; renderForum(); }
     rebuild();
+    // An answer whose option the new answers have hidden (a range the chosen sensor doesn't come in) is dropped.
+    let pruned = false;
+    A.ctx.qs.forEach(q => {
+      const a = A.session.answers && A.session.answers[q.code]; if (!a || a.value == null) return;
+      const gone = [].concat(a.value).filter(v => { const o = S.schema.option(q, v); return o && o.showIf && !R.test(A.ctx, o.showIf); });
+      if (gone.length) { a.value = Array.isArray(a.value) ? a.value.filter(v => !gone.includes(v)) : null; pruned = true; }
+    });
+    if (pruned) rebuild();
     if (!(opts && opts.light)) { S.form.render($('#form')); S.form.renderPS($('#ps')); renderStation(); renderOutputControls(); }
     renderProgress(); renderFollowUps(); previewSoon(); saveSoon();
     if (S.playbook) { S.playbook.autosaveSoon(A); S.playbook.renderActs(A); }

@@ -193,7 +193,7 @@
   }
 
   function optionsEl(q, e) {
-    const opts = q.options || [];
+    const opts = (q.options || []).filter(o => R().test(app.ctx, o.showIf));   // an option can carry a showIf
     const flat = sch().flatOptions(opts);
     const long = flat.length > 5 || flat.some(o => o.label.length > 28) || opts.some(o => o.options);
     const wrap = h('div', { class: 'opts' + (long ? ' opts-list' : ' opts-pills'), role: q.type === 'single' ? 'radiogroup' : 'group', 'aria-label': q.label });

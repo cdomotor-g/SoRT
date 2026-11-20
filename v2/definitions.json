@@ -1199,11 +1199,23 @@
         },
         {
           "code": "0_20m",
-          "label": "0-20m"
+          "label": "0-20m",
+          "showIf": {
+            "q": "sensorOption",
+            "in": [
+              "hs40_define_range"
+            ]
+          }
         },
         {
           "code": "0_30psi_20m",
-          "label": "0-30psi (20m)"
+          "label": "0-30psi (20m)",
+          "showIf": {
+            "q": "sensorOption",
+            "in": [
+              "amazon_bubbler_define_psi_pressure"
+            ]
+          }
         },
         {
           "code": "other_specify",
@@ -2050,11 +2062,23 @@
             },
             {
               "code": "0_20m",
-              "label": "0-20m"
+              "label": "0-20m",
+              "showIf": {
+                "q": "sensorOption",
+                "in": [
+                  "hs40_define_range"
+                ]
+              }
             },
             {
               "code": "0_30psi_20m",
-              "label": "0-30psi (20m)"
+              "label": "0-30psi (20m)",
+              "showIf": {
+                "q": "sensorOption",
+                "in": [
+                  "amazon_bubbler_define_psi_pressure"
+                ]
+              }
             },
             {
               "code": "other_specify",

@@ -117,6 +117,7 @@
         if (!o.label) E(`${where}: option "${o.code}" has no label`);
         if (seen.has(o.code)) E(`${where}: option code "${o.code}" is used twice`);
         seen.add(o.code);
+        checkCond(`${where} option ${o.code}`, o.showIf);
       }
     };
     const checkFields = (where, fields) => {
