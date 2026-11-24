@@ -161,6 +161,27 @@ const scenarios = {
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
+  async sensors(b) {
+    const p = await page(b);
+    await p.pick('41506');
+    const opts = () => p.$$eval('#q-terminationType .opt', e => e.map(x => x.textContent.trim()));
+    const on = () => p.$$eval('#q-terminationType .opt.on', e => e.map(x => x.textContent.trim()).join());
+    await p.click('#q-sensorOption .opt:has-text("HS40")');
+    ok((await opts()).includes('GCO') && (await opts()).includes('BU07'), 'HS40: GCO and BU07 both offered');
+    ok(await on() === 'GCO', 'HS40: GCO is the default');
+    await p.click('#q-terminationType .opt:has-text("BU07")');
+    ok(await on() === 'BU07', 'HS40: BU07 can be chosen instead of the default');
+    await p.click('#q-sensorOption .opt:has-text("Amazon")');
+    ok(!(await opts()).includes('GCO') && (await opts()).includes('BU07'), 'Amazon: GCO is not offered');
+    ok(await on() === 'BU07', 'Amazon: BU07 is the answer');
+    ok(/BU07 only/.test(await p.innerText('#q-terminationType')), 'Amazon: the note says BU07 only');
+    await p.click('#q-sensorOption .opt:has-text("HS40")');
+    await p.click('#q-terminationType .opt:has-text("GCO")');
+    await p.click('#q-sensorOption .opt:has-text("Amazon")');
+    ok(!(await opts()).includes('GCO') && await on() === 'BU07', 'a GCO chosen earlier is swapped to BU07 when Amazon is picked');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
   async copy(b) {
     const p = await page(b);
     await p.pick('540601');

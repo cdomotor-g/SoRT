@@ -1185,6 +1185,12 @@
           "code": "vega_c23",
           "label": "Vega C23"
         }
+      ],
+      "notes": [
+        {
+          "text": "Amazon Bubbler requires a BU07 orifice outlet, never a GCO. HS40 defaults to a GCO (BU07 can be chosen instead).",
+          "level": "info"
+        }
       ]
     },
     "sensorRange": {
@@ -1232,11 +1238,50 @@
       "options": [
         {
           "code": "gco",
-          "label": "GCO"
+          "label": "GCO",
+          "showIf": {
+            "not": {
+              "q": "sensorOption",
+              "is": "amazon_bubbler_define_psi_pressure"
+            }
+          }
         },
         {
           "code": "bu07",
           "label": "BU07"
+        }
+      ],
+      "defaultWhen": [
+        {
+          "when": {
+            "q": "sensorOption",
+            "is": "hs40_define_range"
+          },
+          "value": "gco"
+        },
+        {
+          "when": {
+            "q": "sensorOption",
+            "is": "amazon_bubbler_define_psi_pressure"
+          },
+          "value": "bu07"
+        }
+      ],
+      "notes": [
+        {
+          "text": "HS40: GCO is the default; BU07 can be chosen instead.",
+          "when": {
+            "q": "sensorOption",
+            "is": "hs40_define_range"
+          },
+          "level": "info"
+        },
+        {
+          "text": "Amazon Bubbler: BU07 only. A GCO must not be specified (OTE / ID advice).",
+          "when": {
+            "q": "sensorOption",
+            "is": "amazon_bubbler_define_psi_pressure"
+          }
         }
       ]
     },
@@ -2096,7 +2141,13 @@
           "options": [
             {
               "code": "gco",
-              "label": "GCO"
+              "label": "GCO",
+              "showIf": {
+                "not": {
+                  "q": "sensorOption",
+                  "is": "amazon_bubbler_define_psi_pressure"
+                }
+              }
             },
             {
               "code": "bu07",
