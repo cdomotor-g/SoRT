@@ -146,6 +146,24 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   — each answer orange until checked, then green. A station picked again says it
   already has sessions. The private repo `cdomotor-g/SoRT-playbook` holds the
   five stations it was seeded with; see [`playbook/README.md`](playbook/README.md).
+- **Several people in one session** (`js/live.js`, since 25 Nov 2026): two or
+  more computers with the same saved session open see each other's answers
+  within about ten seconds, and a blue bar says who else is in it and which
+  question each is in (each person types their name once). A question somebody
+  is in is greyed for the others — *✎ Sam is editing this*, with **Take over**
+  — a soft lock that lets go by itself when they leave the question, stop
+  typing for a minute and a half (15 seconds after a click), or close the tab.
+  Nothing new on Flood-Net's server: who is where is a small file of its own
+  in the same store (`stations/live-<session id>.json`), each computer writing
+  its own line every 20–40 seconds and when it moves question; changes come by
+  reading the station's file when somebody's line says they saved. Every save
+  that finds another computer saved first now merges, question by question
+  (and Property Services row, forum detail, map pin and bridge), instead of
+  writing over it: changed on one side only, that side's; on both, the person
+  holding that question's lock wins, else the later save. It reads every
+  6–15 seconds with others in (slower the more there are), 20 seconds alone,
+  nothing while the tab is hidden — well under Flood-Net's 120 requests a
+  minute for an office.
 - **Edit questions** (footer): quick changes mid-forum, as a draft in your
   browser until *Publish to GitHub* commits `v2/definitions.json`.
 - **Tasks for Flood-Net**: any follow-up can go to Flood-Net as a task for a
@@ -176,6 +194,7 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
 | `js/github.js` | The GitHub token (shared with v1) for publishing question changes, and the contents API. |
 | `js/store-remote.js` | The saved sessions on Flood-Net's server, and the forum passphrase. |
 | `js/playbook.js` | Sharing sessions by themselves, Sessions' shared list, continue from / precedents. |
+| `js/live.js` | Several people in one session: who is where, others' answers merged in as they save, the soft lock on a question someone is in. |
 | `js/editor.js` | Edit questions, and publishing them. |
 | `js/tasks.js` | Follow-ups, and the tasks handed to Flood-Net. |
 | `js/benchmarks.js` | The Bureau's benchmarks from Flood-Net (editors only, handed back to this tab), for the Local TBM and their own Word table. |

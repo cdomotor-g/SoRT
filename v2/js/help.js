@@ -102,6 +102,7 @@
     ] },
     { id: 'playbook', title: 'Saved sessions and precedents', items: [
       'The saved sessions keep every forum’s session under its station, for whoever has the forum passphrase — typed once per computer.',
+      '**Several people in one session**, each on their own computer: open the same saved session (**Sessions** → **Saved to the forum** → **Open**). A blue bar says who else is in it and which question each is in; their answers show on your screen within about ten seconds, and yours on theirs. A question somebody is in is greyed for everyone else, marked **✎ Sam is editing this** — wait, or press **Take over** (what they typed so far is kept). It lets go by itself when they leave the question or stop typing for a while. Type your name in the blue bar the first time, so the others know who is who.',
       'The passphrase is a sentence: capitals, spaces and punctuation don’t matter. Anyone who has it can change it — **Sessions** → **Change the forum passphrase** — and every other computer then asks for the new one.',
       'A station that has been to SoRT before offers **Continue from it** — its last answers come back marked **Earlier session**.',
       '**A precedent**: when this station is best handled like one done before, **Sessions** → find that station → **Use as a precedent** (or **Saved sessions** on the station card — click it to unfold — → **Use** beside a similar station). Its answers fill the questions still empty here — never coordinates, licence numbers, the TBM or notes — each **orange** until you check it.',

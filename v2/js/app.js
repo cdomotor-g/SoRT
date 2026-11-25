@@ -19,7 +19,7 @@
   const A = S.app = {
     defs: null, defsSource: '', defsNote: '', session: null, ctx: null, picture: null,
     playbookChanged: () => { renderDupNote(); renderSavedChip(); if (A.sessionsDraw) A.sessionsDraw(); },
-    changed, hint, focusMapOn, drawOnMap, toast, newSession, openSession, refreshStation, useDefs, reloadDefs
+    changed, remoteChanged, hint, focusMapOn, drawOnMap, toast, newSession, openSession, refreshStation, useDefs, reloadDefs
   };
 
   /* ---------------- definitions ---------------- */
@@ -101,6 +101,22 @@
     if (S.playbook) { S.playbook.autosaveSoon(A); S.playbook.renderActs(A); }
     if (S.mapView) S.mapView.sync(A);
     Object.values(S.suggesters || {}).forEach(m => m.sync(A));   // the corrosion and soil suggestions
+    if (S.live) S.live.decorate();
+  }
+  // Somebody on another computer changed the session on screen (js/live.js
+  // merged it in): everything redrawn from it, the box being typed in kept.
+  // Not marked as this person's edit, and not saved here again unless the
+  // merge kept something of this computer's (live.js sets updatedAt then).
+  function remoteChanged() {
+    rebuild();
+    const f = A.session.forum || {}, fk = JSON.stringify([f.date, f.attendees, f.outOfSession]);
+    if (fk !== A.forumKey) { A.forumKey = fk; if (!($('#forum') || document.body).contains(document.activeElement)) renderForum(); }
+    S.form.render($('#form')); S.form.renderPS($('#ps')); renderStation(); renderOutputControls();
+    renderProgress(); renderFollowUps(); previewSoon(); renderSavedChip();
+    if (S.playbook) { S.playbook.autosaveSoon(A); S.playbook.renderActs(A); }
+    if (S.mapView) S.mapView.sync(A);
+    Object.values(S.suggesters || {}).forEach(m => m.sync(A));
+    if (S.live) S.live.decorate();
   }
   function hint(key) {
     if (key.startsWith('station.')) return S.floodnet.hint(A.session.station, key);
@@ -1077,6 +1093,8 @@
     renderDupNote();
     if (S.mapView) { S.mapView.station(A); S.mapView.sync(A); }
     Object.values(S.suggesters || {}).forEach(m => m.sync(A));   // the corrosion and soil suggestions
+    const f = A.session.forum || {}; A.forumKey = JSON.stringify([f.date, f.attendees, f.outOfSession]);
+    if (S.live) { S.live.decorate(); S.live.now(); }
   }
   async function boot() {
     initTheme(); initLayout();
@@ -1103,6 +1121,7 @@
     watchPreview(); initPreviewClicks(); initMapFull();
     initJump();
     if (S.playbook) S.playbook.init(A);
+    if (S.live) S.live.init(A);
     if (S.bureauBM) S.bureauBM.init(A);
     renderAll();
     startPrompt();

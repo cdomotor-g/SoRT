@@ -181,12 +181,17 @@
       const i = file.sessions.findIndex(x => x.id === rec.id);
       const theirs = i >= 0 ? ((file.sessions[i].session || {}).updatedAt || 0) : 0;
       if (!onScreen && theirs > (rec.session.updatedAt || 0)) return { file, sha: cur.sha, newer: true, reread };
+      // Somebody else saved this session since this computer last saw it (two
+      // people in it at once, js/live.js): their answers are merged into the one
+      // on screen first, question by question, so neither's work is lost.
+      if (onScreen && i >= 0 && S.live && P.A && S.live.reconcile(file.sessions[i].session)) rec = record(P.A.defs, P.A.session);
       if (i >= 0) file.sessions[i] = rec; else file.sessions.push(rec);
       file.sessions.sort((a, b) => String((a.forum || {}).date).localeCompare(String((b.forum || {}).date)));
       try {
         const r = await putJson(`stations/${key}.json`, file, cur && cur.sha);
         P.files.set(key, { data: file, sha: r.sha });
-        return { file, sha: r.sha, reread };
+        if (onScreen && S.live) S.live.saved(rec);
+        return { file, sha: r.sha, reread, rec };
       } catch (e) {
         if (e.status !== 409 || attempt === 2) throw e;
         cur = await loadStation(key, true); reread = true;   // someone saved in between: read it again
@@ -278,7 +283,7 @@
       session.playbook = Object.assign({}, old, { allowed: [...allowed] });
     }
     P.held.delete(session.id);
-    const rec = record(A.defs, session), fp = fingerprint(rec);
+    let rec = record(A.defs, session), fp = fingerprint(rec);
     const pb = (sha, savedAt) => ({ savedAt: savedAt || Date.now(), asOf: rec.session.updatedAt || Date.now(), key, sha: sha || '', fp, allowed: [...allowed] });
     if (old.fp === fp && old.key === key && old.savedAt && !again) { markShared(session, pb(old.sha, old.savedAt)); refresh(); return 'same'; }
     P.busy = session.id; refresh();
@@ -286,6 +291,7 @@
       const onScreen = !!(A.session && A.session.id === session.id);
       if (S.pictures) await S.pictures.share(session);   // its pictures first, each its own file (js/pictures.js)
       const r = await putStation(key, st, rec, onScreen, again);
+      if (r.rec && r.rec !== rec) { rec = r.rec; fp = fingerprint(rec); }   // another computer's answers merged in on the way
       if (r.gone) { P.gone.add(session.id); P.failure = null; return 'gone'; }
       P.gone.delete(session.id);
       if (r.newer) { markShared(session, Object.assign(pb(r.sha), { fp: null })); return 'newer'; }
@@ -494,8 +500,13 @@
   // Now rather than in a moment: before another session opens, or when the page is hidden.
   function flush(A) {
     const s = A && A.session;
+    const was = !!soon;
     if (soon) { clearTimeout(soon); soon = null; }
     if (s && needsSave(s)) todo.set(s.id, s);
+    // The last keystrokes can still be on their way into the session (app.js
+    // keeps it a moment after typing stops): a save that was waiting isn't
+    // dropped, it goes as soon as they are in.
+    else if (was && s) soon = setTimeout(() => { soon = null; if (needsSave(s)) todo.set(s.id, s); pump(); }, 600);
     pump();
   }
   // Every session in this browser that has changed since it was shared.
@@ -578,6 +589,7 @@
       // Its fingerprint as shared, so opening it sends nothing until something changes.
       theirs.playbook = { savedAt: Date.parse(rec.savedAt) || Date.now(), asOf: theirs.updatedAt || 0, key, sha: f.sha, fp: fingerprint(rec) };
       if (!mine || (theirs.updatedAt || 0) >= (mine.updatedAt || 0)) { theirs.playbook.savedAt = Math.max(theirs.playbook.savedAt, theirs.updatedAt || 0); S.store.save(theirs, true); }
+      if (S.live) S.live.saved(rec);   // what the forum holds: the starting point for merging others' changes
       A.openSession(rec.id);
     } catch (e) { A.toast(`Couldn’t read the playbook: ${e.message}`); }
   }
@@ -735,5 +747,5 @@
   // Sessions opening: the shared list as it is now, and anything left unshared.
   function onSessionsOpen() { P.ask = null; freshIndex(); catchUp(); }
 
-  S.playbook = { REPO, init, stationStrip, renderActs, panel, count, existing, openSaved, autosaveSoon, flush, catchUp, onSessionsOpen, renderSaveBar, save, needsSave, shareState, usePrecedent, continueFrom, similar, summary, record, indexEntry, fingerprint, stationKey, privacyScan, loadIndex, deleteShared, dropQueued, state: P };
+  S.playbook = { REPO, init, loadStation, stationStrip, renderActs, panel, count, existing, openSaved, autosaveSoon, flush, catchUp, onSessionsOpen, renderSaveBar, save, needsSave, shareState, usePrecedent, continueFrom, similar, summary, record, indexEntry, fingerprint, stationKey, privacyScan, loadIndex, deleteShared, dropQueued, state: P };
 })(typeof window !== 'undefined' ? window : globalThis);

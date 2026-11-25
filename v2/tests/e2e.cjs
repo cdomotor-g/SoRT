@@ -4,7 +4,7 @@
      cd SoRT && python3 -m http.server 8642 --bind 127.0.0.1 &
      node v2/tests/e2e.cjs [scenario ...]        # all scenarios when none named
 
-   Scenarios: oldforum, station, copy, playbook, shared, delete, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil, pictures, refine, mapwork, jump. They use the live Flood-Net
+   Scenarios: oldforum, station, copy, playbook, shared, live, delete, editor, tasks, manual, particulars, bureau, layout, help, cutover, map, coast, soil, pictures, refine, mapwork, jump. They use the live Flood-Net
    API (and, for "map", the Esri CDN and the Queensland map services); GitHub is
    always a stand-in (an in-memory contents API), so nothing is ever written.
    "coast" gives QSpatial's coastline a stand-in too: one straight shore, so the
@@ -59,7 +59,7 @@ function fakeGithub(defsText) {
 // the forum passphrase is TEST-PASS; files carry ETags; If-Match / If-None-Match.
 function fakeStore() {
   const files = new Map(); let n = 0; let puts = 0; let failPuts = 0;
-  const log = [];   // "PUT files/index.json", … — every request after the passphrase
+  const log = [], liveLog = [];   // "PUT files/index.json", … — every request after the passphrase
   const crypto = require('crypto');
   const N = p => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   let hash = crypto.createHash('sha256').update('sort-forum-v1:' + N('TEST-PASS')).digest('hex');
@@ -69,8 +69,10 @@ function fakeStore() {
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type, x-sort-passphrase, if-match, if-none-match', 'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS', 'Access-Control-Expose-Headers': 'ETag' } });
     if (crypto.createHash('sha256').update('sort-forum-v1:' + N(H['x-sort-passphrase'])).digest('hex') !== hash) return reply(route, 401, { error: 'passphrase' });
     const path = url.pathname.replace(/^\/api\/sort\/v1\//, '');
-    log.push(`${req.method()} ${path}`);
-    if (req.method() === 'PUT' && path.startsWith('files/') && failPuts > 0) { failPuts--; return reply(route, 503, { error: 'busy' }); }
+    // Who-is-where (js/live.js) has its own log, so the request counts below see only the sessions.
+    const live = /^files\/stations\/live-/.test(path);
+    (live ? liveLog : log).push(`${req.method()} ${path}`);
+    if (req.method() === 'PUT' && path.startsWith('files/') && !live && failPuts > 0) { failPuts--; return reply(route, 503, { error: 'busy' }); }
     if (path === 'check') return reply(route, 200, { ok: true });
     if (path === 'passphrase' && req.method() === 'PUT') { const b = JSON.parse(req.postData() || '{}'); if (!/^[0-9a-f]{64}$/.test(b.sha256 || '')) return reply(route, 400, { error: 'sha256' }); hash = b.sha256; return reply(route, 200, { ok: true }); }
     const m = path.match(/^files\/(index\.json|stations\/[a-z0-9][a-z0-9-]*\.json)$/);
@@ -89,7 +91,7 @@ function fakeStore() {
     }
     return reply(route, 405, { error: 'method' });
   };
-  return { files, handler, puts: () => puts, log, failPuts: k => { failPuts = k; } };
+  return { files, handler, puts: () => puts, log, liveLog, failPuts: k => { failPuts = k; } };
 }
 
 // A 256×256 PNG of random-ish colours, made with Node alone: the stand-in imagery tile.
@@ -111,6 +113,7 @@ async function page(browser, opts) {
   if (o.token) await ctx.addInitScript(() => { try { localStorage.setItem('sort.github', JSON.stringify({ token: 'fake', login: 'tester' })); } catch (e) { /* */ } });
   if (o.autosaveMs) await ctx.addInitScript(ms => { window.SORT_AUTOSAVE_MS = ms; }, o.autosaveMs);
   if (o.retryMs) await ctx.addInitScript(ms => { window.SORT_RETRY_MS = ms; }, o.retryMs);
+  if (o.liveMs) await ctx.addInitScript(ms => { window.SORT_LIVE_MS = ms; }, o.liveMs);
   let defsText = require('fs').readFileSync(require('path').join(__dirname, '..', 'definitions.json'), 'utf8');
   if (o.defsPatch) { const d = JSON.parse(defsText); o.defsPatch(d); defsText = JSON.stringify(d); }
   const gh = fakeGithub(defsText);
@@ -1321,6 +1324,46 @@ const scenarios = {
     ok(!(await p.$('#startDlg[open]')) || /Zzyzx/.test(await p.innerText('#startBody')), 'a blank session is never offered');
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
+  },
+  async live(b) {
+    // Two computers in one session (js/live.js): each sees the other's answers,
+    // who is in which question, and can take a question over.
+    const o = { pass: true, autosaveMs: 600, retryMs: 1000, liveMs: 400 };
+    const p = await page(b, o);
+    await p.pick('540601');
+    await p.click('#q-complexity .opt:has-text("Moderate Complexity Total Rebuild – Type 2")');
+    ok(await until(() => p.store.files.has('stations/540601.json')), 'the first computer’s session is saved to the forum');
+    const q = await page(b, Object.assign({ store: p.store }, o));
+    await q.evaluate(() => SoRT.playbook.openSaved(SoRT.app, '540601'));
+    await q.waitForFunction(() => /Type 2/.test((document.querySelector('#q-complexity .opt.on') || {}).textContent || ''), null, { timeout: 10000 }).catch(() => {});
+    ok(await p.evaluate(() => SoRT.app.session.id) === await q.evaluate(() => SoRT.app.session.id), 'the second computer opens the same session');
+    const both = await Promise.all([p, q].map(x => x.waitForFunction(() => /Also in this session/.test(document.querySelector('#liveBar').textContent), null, { timeout: 10000 }).then(() => true, () => false)));
+    ok(both.every(Boolean), 'each says somebody else is in the session');
+    ok(await p.isVisible('#liveName'), 'and asks for a name to show the others');
+    await p.fill('#liveName', 'Sam'); await p.press('#liveName', 'Enter');
+    await q.fill('#liveName', 'Jo'); await q.press('#liveName', 'Enter');
+    await q.waitForFunction(() => /Sam/.test(document.querySelector('#liveBar').textContent), null, { timeout: 8000 }).catch(() => {});
+    ok(/Sam/.test(await q.innerText('#liveBar')), 'the other computer sees the name');
+    // Different questions at the same moment: neither answer is lost.
+    await Promise.all([p.click('#q-stockFence .opt:has-text("No")'), q.click('#q-complexity .opt:has-text("Low Complexity")')]);
+    const has = x => x.evaluate(() => { const a = SoRT.app.session.answers; return (a.stockFence || {}).value === 'no' && /low/i.test(String((a.complexity || {}).value)); });
+    ok(await until(async () => (await has(p)) && (await has(q)), 15000), 'answers made on both at once end up on both screens');
+    ok(await until(() => { const s = JSON.parse(p.store.files.get('stations/540601.json').text).sessions[0].session.answers; return (s.stockFence || {}).value === 'no' && /low/i.test(String((s.complexity || {}).value)); }, 10000), 'and in the forum’s saved copy');
+    // The soft lock: a question somebody is in is greyed for the other, with who.
+    const row = await p.$$eval('#ps [data-ps] input[type=text]:not([readonly])', es => es.map(e => e.closest('[data-ps]').dataset.ps).find((r, i) => es[i].dataset.fk === 'ps::' + r));
+    const R = `[data-ps="${row}"]`;
+    await p.click(`${R} input`);
+    await q.waitForSelector(`${R}.live-locked`, { timeout: 8000 }).catch(() => {});
+    ok(/Sam is editing/.test(await q.innerText(R).catch(() => '')), 'the other computer sees “Sam is editing this”');
+    ok(await q.$eval(`${R} input`, e => !!e.closest('[inert]')), 'and can’t type in it');
+    await p.fill(`${R} input`, 'Upstream');
+    await q.click(`${R} .live-take`);
+    await p.waitForSelector(`${R}.live-locked`, { timeout: 8000 }).catch(() => {});
+    ok(/Jo is editing/.test(await p.innerText(R).catch(() => '')), 'Take over: the first computer now sees Jo in it');
+    ok(await until(async () => (await q.$eval(`${R} input`, e => e.value)) === 'Upstream', 10000), 'and what Sam had typed is kept');
+    ok(!(await q.$(`${R}.live-locked`)), 'the one who took over isn’t locked out of it');
+    for (const x of [p, q]) ok(!x.errors.length, `no page errors ${x.errors.join('; ')}`);
+    await p.context().close(); await q.context().close();
   },
   async jump(b) {
     for (const [label, vp] of [['map beside (two panes)', { width: 1360, height: 900 }], ['narrow (one page)', { width: 800, height: 900 }]]) {
