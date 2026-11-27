@@ -15,6 +15,8 @@
                  options? (type "choice": [{code,label,ticks?,custom?}])} ],
      notes?: [ {text, when?, level?} ], showIf?, defaultWhen?: [{when,value}],
      derive?, prefill?, pin?, mapDraw?, hintFrom?, word?:false,
+     idList?: { kinds:[{code,label}] } — a list the person adds to, edits and removes
+               from (the ALERT IDs): rows of {kind, id}; needs type "none",
      presets?: <a choice field's code>  — a multi question whose tick boxes
                follow that field: each choice's `ticks`, and `custom` for the rest,
      guide?: <a key of guides>, suggest?: "coast" (js/coast.js) }
@@ -207,6 +209,20 @@
         if (d.field && !fields.has(d.field)) E(`${where}: mapDraw.field "${d.field}" is not one of its fields`);
       });
       if (q.prefill && q.prefill.field && !fields.has(q.prefill.field)) E(`${where}: prefill.field "${q.prefill.field}" is not one of its fields`);
+      if (q.idList != null) {
+        const ks = q.idList.kinds;
+        if (q.type !== 'none') E(`${where}: idList needs a question of type "none"`);
+        if (!Array.isArray(ks) || !ks.length) E(`${where}: idList needs "kinds" (a list of {code, label})`);
+        else {
+          const seenK = new Set();
+          ks.forEach(k => {
+            if (!k || !OPT_RE.test(k.code || '')) E(`${where}: idList kind code "${k && k.code}" must be lower-case letters, digits and _`);
+            else if (seenK.has(k.code)) E(`${where}: idList kind "${k.code}" is used twice`);
+            else seenK.add(k.code);
+            if (!k || !k.label) E(`${where}: idList kind "${k && k.code}" has no label`);
+          });
+        }
+      }
       checkPresets(where, q); checkGuide(where, q);
       checkCond(`${where} showIf`, q.showIf);
       (q.notes || []).forEach((n, i) => { if (!n.text) E(`${where}: note ${i + 1} has no text`); checkCond(`${where} note`, n.when); });

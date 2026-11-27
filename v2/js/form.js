@@ -43,6 +43,7 @@
     });
     if (a.other === undefined && e.other) a.other = e.other;
     if (a.note === undefined && e.note) a.note = e.note;
+    if (q.idList && !Array.isArray(a.list) && e.listSrc && e.listSrc !== 'user') a.list = U().clone(e.list);
   }
 
   /* ---------------- focus keeping ---------------- */
@@ -184,12 +185,58 @@
       }
     }
     if (hintEl) body.appendChild(hintEl);
+    if (q.idList) body.appendChild(idListEl(q, e));
     (q.fields || []).forEach(f => { if (f !== pf && R().fieldVisible(ctx, f)) body.appendChild(f.type === 'choice' ? choiceEl(q, f, e) : fieldEl(q, f, e)); });
     body.appendChild(noteEl(q, e));
     const pics = S.pictures && S.pictures.block(app, q);   // pasted snips (js/pictures.js)
     if (pics) body.appendChild(pics);
     card.appendChild(body);
     return card;
+  }
+
+  /* A list the person adds to, edits and removes from (the ALERT IDs): a row each
+     — what it measures, and its number. What Flood-Net holds shows until the
+     first change; from then on the list is the person's own, and "Reset" goes
+     back to Flood-Net's. */
+  function idListEl(q, e) {
+    const kinds = q.idList.kinds || [], pre = (app.session.prefill[q.code] || {}).list;
+    const rows = e.list || [];
+    const wrap = h('div', { class: 'fld fld-wide idlist' });
+    // The first change makes the list the person's own: a copy of what shows now.
+    const own = () => { const a = ans(q.code); if (!Array.isArray(a.list)) a.list = U().clone(e.list || []); return a.list; };
+    const src = e.listSrc;
+    rows.forEach((r, i) => {
+      const bad = String(r.id).trim() !== '' && !/^\d{1,5}$/.test(String(r.id).trim());
+      const dup = String(r.id).trim() !== '' && rows.some((x, j) => j !== i && String(x.id).trim() === String(r.id).trim());
+      const sel = h('select', { 'data-fk': `${q.code}::list::${i}::kind`, 'aria-label': `ALERT ID ${i + 1}: what it measures`,
+        onchange: ev => { own()[i].kind = ev.target.value; app.changed(); } },
+        kinds.map(k => h('option', { value: k.code, selected: k.code === r.kind }, k.label)));
+      const input = h('input', { type: 'text', inputmode: 'numeric', value: String(r.id), placeholder: 'ALERT ID', 'data-fk': `${q.code}::list::${i}::id`,
+        class: R().PREFILL_SRCS.includes(src) ? `prefilled pre-${src}` : null, 'aria-label': `ALERT ID ${i + 1}: the number`,
+        oninput: ev => { own()[i].id = ev.target.value; app.changed({ light: true }); }, onchange: () => app.changed() });
+      const line = h('div', { class: 'fld-line idlist-row' }, sel, input,
+        r.kind === 'other' && r.what ? h('span', { class: 'hint', title: 'The sensor type Flood-Net records for this ID' }, r.what) : null,
+        h('button', { type: 'button', class: 'btn-mini', title: 'Remove this ID', 'aria-label': `Remove ALERT ID ${i + 1}`, onclick: () => { own().splice(i, 1); app.changed(); } }, '✕'));
+      wrap.appendChild(line);
+      if (bad) wrap.appendChild(h('div', { class: 'hint warn' }, 'ALERT IDs are whole numbers (like 6748) — check this one.'));
+      else if (dup) wrap.appendChild(h('div', { class: 'hint warn' }, 'This ID is in the list twice.'));
+    });
+    if (!rows.length) wrap.appendChild(h('div', { class: 'hint' }, 'No ALERT IDs yet — Flood-Net has none recorded for this station. Add them below.'));
+    const tools = h('div', { class: 'fld-line' });
+    tools.appendChild(h('button', { type: 'button', class: 'btn-mini', title: 'Add another ALERT ID', onclick: () => {
+      const list = own(), used = new Set(list.map(r => r.kind));
+      const kind = (kinds.find(k => k.code !== 'other' && !used.has(k.code)) || kinds.find(k => k.code === 'water_level') || kinds[0]).code;
+      list.push({ kind, id: '' });
+      app.changed();
+      const el = document.querySelector(`[data-fk="${CSS.escape(`${q.code}::list::${list.length - 1}::id`)}"]`);
+      if (el) el.focus();
+    } }, '+ Add ID'));
+    if (Array.isArray((app.session.answers[q.code] || {}).list) && Array.isArray(pre) && pre.length) {
+      tools.appendChild(h('button', { type: 'button', class: 'link', title: 'Throw away your changes and show what Flood-Net has again',
+        onclick: () => { delete app.session.answers[q.code].list; app.changed(); } }, '↺ Reset to Flood-Net’s list'));
+    }
+    wrap.appendChild(tools);
+    return wrap;
   }
 
   function optionsEl(q, e) {

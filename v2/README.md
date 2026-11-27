@@ -30,6 +30,15 @@ Since the cutover (4 Nov 2026) `/SoRT/` opens v2 and v1 is kept as it was at
   change it; the top bar's *N to confirm* lists them — what each says and where
   it came from — with *✓ Keep*, *Show* and *✓ Keep all*. The radio path is on
   the Fade Margin question, not the station card (since 9 Nov 2026).
+- **ALERT IDs** (Comms & radio): every ALERT ID Flood-Net holds for the station
+  is filled in as a list — what it measures (battery, rain, water level, other)
+  and its number; usually one battery and one rain ID, sometimes a water level ID
+  or two. *+ Add ID*, change a row, or ✕ remove it; once you touch the list it is
+  yours (a Flood-Net refresh leaves it alone) and *Reset to Flood-Net's list*
+  brings Flood-Net's back. Each ID goes into Word as its own line
+  (`Battery ALERT ID: 1800`). A hand-entered station starts with an empty list.
+  In `definitions.json` it is a question of type `none` with `idList: {kinds}`
+  (stored as `answers.alertIds.list = [{kind, id}]`).
 - **Corrections to a station's particulars** (name, number, hub, council, owner —
   e.g. a name Radio Mobile's export cut short): *Edit details* on the station
   card. The Word tables use them and Flood-Net is not changed; the card lists what

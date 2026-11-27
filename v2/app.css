@@ -80,6 +80,9 @@ h3 { font-size: 15px; margin: 18px 0 8px; }
 .fld-unit { font-weight: 400; }
 .fld-line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .fld-line > input, .fld-line > textarea { flex: 1 1 220px; }
+.idlist { display: grid; gap: 6px; }
+.idlist-row > select { flex: 0 0 auto; min-width: 9em; padding: 5px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--card); color: inherit; font: inherit; }
+.idlist-row > input { flex: 0 1 12em; }
 .inline-check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; white-space: nowrap; }
 .hint { font-size: 13px; color: var(--muted); }
 .hint.warn { color: var(--warn); }

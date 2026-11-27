@@ -1,9 +1,9 @@
 {
   "schema": "sort-definitions/2",
-  "version": 14,
+  "version": 15,
   "meta": {
     "appTitle": "SoRT Forum Scope Builder",
-    "updated": "2026-11-05",
+    "updated": "2026-11-27",
     "note": "Seeded from v1 definitions.json by v2/tools/convert-v1.mjs; edited directly since. Codes are permanent: reword a label freely, never reuse a code."
   },
   "links": {
@@ -343,6 +343,34 @@
         "from": "station.txFrequency"
       },
       "hintFrom": "station.txFrequency"
+    },
+    "alertIds": {
+      "label": "ALERT IDs",
+      "section": "comms",
+      "hint": "(Filled in from Flood-Net where it has them. Usually one battery ID and one rain ID, sometimes a water level ID or two — add, change or remove them as needed)",
+      "icon": "🆔",
+      "type": "none",
+      "idList": {
+        "kinds": [
+          {
+            "code": "battery",
+            "label": "Battery"
+          },
+          {
+            "code": "rain",
+            "label": "Rain"
+          },
+          {
+            "code": "water_level",
+            "label": "Water level"
+          },
+          {
+            "code": "other",
+            "label": "Other"
+          }
+        ]
+      },
+      "precedent": false
     },
     "alertFormat": {
       "label": "ALERT Reporting",
@@ -1665,6 +1693,7 @@
         "txPower",
         "frequency",
         "acmaLicence",
+        "alertIds",
         "alertFormat",
         "stockFence",
         {
@@ -1966,6 +1995,7 @@
         "txPower",
         "frequency",
         "acmaLicence",
+        "alertIds",
         "alertFormat",
         "stockFence",
         "demolition",
@@ -2187,6 +2217,7 @@
         "txPower",
         "frequency",
         "acmaLicence",
+        "alertIds",
         "alertFormat",
         "stockFence",
         "demolition",
@@ -2364,6 +2395,7 @@
         "txPower",
         "frequency",
         "acmaLicence",
+        "alertIds",
         "alertFormat",
         "remediation",
         "vegetation",

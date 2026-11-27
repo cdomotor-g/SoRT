@@ -87,7 +87,9 @@
       const vals = e.value == null ? [] : [].concat(e.value);
       const fields = {};
       (q.fields || []).forEach(f => { if (R().fieldVisible(ctx, f)) { const t = R().fieldText(f, e.fields[f.code]); if (t) fields[f.code] = t; } });
-      if (!vals.length && !Object.keys(fields).length && !e.note.trim()) return;
+      const list = q.idList ? R().listRows(e).map(r => ({ kind: r.kind, id: String(r.id).trim(), what: r.what || '' })) : null;
+      if (!vals.length && !Object.keys(fields).length && !e.note.trim() && !(list && list.length)) return;
+      if (list && list.length) { answers[q.code] = { value: null, labels: [], other: '', fields, note: e.note.trim(), src: e.listSrc || null, list }; return; }
       answers[q.code] = { value: q.type === 'multi' ? vals : (vals[0] || null), labels: vals.map(v => sch().optionLabel(q, v)), other: e.other || '', fields, note: e.note.trim(), src: e.src || null };
     });
     const ps = {};
@@ -343,7 +345,7 @@
       const a = answers[q.code];
       if (!a || q.precedent === false && src === 'precedent') return;
       const mine = A.session.answers[q.code];
-      if (mine && (!R().emptyVal(mine.value) || Object.values(mine.fields || {}).some(x => String(x || '').trim()))) return;
+      if (mine && (!R().emptyVal(mine.value) || Array.isArray(mine.list) || Object.values(mine.fields || {}).some(x => String(x || '').trim()))) return;
       const fields = {};
       (q.fields || []).forEach(f => {
         if (src === 'precedent' && (f.type === 'coord' || f.precedent === false)) return;
@@ -356,8 +358,9 @@
         const vs = [].concat(value == null ? [] : value).filter(v => ok.has(v));
         value = q.type === 'multi' ? (vs.length ? vs : null) : (vs[0] || null);
       }
-      if (R().emptyVal(value) && !Object.keys(fields).length) return;
-      A.session.prefill[q.code] = { src, from, value, other: a.other || '', fields, note: src === 'earlier' ? (a.note || '') : '' };
+      const list = q.idList && src === 'earlier' && Array.isArray(a.list) && a.list.length ? a.list.map(r => ({ kind: r.kind, id: String(r.id), what: r.what || '' })) : null;
+      if (R().emptyVal(value) && !Object.keys(fields).length && !list) return;
+      A.session.prefill[q.code] = Object.assign({ src, from, value, other: a.other || '', fields, note: src === 'earlier' ? (a.note || '') : '' }, list ? { list } : {});
       n++;
     });
     return n;

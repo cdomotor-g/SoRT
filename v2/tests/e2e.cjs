@@ -164,6 +164,36 @@ const scenarios = {
     ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
     await p.context().close();
   },
+  async alertIds(b) {
+    const p = await page(b);
+    await p.pick('540684');   // Flood-Net: a battery ID and a water level ID
+    const rows = () => p.$$eval('#q-alertIds .idlist-row', rs => rs.map(r => `${r.querySelector('select').selectedOptions[0].textContent}=${r.querySelector('input').value}`).join());
+    const lines = () => p.evaluate(() => { const A = SoRT.app, ctx = SoRT.rules.context(A.defs, A.session); return SoRT.rules.outputLines(ctx, ctx.byCode.alertIds).join(' | '); });
+    ok(await rows() === 'Battery=1800,Water level=1855', `ALERT IDs filled in from Flood-Net (${await rows()})`);
+    ok(await p.$eval('#q-alertIds', e => e.classList.contains('waiting')), 'orange until checked');
+    ok(await lines() === 'Battery ALERT ID: 1800 | Water level ALERT ID: 1855', 'and they go into Word as a line each');
+    await p.click('#q-alertIds .src-ok');
+    ok(await p.$eval('#q-alertIds', e => e.classList.contains('checked')) && await rows() === 'Battery=1800,Water level=1855', 'Keep accepts them');
+    // Add a second water level ID, edit one, remove the battery.
+    await p.click('#q-alertIds button:has-text("+ Add ID")');
+    ok(await rows() === 'Battery=1800,Water level=1855,Rain=', 'Add ID adds a row (the first kind not yet used)');
+    await p.selectOption('#q-alertIds .idlist-row:nth-child(3) select', 'water_level');
+    const typeId = async (n, v) => { await p.fill(`#q-alertIds .idlist-row:nth-child(${n}) input`, v); await p.press(`#q-alertIds .idlist-row:nth-child(${n}) input`, 'Tab'); await p.waitForTimeout(150); };
+    await typeId(3, '1856x');
+    ok(/whole numbers/.test(await p.innerText('#q-alertIds')), 'a number that is not whole says so');
+    await typeId(3, '1856');
+    await typeId(2, '1857');
+    await p.click('#q-alertIds .idlist-row:nth-child(1) button[title="Remove this ID"]');
+    ok(await rows() === 'Water level=1857,Water level=1856', `edit and remove work (${await rows()})`);
+    ok(await lines() === 'Water level ALERT ID: 1857 | Water level ALERT ID: 1856', 'Word follows the edited list');
+    // A refresh from Flood-Net must not undo the person's list.
+    await p.evaluate(() => { const A = SoRT.app; SoRT.floodnet.applyPrefill(A.defs, A.session); A.changed(); });
+    ok(await rows() === 'Water level=1857,Water level=1856', 'a Flood-Net refresh leaves the edited list alone');
+    await p.click('#q-alertIds button:has-text("Reset to Flood-Net")');
+    ok(await rows() === 'Battery=1800,Water level=1855', 'Reset brings Flood-Net’s list back');
+    ok(!p.errors.length, `no page errors ${p.errors.join('; ')}`);
+    await p.context().close();
+  },
   async sensors(b) {
     const p = await page(b);
     await p.pick('41506');

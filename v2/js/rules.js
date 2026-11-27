@@ -36,6 +36,9 @@
     return { defs, session, qs, byCode, tpl, waterLevel: !!(tpl && tpl.waterLevel), _eff: {}, _busy: {} };
   }
 
+  // The rows of a list question that have an ID typed in.
+  const listRows = e => (e.list || []).filter(r => r && String(r.id == null ? '' : r.id).trim() !== '');
+
   function questionDef(ctx, code) { return ctx.byCode[code] || (ctx.defs.questions || {})[code] || null; }
 
   // ---- effective answers ---------------------------------------------------
@@ -67,6 +70,15 @@
       else { out.fields[f.code] = ''; out.fieldSrc[f.code] = null; }
     });
     if (q.presets) presetSync(q, a, out);
+    // A list question (ALERT IDs): the person's own list once they have touched it,
+    // otherwise what Flood-Net (or an earlier session) suggested. fieldSrc.__list
+    // lets the badges treat the list like any other suggested field.
+    if (q.idList) {
+      const own = Array.isArray(a.list), pre = Array.isArray(p.list) && p.list.length;
+      out.list = own ? a.list : pre ? p.list : [];
+      out.listSrc = own ? 'user' : pre ? (p.src || 'prefill') : null;
+      if (out.listSrc && out.listSrc !== 'user') out.fieldSrc.__list = out.listSrc;
+    }
     delete ctx._busy[code];
     ctx._eff[code] = out;
     return out;
@@ -134,7 +146,7 @@
       const vals = e.value == null ? [] : [].concat(e.value);
       if (c.filled != null) {
         const fieldFilled = k => e.fieldSrc[k] !== 'default' && String(e.fields[k] == null ? '' : e.fields[k]).trim() !== '';
-        const filled = c.field ? fieldFilled(c.field) : (vals.length > 0 || Object.keys(e.fields).some(fieldFilled));
+        const filled = c.field ? fieldFilled(c.field) : (vals.length > 0 || listRows(e).length > 0 || Object.keys(e.fields).some(fieldFilled));
         return c.filled ? filled : !filled;
       }
       if (c.is != null) return vals.includes(c.is);
@@ -156,6 +168,7 @@
     const e = eff(ctx, q.code);
     if (e.note.trim()) return true;
     if (!emptyVal(e.value) && (!mine || e.src === 'user')) return true;
+    if (q.idList && listRows(e).length && (!mine || e.listSrc === 'user')) return true;
     return (q.fields || []).some(f => {
       if (!fieldVisible(ctx, f)) return false;
       const v = String(e.fields[f.code] || '').trim();
@@ -168,6 +181,7 @@
   function awaitingConfirm(ctx, q) {
     const e = eff(ctx, q.code);
     if (e.src && e.src !== 'user' && e.src !== 'auto' && !emptyVal(e.value)) return true;
+    if (q.idList && PREFILL_SRCS.includes(e.listSrc) && listRows(e).length) return true;
     return (q.fields || []).some(f => fieldVisible(ctx, f) && PREFILL_SRCS.includes(e.fieldSrc[f.code]) && String(e.fields[f.code] || '').trim());
   }
   function progress(ctx) {
@@ -234,6 +248,13 @@
       if (t) lines.push(`${f.label}: ${t}`);
       else if (f.emptyText) lines.push(`${f.label}: ${fill(ctx, f.emptyText)}`);
     });
+    if (q.idList) {
+      const kinds = q.idList.kinds || [];
+      listRows(e).forEach(r => {
+        const k = kinds.find(x => x.code === r.kind);
+        lines.push(`${k ? k.label : 'Other'} ALERT ID: ${String(r.id).trim()}${r.kind === 'other' && r.what ? ` (${r.what})` : ''}`);
+      });
+    }
     if (e.note.trim()) lines.push(e.note.trim());
     return lines;
   }
@@ -314,6 +335,6 @@
   }
 
   S.rules = { PREFILL_SRCS, context, eff, test, visible, fieldVisible, visibleQuestions, hasContent, awaitingConfirm, progress,
-    fill, fieldText, outputLines, notesFor, followUps, emptyVal,
+    fill, fieldText, outputLines, notesFor, followUps, emptyVal, listRows,
     psState, psText, psSourceText, psQuestionValue, psQuestionLabel, psDetail, psNA, psRow };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -43,6 +43,18 @@
 
   const KIND_LABEL = { rain: 'Rain', river: 'River', repeater: 'Repeater', base: 'Base' };
 
+  /* What an ALERT ID measures, from Flood-Net's sensor type ("Rainfall", "Rainfall
+     Increment", "Battery", "Water Level") or its alert_ids key ("rainfall",
+     "water_level"): one of the ALERT IDs question's kinds. Anything else is 'other'. */
+  const ALERT_KIND_ORDER = ['battery', 'rain', 'water_level', 'other'];
+  function alertKind(type) {
+    const s = String(type || '').toLowerCase().replace(/_/g, ' ');
+    if (/batt|volt/.test(s)) return 'battery';
+    if (/rain/.test(s)) return 'rain';
+    if (/level|river|stage|gauge|height/.test(s)) return 'water_level';
+    return 'other';
+  }
+
   // What is on site now, as far as Flood-Net can tell.
   function commsGuess(d) {
     const nr = d.networks_and_radio || {}, tel = d.telemetry || {};
@@ -94,8 +106,10 @@
     const idn = d.identity || {}, loc = d.location || {}, nr = d.networks_and_radio || {}, tel = d.telemetry || {};
     const sls = ((d.service_level || {}).entries || (d.service_level || {}).items || [])[0] || null;
     const addresses = [];
-    ((tel.sensors || {}).items || []).forEach(s => { if (s.alert_id != null && !addresses.some(a => a.id === s.alert_id)) addresses.push({ id: s.alert_id, type: s.type }); });
-    Object.entries(nr.alert_ids || {}).forEach(([k, v]) => { if (!addresses.some(a => a.id === v)) addresses.push({ id: v, type: k }); });
+    // Every ID Flood-Net holds: the sensors' own first (their types are exact), then any in its alert_ids map not already seen.
+    ((tel.sensors || {}).items || []).forEach(s => { if (s.alert_id != null && !addresses.some(a => a.id === s.alert_id)) addresses.push({ id: s.alert_id, type: s.type, kind: alertKind(s.type) }); });
+    Object.entries(nr.alert_ids || {}).forEach(([k, v]) => { if (!addresses.some(a => a.id === v)) addresses.push({ id: v, type: k, kind: alertKind(k) }); });
+    addresses.sort((a, b) => ALERT_KIND_ORDER.indexOf(a.kind) - ALERT_KIND_ORDER.indexOf(b.kind));
     const guess = commsGuess(d);
     const facts = {
       source: 'floodnet', id: idn.id || id, number: idn.station_number || '', name: idn.name || id,
@@ -208,6 +222,10 @@
     if (has('coords') && st.lat != null) {
       const pos = st.checked ? U().formatCoord(st.checked.lat, st.checked.lon) : U().formatCoord(st.lat, st.lon);
       put('coords', { fields: { existing: pos }, src: st.checked ? 'map' : 'floodnet' });
+    }
+    // ALERT IDs: every one Flood-Net holds (a hand-entered station has none from Flood-Net). The list stays the person's once they edit it.
+    if (has('alertIds') && st.source === 'floodnet' && (st.alertIds || []).length) {
+      put('alertIds', { list: st.alertIds.map(a => ({ kind: a.kind || alertKind(a.type), id: String(a.id), what: a.type || '' })) });
     }
     if (has('currentComms') && st.commsGuess && st.commsGuess !== 'unknown') put('currentComms', { value: st.commsGuess });
     if (has('frequency') && st.txFrequency) {
@@ -362,5 +380,5 @@
     return null;
   }
 
-  S.floodnet = { API, search, dossier, record, near, acma, stationFacts, radioPathFacts, pathText, dbText, suggestTemplate, applyPrefill, hint, commsGuess, freqText, radioText, KIND_LABEL };
+  S.floodnet = { API, search, dossier, record, near, acma, stationFacts, radioPathFacts, pathText, dbText, suggestTemplate, applyPrefill, hint, commsGuess, alertKind, freqText, radioText, KIND_LABEL };
 })(typeof window !== 'undefined' ? window : globalThis);
